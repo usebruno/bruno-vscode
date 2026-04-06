@@ -96,9 +96,9 @@ const Auth = ({
       case 'ntlm': {
         return <NTLMAuth collection={collection} item={item} request={request} save={save} updateAuth={updateAuth} />;
       }
-      // case 'oauth2': {
-      //   return <OAuth2 collection={collection} item={item} request={request} save={save} updateAuth={updateAuth} />;
-      // }
+      case 'oauth2': {
+        return <OAuth2 collection={collection} item={item} request={request} save={save} updateAuth={updateAuth} />;
+      }
       case 'wsse': {
         return <WsseAuth collection={collection} item={item} request={request} save={save} updateAuth={updateAuth} />;
       }

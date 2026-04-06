@@ -13,6 +13,7 @@ import { getProcessEnvVars } from '../../store/process-env';
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, Item } from '../../utils/collection';
 import path from 'path';
+import { registerOAuth2Handlers, applyOAuth2ToRequest } from './oauth2-handlers';
 import { runPreRequestScript, runPostResponseVars, runPostResponseScript, runTests, runAssertions } from '../../utils/script-runner';
 import { v4 as uuidv4 } from 'uuid';
 import { cloneDeep, get, filter, forOwn } from 'lodash';
@@ -263,6 +264,13 @@ const executeRequest = async (
     const hasVariables = interpolatedRequest.url?.startsWith('{{');
     if (!hasVariables && interpolatedRequest.url && !protocolRegex.test(interpolatedRequest.url)) {
       interpolatedRequest.url = `http://${interpolatedRequest.url}`;
+    }
+
+    // Apply OAuth2 token to request (auto-fetch/refresh if needed)
+    const authMode = (interpolatedRequest as any)?.auth?.mode;
+    if (authMode === 'oauth2' || (interpolatedRequest as any)?.oauth2) {
+      addTimelineEvent('Applying OAuth2 token');
+      await applyOAuth2ToRequest(interpolatedRequest as unknown as Record<string, unknown>, context.collectionUid);
     }
 
     addTimelineEvent('Preparing request');
@@ -1506,17 +1514,8 @@ const registerNetworkIpc = (): void => {
     }
   });
 
-  // OAuth2 token retrieval (stub - deferred per user request)
-  registerHandler('renderer:get-oauth2-token', async (args) => {
-    const [_grantType, _credentials, _context] = args as [string, unknown, RequestContext];
-    throw new Error('OAuth2 not yet implemented - deferred');
-  });
-
-  // Refresh OAuth2 token (stub - deferred per user request)
-  registerHandler('renderer:refresh-oauth2-token', async (args) => {
-    const [_refreshToken, _credentials, _context] = args as [string, unknown, RequestContext];
-    throw new Error('OAuth2 not yet implemented - deferred');
-  });
+  // OAuth2 handlers (fetch, refresh, clear, browser auth state)
+  registerOAuth2Handlers();
 
   registerHandler('renderer:start-http-stream', async (args) => {
     const [request, context] = args as [BrunoRequest, RequestContext];

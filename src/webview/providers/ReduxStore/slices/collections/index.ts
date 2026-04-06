@@ -2292,21 +2292,29 @@ export const collectionsSlice = createSlice({
     },
 
     collectionAddOauth2CredentialsByUrl: (state, action: PayloadAction<CollectionAddOauth2CredentialsByUrlPayload>) => {
-      const { collectionUid } = action.payload;
+      const { collectionUid, folderUid, itemUid, url, credentials, credentialsId, debugInfo } = action.payload as any;
       const collection = findCollectionByUid(state.collections, collectionUid);
-      if (collection) {
-        if (!collection.oauth2Credentials) {
-          collection.oauth2Credentials = {};
-        }
-        Object.assign(collection.oauth2Credentials, action.payload);
+      if (!collection) return;
+
+      if (!collection.oauth2Credentials || !Array.isArray(collection.oauth2Credentials)) {
+        collection.oauth2Credentials = [] as any;
       }
+
+      // Remove existing credentials for the same combination
+      const filtered = (collection.oauth2Credentials as unknown as any[]).filter(
+        (creds: any) => !(creds.url === url && creds.collectionUid === collectionUid && creds.credentialsId === credentialsId)
+      );
+
+      // Add the new credential
+      filtered.push({ collectionUid, folderUid, itemUid, url, credentials, credentialsId, debugInfo });
+      collection.oauth2Credentials = filtered as any;
     },
 
     collectionClearOauth2CredentialsByUrl: (state, action: PayloadAction<CollectionClearOauth2CredentialsByUrlPayload>) => {
       const { collectionUid } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
-      if (collection && collection.oauth2Credentials) {
-        collection.oauth2Credentials = {};
+      if (collection) {
+        collection.oauth2Credentials = [] as any;
       }
     },
 

@@ -152,6 +152,7 @@ const Oauth2ActionButtons = ({
         onClick={handleFetchOauth2Credentials}
         disabled={fetchingToken || refreshingToken}
         loading={fetchingToken}
+        data-testid="oauth2-get-token-btn"
       >
         Get Access Token
       </Button>
@@ -163,6 +164,7 @@ const Oauth2ActionButtons = ({
               onClick={handleRefreshAccessToken}
               disabled={fetchingToken || refreshingToken}
               loading={refreshingToken}
+              data-testid="oauth2-refresh-token-btn"
             >
               Refresh Token
             </Button>
@@ -176,6 +178,7 @@ const Oauth2ActionButtons = ({
               onClick={handleCancelAuthorization}
               icon={<IconX size={16} />}
               iconPosition="left"
+              data-testid="oauth2-cancel-auth-btn"
             >
               Cancel Authorization
             </Button>
@@ -185,6 +188,7 @@ const Oauth2ActionButtons = ({
         color="secondary"
         variant="ghost"
         onClick={handleClearCache}
+        data-testid="oauth2-clear-cache-btn"
       >
         Clear Cache
       </Button>

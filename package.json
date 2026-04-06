@@ -35,7 +35,9 @@
     "Thunder Client"
   ],
   "activationEvents": [
-    "*"
+    "workspaceContains:**/bruno.json",
+    "workspaceContains:**/opencollection.yaml",
+    "workspaceContains:**/opencollection.yml"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -60,7 +62,8 @@
         {
           "id": "bruno.logsView",
           "name": "Logs",
-          "type": "webview"
+          "type": "webview",
+          "icon": "$(output)"
         }
       ],
       "bruno": [
@@ -68,7 +71,8 @@
           "type": "webview",
           "id": "bruno.sidebarView",
           "name": "Collections",
-          "contextualTitle": "Bruno Collections"
+          "contextualTitle": "Bruno Collections",
+          "icon": "$(folder-library)"
         }
       ],
       "explorer": [
@@ -397,6 +401,10 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "package": "npx @vscode/vsce package --no-dependencies",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:server": "npx tsx tests/e2e/server/index.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
@@ -411,6 +419,8 @@
     "@rsbuild/plugin-sass": "^1.1.0",
     "@rsbuild/plugin-styled-components": "^1.6.0",
     "@types/adm-zip": "^0.5.7",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/fs-extra": "^11.0.4",
     "@types/lodash": "^4.17.0",
     "@types/node": "^20.0.0",
@@ -421,16 +431,21 @@
     "@types/vscode": "^1.80.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^4.1.2",
     "@vscode/test-electron": "^2.5.2",
     "autoprefixer": "^10.4.20",
+    "cors": "^2.8.6",
     "esbuild": "^0.20.0",
     "eslint": "^8.57.0",
+    "express": "^5.2.1",
     "fs-extra": "^11.2.0",
     "glob": "^10.3.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.1",
     "ts-migrate": "^0.1.35",
-    "typescript": "^5.4.0"
+    "tsx": "^4.21.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.2"
   },
   "dependencies": {
     "@faker-js/faker": "^9.0.0",
