@@ -1,0 +1,11 @@
+/* Placeholder styles for @usebruno/graphql-docs shim */
+.graphql-doc-explorer {
+  padding: 16px;
+  font-family: inherit;
+}
+
+.graphql-doc-explorer-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}

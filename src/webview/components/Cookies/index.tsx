@@ -1,0 +1,349 @@
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import Modal from 'components/Modal';
+import Accordion from 'components/Accordion/index';
+import { IconTrash, IconEdit, IconCirclePlus, IconCookieOff, IconAlertTriangle, IconSearch } from '@tabler/icons';
+import { deleteCookiesForDomain, deleteCookie } from 'providers/ReduxStore/slices/app';
+import toast from 'react-hot-toast';
+import ModifyCookieModal from 'components/Cookies/ModifyCookieModal/index';
+import StyledWrapper from './StyledWrapper';
+import moment from 'moment';
+import { Tooltip } from 'react-tooltip';
+import Button from 'ui/Button';
+
+interface ClearDomainCookiesModalProps {
+  onClose?: (...args: unknown[]) => void;
+  domain?: React.ReactNode;
+  onClear?: (...args: unknown[]) => void;
+  cookieName?: React.ReactNode;
+  onDelete?: (...args: unknown[]) => void;
+}
+
+const ClearDomainCookiesModal = ({
+  onClose,
+  domain,
+  onClear
+}: any) => (
+  <Modal onClose={onClose} handleCancel={onClose} title="Clear Domain Cookies" hideFooter={true}>
+    <div className="flex items-center font-normal">
+      <IconAlertTriangle size={32} strokeWidth={1.5} className="warning-icon" />
+      <h1 className="ml-2 text-lg font-medium">Hold on..</h1>
+    </div>
+    <div className="font-normal mt-4">
+      Are you sure you want to clear all cookies for the domain {domain}?
+    </div>
+
+    <div className="flex justify-between mt-6">
+      <div>
+        <Button color="secondary" variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+      <div>
+        <Button color="danger" onClick={onClear}>
+          Clear All
+        </Button>
+      </div>
+    </div>
+  </Modal>
+);
+
+const DeleteCookieModal = ({
+  onClose,
+  cookieName,
+  onDelete
+}: any) => (
+  <Modal onClose={onClose} handleCancel={onClose} title="Delete Cookie" hideFooter={true}>
+    <div className="flex items-center font-normal">
+      <IconAlertTriangle size={32} strokeWidth={1.5} className="warning-icon" />
+      <h1 className="ml-2 text-lg font-medium">Hold on..</h1>
+    </div>
+    <div className="font-normal mt-4">
+      Are you sure you want to delete the cookie {cookieName}?
+    </div>
+
+    <div className="flex justify-between mt-6">
+      <div>
+        <Button color="secondary" variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+      <div>
+        <Button color="danger" onClick={onDelete}>
+          Delete
+        </Button>
+      </div>
+    </div>
+  </Modal>
+);
+
+const CollectionProperties = ({
+  onClose
+}: any) => {
+  const dispatch = useDispatch();
+  const cookies = useSelector((state) => state.app.cookies) || [];
+  const [isModifyCookieModalOpen, setIsModifyCookieModalOpen] = useState(false);
+  const [currentDomain, setCurrentDomain] = useState(null);
+  const [cookieToEdit, setCookieToEdit] = useState(null);
+
+  const [domainToClear, setDomainToClear] = useState(null);
+  const [cookieToDelete, setCookieToDelete] = useState(null);
+  const [searchText, setSearchText] = useState(null);
+
+  const handleAddCookie = (domain?: any) => {
+    if (domain) setCurrentDomain(domain);
+    setIsModifyCookieModalOpen(true);
+  };
+
+  const handleEditCookie = (domain: any, cookie: any) => {
+    setCurrentDomain(domain);
+    setCookieToEdit(cookie);
+    setIsModifyCookieModalOpen(true);
+  };
+
+  const handleClearDomainCookies = (domain: any) => {
+    setDomainToClear(domain);
+  };
+
+  const clearDomainCookiesAction = () => {
+    (dispatch(deleteCookiesForDomain(domainToClear)) as unknown as Promise<void>)
+      .then(() => {
+        toast.success('Domain cookies cleared successfully');
+      })
+      .catch((err: any) => {
+        toast.error('Failed to clear domain cookies');
+      });
+    setDomainToClear(null);
+  };
+
+  const handleDeleteCookie = (domain: any, path: any, key: any) => {
+    setCookieToDelete({ key, domain, path });
+  };
+
+  const deleteCookieAction = () => {
+    if (cookieToDelete) {
+      const { domain, path, key } = cookieToDelete;
+      (dispatch(deleteCookie(domain, path, key)) as unknown as Promise<void>)
+        .then(() => {
+          toast.success('Cookie deleted successfully');
+        })
+        .catch((err: any) => {
+          toast.error('Failed to delete cookie');
+        });
+    }
+    setCookieToDelete(null);
+  };
+
+  const filteredCookies = useMemo(() => {
+    if (!searchText) return cookies;
+
+    return cookies.filter((cookie: any) => cookie.domain.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [cookies, searchText]);
+
+  const shouldShowHeader = cookies && cookies.length > 0;
+
+  return <>
+    <Modal
+      size="xl"
+      title="Cookies"
+      hideFooter={true}
+      handleCancel={onClose}
+      customHeader={shouldShowHeader ? (
+        <StyledWrapper className="header flex items-center justify-between w-full">
+          <h2 className="text-xs font-medium">Cookies</h2>
+          <input
+            type="search"
+            placeholder="Search by domain"
+            value={searchText || ''}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="block textbox non-passphrase-input ml-auto font-normal"
+            autoFocus
+          />
+          <Button
+            type="submit"
+            size="sm"
+            className="mx-4"
+            icon={<IconCirclePlus strokeWidth={1.5} size={16} />}
+            onClick={(e: any) => {
+              e.stopPropagation();
+              handleAddCookie();
+            }}
+          >
+            <span>Add Cookie</span>
+          </Button>
+        </StyledWrapper>
+      ) : null}
+    >
+      <StyledWrapper>
+        {!cookies || !cookies.length ? (
+          <div className="flex items-center justify-center flex-col">
+            <IconCookieOff size={48} strokeWidth={1.5} className="empty-icon" />
+            <h2 className="text-lg font-medium mt-4">No cookies found</h2>
+            <p className="empty-text mt-2">Add cookies to get started</p>
+            <Button
+              type="submit"
+              size="sm"
+              className="mt-8"
+              icon={<IconCirclePlus strokeWidth={1.5} size={16} />}
+              onClick={(e: any) => {
+                e.stopPropagation();
+                handleAddCookie();
+              }}
+            >
+              Add Cookie
+            </Button>
+          </div>
+        ) : cookies.length && !filteredCookies.length ? (
+          <div className="flex items-center justify-center flex-col">
+            <IconSearch size={48} />
+            <h2 className="text-lg font-medium mt-4">No search results</h2>
+            <p className="empty-text mt-2">Try a different search term</p>
+          </div>
+        ) : (
+          <div className="scroll-box">
+            <Accordion defaultIndex={0}>
+              {filteredCookies.map((domainWithCookies: any, i: any) => (
+                <Accordion.Item key={i} index={i}>
+                  <Accordion.Header index={i} className="flex items-center">
+                    <div className="flex items-center">
+                      <span>{domainWithCookies.domain}</span>
+                      <span className="domain-count ml-2 text-xs">
+                        ({domainWithCookies.cookies.length}{' '}
+                        {domainWithCookies.cookies.length === 1 ? 'cookie' : 'cookies'})
+                      </span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <button
+                          type="submit"
+                          className="action-button flex items-center gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddCookie(domainWithCookies.domain);
+                          }}
+                        >
+                          <IconCirclePlus strokeWidth={1.5} size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearDomainCookies(domainWithCookies.domain);
+                          }}
+                          className="action-button-danger mr-2"
+                        >
+                          <IconTrash strokeWidth={1.5} size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </Accordion.Header>
+                  <Accordion.Content index={i}>
+                    <div className="flex items-center justify-between">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left">
+                            <th className="py-2 px-4 font-medium w-32">Name</th>
+                            <th className="py-2 px-4 font-medium w-52">Value</th>
+                            <th className="py-2 px-4 font-medium">Path</th>
+                            <th className="py-2 px-4 font-medium">Expires</th>
+                            <th className="py-2 px-4 font-medium text-center">Secure</th>
+                            <th className="py-2 px-4 font-medium text-center">HTTP Only</th>
+                            <th className="py-2 px-4 font-medium text-right w-24">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {domainWithCookies.cookies.map((cookie: any) => <tr key={cookie.key}>
+                            <td className="py-2 px-4 truncate">
+                              <span id={`cookie-key-${cookie.key}`}>{cookie.key}</span>
+                              <Tooltip
+                                anchorId={`cookie-key-${cookie.key}`}
+                                className="tooltip-mod"
+                                html={cookie.key}
+                              />
+                            </td>
+                            <td className="py-2 px-4 truncate">
+                              <span id={`cookie-value-${cookie.key}`}>{cookie.value}</span>
+                              <Tooltip
+                                anchorId={`cookie-value-${cookie.key}`}
+                                className="tooltip-mod"
+                                html={cookie.value}
+                              />
+                            </td>
+                            <td className="py-2 px-4 truncate">{cookie.path || '/'}</td>
+                            <td className="py-2 px-4 truncate">
+                              <span id={`cookie-expires-${cookie.key}`}>
+                                {cookie.expires && moment(cookie.expires).isValid()
+                                  ? new Date(cookie.expires).toLocaleString()
+                                  : 'Session'}
+                              </span>
+                              {cookie.expires && moment(cookie.expires).isValid() && (
+                                <Tooltip
+                                  anchorId={`cookie-expires-${cookie.key}`}
+                                  className="tooltip-mod"
+                                  html={new Date(cookie.expires).toLocaleString()}
+                                />
+                              )}
+                            </td>
+                            <td className="py-2 px-4 text-center">{cookie.secure ? '✓' : ''}</td>
+                            <td className="py-2 px-4 text-center">{cookie.httpOnly ? '✓' : ''}</td>
+                            <td className="py-2 px-4">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditCookie(domainWithCookies.domain, cookie);
+                                  }}
+                                  className="edit-button"
+                                >
+                                  <IconEdit strokeWidth={1.5} size={16} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCookie(domainWithCookies.domain, cookie.path, cookie.key);
+                                  }}
+                                  className="delete-button"
+                                >
+                                  <IconTrash strokeWidth={1.5} size={16} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>)}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Accordion.Content>
+                </Accordion.Item>
+              ))}
+            </Accordion>
+          </div>
+        )}
+      </StyledWrapper>
+    </Modal>
+    {isModifyCookieModalOpen && (
+      <ModifyCookieModal
+        onClose={() => {
+          setCookieToEdit(null);
+          setCurrentDomain(null);
+          setIsModifyCookieModalOpen(false);
+        }}
+        domain={currentDomain}
+        cookie={cookieToEdit}
+      />
+    )}
+    {domainToClear ? (
+      <ClearDomainCookiesModal
+        onClose={() => setDomainToClear(null)}
+        domain={domainToClear}
+        onClear={clearDomainCookiesAction}
+      />
+    ) : null}
+    {cookieToDelete ? (
+      <DeleteCookieModal
+        onClose={() => setCookieToDelete(null)}
+        cookieName={cookieToDelete.key}
+        onDelete={deleteCookieAction}
+      />
+    ) : null}
+  </>;
+};
+
+export default CollectionProperties;

@@ -1,0 +1,35 @@
+import React from 'react';
+import { useDispatch } from 'react-redux';
+import StyledWrapper from './StyledWrapper';
+import { clearRequestTimeline } from 'providers/ReduxStore/slices/collections/index';
+
+interface ClearTimelineProps {
+  collection: unknown;
+  item: unknown;
+}
+
+
+const ClearTimeline = ({
+  collection,
+  item
+}: any) => {
+  const dispatch = useDispatch();
+
+  const clearResponse = () =>
+    dispatch(
+      clearRequestTimeline({
+        itemUid: item.uid,
+        collectionUid: collection.uid
+      })
+    );
+
+  return (
+    <StyledWrapper className="flex items-center">
+      <button type="button" onClick={clearResponse} className="text-link hover:underline whitespace-nowrap" title="Clear Timeline">
+        Clear Timeline
+      </button>
+    </StyledWrapper>
+  );
+};
+
+export default ClearTimeline;

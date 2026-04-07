@@ -1,0 +1,518 @@
+{
+  "name": "bruno",
+  "displayName": "Bruno",
+  "description": "API client for exploring and testing APIs in VS Code",
+  "version": "5.0.0",
+  "publisher": "bruno-api-client",
+  "license": "MIT",
+  "icon": "media/bruno-icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/usebruno/bruno"
+  },
+  "homepage": "https://www.usebruno.com",
+  "bugs": {
+    "url": "https://github.com/usebruno/bruno/issues"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Testing",
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "Bruno",
+    "API Client",
+    "GraphQL",
+    "gRPC",
+    "HTTP",
+    "REST",
+    "Testing",
+    "Bruno API",
+    "Postman",
+    "Thunder Client"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "bruno",
+          "title": "Bruno",
+          "icon": "media/logo-sidebar.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "brunoLogsContainer",
+          "title": "Bruno Logs",
+          "icon": "$(output)"
+        }
+      ]
+    },
+    "views": {
+      "brunoLogsContainer": [
+        {
+          "id": "bruno.logsView",
+          "name": "Logs",
+          "type": "webview"
+        }
+      ],
+      "bruno": [
+        {
+          "type": "webview",
+          "id": "bruno.sidebarView",
+          "name": "Collections",
+          "contextualTitle": "Bruno Collections"
+        }
+      ],
+      "explorer": [
+        {
+          "id": "bruno.workspaceCollections",
+          "name": "Bruno Collections",
+          "when": "workbenchState != empty",
+          "icon": "media/logo-sidebar.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "bruno.switchFileEditor",
+        "title": "Open with Bruno Editor",
+        "category": "Bruno",
+        "icon": {
+          "light": "media/bruno-icon.svg",
+          "dark": "media/bruno-icon.svg"
+        }
+      },
+      {
+        "command": "bruno.switchToTextEditor",
+        "title": "Open with Text Editor",
+        "category": "Bruno",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "bruno.runCollection",
+        "title": "Open in Bruno Runner",
+        "category": "Bruno",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bruno.openSettings",
+        "title": "Open Collection Settings",
+        "category": "Bruno",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "bruno.createCollection",
+        "title": "Create Collection",
+        "category": "Bruno",
+        "icon": "$(file-directory-create)"
+      },
+      {
+        "command": "bruno.openCollection",
+        "title": "Open Collection",
+        "category": "Bruno",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "bruno.importCollection",
+        "title": "Import Collection",
+        "category": "Bruno",
+        "icon": "$(file-symlink-directory)"
+      },
+      {
+        "command": "bruno.refreshSidebar",
+        "title": "Refresh",
+        "category": "Bruno",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "bruno.newRequest",
+        "title": "New Request",
+        "category": "Bruno",
+        "icon": "$(add)"
+      },
+      {
+        "command": "bruno.refreshWorkspaceCollections",
+        "title": "Refresh",
+        "category": "Bruno",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "bruno.openRequestFromTree",
+        "title": "Open Request",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.runCollectionFromTree",
+        "title": "Run Collection",
+        "category": "Bruno",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bruno.runFolderFromTree",
+        "title": "Run Folder",
+        "category": "Bruno",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bruno.openCollectionSettingsFromTree",
+        "title": "Collection Settings",
+        "category": "Bruno",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "bruno.newRequestInCollection",
+        "title": "New Request",
+        "category": "Bruno",
+        "icon": "$(add)"
+      },
+      {
+        "command": "bruno.newFolderInCollection",
+        "title": "New Folder",
+        "category": "Bruno",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "bruno.revealInExplorer",
+        "title": "Reveal in Explorer",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.deleteItemFromTree",
+        "title": "Delete",
+        "category": "Bruno",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "bruno.renameItemFromTree",
+        "title": "Rename",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.saveFromEditor",
+        "title": "Save Request",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.clearLogs",
+        "title": "Clear Logs",
+        "category": "Bruno",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "bruno.openVariables",
+        "title": "Open Variables",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.openCreateCollection",
+        "title": "Create Collection",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.openGlobalEnvironments",
+        "title": "Open Global Environments",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.openEnvironmentSettings",
+        "title": "Open Environment Settings",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.openNewRequest",
+        "title": "New Request",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.openExportCollection",
+        "title": "Export Collection",
+        "category": "Bruno"
+      },
+      {
+        "command": "bruno.openCloneCollection",
+        "title": "Clone Collection",
+        "category": "Bruno"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "bruno.switchFileEditor",
+          "when": "(resourceExtname == .bru || resourceExtname == .yml) && activeCustomEditorId != bruno.requestEditor",
+          "group": "navigation"
+        },
+        {
+          "command": "bruno.switchToTextEditor",
+          "when": "(resourceExtname == .bru || resourceExtname == .yml) && activeCustomEditorId == bruno.requestEditor",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "bruno.runCollection",
+          "when": "explorerResourceIsFolder",
+          "group": "bruno@1"
+        },
+        {
+          "command": "bruno.openSettings",
+          "when": "explorerResourceIsFolder",
+          "group": "bruno@2"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "bruno.clearLogs",
+          "when": "view == bruno.logsView",
+          "group": "navigation"
+        },
+        {
+          "command": "bruno.createCollection",
+          "when": "view == bruno.sidebarView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bruno.openCollection",
+          "when": "view == bruno.sidebarView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bruno.importCollection",
+          "when": "view == bruno.sidebarView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "bruno.refreshWorkspaceCollections",
+          "when": "view == bruno.workspaceCollections",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "bruno.runCollectionFromTree",
+          "when": "view == bruno.workspaceCollections && viewItem == collection",
+          "group": "1_run@1"
+        },
+        {
+          "command": "bruno.runFolderFromTree",
+          "when": "view == bruno.workspaceCollections && viewItem == folder",
+          "group": "1_run@1"
+        },
+        {
+          "command": "bruno.openCollectionSettingsFromTree",
+          "when": "view == bruno.workspaceCollections && viewItem == collection",
+          "group": "1_run@2"
+        },
+        {
+          "command": "bruno.newRequestInCollection",
+          "when": "view == bruno.workspaceCollections && viewItem =~ /^(collection|folder)$/",
+          "group": "2_new@1"
+        },
+        {
+          "command": "bruno.newFolderInCollection",
+          "when": "view == bruno.workspaceCollections && viewItem =~ /^(collection|folder)$/",
+          "group": "2_new@2"
+        },
+        {
+          "command": "bruno.renameItemFromTree",
+          "when": "view == bruno.workspaceCollections && viewItem =~ /^(folder|http-request|graphql-request|grpc-request|ws-request)$/",
+          "group": "3_edit@1"
+        },
+        {
+          "command": "bruno.deleteItemFromTree",
+          "when": "view == bruno.workspaceCollections && viewItem =~ /^(folder|http-request|graphql-request|grpc-request|ws-request)$/",
+          "group": "3_edit@2"
+        },
+        {
+          "command": "bruno.revealInExplorer",
+          "when": "view == bruno.workspaceCollections",
+          "group": "4_misc@1"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "bruno.requestEditor",
+        "displayName": "Bruno Request Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.bru"
+          },
+          {
+            "filenamePattern": "*.yml"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "languages": [
+      {
+        "id": "bru",
+        "extensions": [
+          ".bru"
+        ],
+        "aliases": [
+          "Bruno Request"
+        ],
+        "icon": {
+          "light": "./media/bruno-icon.png",
+          "dark": "./media/bruno-icon.png"
+        },
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bru",
+        "scopeName": "source.bru",
+        "path": "./syntaxes/bruno.tmLanguage.json"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "bruno.saveFromEditor",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeCustomEditorId == 'bruno.requestEditor'"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "npm run build:extension && npm run build:webview",
+    "build:extension": "node esbuild.extension.mjs",
+    "build:webview": "rsbuild build -c rsbuild.webview.config.mjs",
+    "dev": "npm run dev:extension & npm run dev:webview",
+    "dev:extension": "node esbuild.extension.mjs --watch",
+    "dev:webview": "rsbuild dev -c rsbuild.webview.config.mjs",
+    "copy:ui": "node scripts/copy-ui.js",
+    "copy:packages": "node scripts/copy-packages.js",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:cursor": "CURSOR_PATH=$(which cursor 2>/dev/null || echo '') playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@rsbuild/core": "^1.1.2",
+    "@rsbuild/plugin-babel": "^1.0.3",
+    "@rsbuild/plugin-node-polyfill": "^1.2.0",
+    "@rsbuild/plugin-react": "^1.0.7",
+    "@rsbuild/plugin-sass": "^1.1.0",
+    "@rsbuild/plugin-styled-components": "^1.6.0",
+    "@types/adm-zip": "^0.5.7",
+    "@types/fs-extra": "^11.0.4",
+    "@types/lodash": "^4.17.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/styled-components": "^5.1.26",
+    "@types/uuid": "^10.0.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.5.2",
+    "autoprefixer": "^10.4.20",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.57.0",
+    "fs-extra": "^11.2.0",
+    "glob": "^10.3.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.1",
+    "ts-migrate": "^0.1.35",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.0.0",
+    "@fontsource/inter": "^5.0.15",
+    "@prantlf/jsonlint": "^14.0.0",
+    "@reduxjs/toolkit": "^1.8.0",
+    "@tabler/icons": "^1.46.0",
+    "@tippyjs/react": "^4.2.6",
+    "@usebruno/common": "0.18.0",
+    "@usebruno/converters": "0.17.1",
+    "@usebruno/filestore": "0.7.1",
+    "@usebruno/js": "0.45.1",
+    "@usebruno/lang": "0.34.0",
+    "@usebruno/requests": "0.15.2",
+    "@usebruno/schema": "0.23.0",
+    "@usebruno/vm2": "3.9.19",
+    "adm-zip": "^0.5.16",
+    "axios": "^1.8.3",
+    "classnames": "^2.3.1",
+    "codemirror": "^5.65.3",
+    "codemirror-graphql": "2.1.1",
+    "cookie": "^0.6.0",
+    "dompurify": "^3.2.4",
+    "escape-html": "^1.0.3",
+    "extract-zip": "^2.0.1",
+    "fast-fuzzy": "^1.12.0",
+    "fast-json-format": "^0.3.0",
+    "file-dialog": "^0.0.8",
+    "file-saver": "^2.0.5",
+    "form-data": "^4.0.0",
+    "formik": "^2.2.9",
+    "github-markdown-css": "^5.8.1",
+    "graphiql": "3.7.1",
+    "graphql": "^16.6.0",
+    "graphql-request": "^3.7.0",
+    "hexy": "^0.3.5",
+    "httpsnippet": "^3.0.0",
+    "i18next": "24.1.2",
+    "idb": "^7.0.0",
+    "immer": "^9.0.15",
+    "is-valid-path": "^0.1.1",
+    "js-yaml": "^4.1.0",
+    "jshint": "^2.13.0",
+    "jsonc-parser": "^3.2.0",
+    "jsonpath-plus": "^10.0.0",
+    "jsonschema": "^1.4.1",
+    "know-your-http-well": "^0.5.0",
+    "lodash": "^4.17.21",
+    "markdown-it": "^13.0.2",
+    "markdown-it-replace-link": "^1.2.0",
+    "mime-types": "^3.0.2",
+    "moment": "^2.30.1",
+    "moment-timezone": "^0.6.0",
+    "mousetrap": "^1.6.5",
+    "nanoid": "3.3.8",
+    "pdfjs-dist": "^4.0.0",
+    "platform": "^1.3.6",
+    "polished": "^4.3.1",
+    "posthog-node": "^3.0.0",
+    "prettier": "^3.0.0",
+    "punycode": "^2.3.1",
+    "qs": "^6.11.0",
+    "query-string": "^8.0.0",
+    "react": "19.0.0",
+    "react-copy-to-clipboard": "^5.1.0",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "19.0.0",
+    "react-hot-toast": "^2.4.0",
+    "react-i18next": "^15.0.1",
+    "react-inspector": "^6.0.2",
+    "react-json-view": "^1.21.3",
+    "react-pdf": "^9.0.0",
+    "react-player": "^2.16.0",
+    "react-redux": "^7.2.9",
+    "react-tooltip": "^5.5.2",
+    "shell-quote": "^1.8.0",
+    "styled-components": "^5.3.3",
+    "swagger-ui-react": "^5.17.0",
+    "tough-cookie": "^4.1.4",
+    "uuid": "^9.0.0",
+    "xml-formatter": "^3.5.0",
+    "yup": "^0.32.11"
+  }
+}

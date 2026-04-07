@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src/extension",
+    "module": "commonjs",
+    "target": "ES2021",
+    "lib": ["ES2021"],
+    "types": ["node", "vscode"],
+    "typeRoots": ["./node_modules/@types", "./src/extension/types"]
+  },
+  "include": [
+    "src/extension/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/webview"
+  ]
+}

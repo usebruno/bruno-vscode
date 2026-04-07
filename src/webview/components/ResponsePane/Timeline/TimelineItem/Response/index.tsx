@@ -1,0 +1,51 @@
+import React from 'react';
+import BodyBlock from '../Common/Body/index';
+import Headers from '../Common/Headers/index';
+import Status from '../Common/Status/index';
+
+interface safeStringifyJSONIfNotStringProps {
+  collection?: React.ReactNode;
+  response: unknown;
+  item?: React.ReactNode;
+}
+
+const safeStringifyJSONIfNotString = (obj: any) => {
+  if (obj === null || obj === undefined) return '';
+
+  if (typeof obj === 'string') {
+    return obj;
+  }
+
+  try {
+    return JSON.stringify(obj);
+  } catch (e) {
+    return '[Unserializable Object]';
+  }
+};
+
+const Response = ({
+  collection,
+  response,
+  item
+}: any) => {
+  let { status, statusCode, statusText, dataBuffer, headers, data, error } = response || {};
+  if (!dataBuffer) {
+    dataBuffer = Buffer.from(safeStringifyJSONIfNotString(data))?.toString('base64');
+  }
+
+  return (
+    <div>
+      <div className="mb-1">
+        <Status statusCode={status || statusCode} statusText={statusText} />
+        {response.duration && <span className="timeline-item-metadata">{response.duration}ms</span>}
+        {response.size && <span className="timeline-item-metadata">{response.size}B</span>}
+      </div>
+
+      <Headers headers={headers} type="response" />
+
+      <BodyBlock collection={collection} data={data} dataBuffer={dataBuffer} error={error} headers={headers} item={item} type="response" />
+    </div>
+  );
+};
+
+export default Response;

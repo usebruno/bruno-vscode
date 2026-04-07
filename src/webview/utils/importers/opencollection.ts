@@ -1,0 +1,80 @@
+import each from 'lodash/each';
+import { uuid } from 'utils/common';
+import { BrunoError } from 'utils/common/error';
+import { validateSchema, updateUidsInCollection, hydrateSeqInCollection } from './common';
+
+const addUidsToRoot = (collection: any) => {
+  if (collection.root?.request?.headers) {
+    each(collection.root.request.headers, (header) => {
+      header.uid = uuid();
+    });
+  }
+  if (collection.root?.request?.vars?.req) {
+    each(collection.root.request.vars.req, (v) => {
+      v.uid = uuid();
+    });
+  }
+  if (collection.root?.request?.vars?.res) {
+    each(collection.root.request.vars.res, (v) => {
+      v.uid = uuid();
+    });
+  }
+
+  const addUidsToFolderRoot = (items: any) => {
+    each(items, (item) => {
+      if (item.type === 'folder') {
+        if (item.root?.request?.headers) {
+          each(item.root.request.headers, (header) => {
+            header.uid = uuid();
+          });
+        }
+        if (item.root?.request?.vars?.req) {
+          each(item.root.request.vars.req, (v) => {
+            v.uid = uuid();
+          });
+        }
+        if (item.root?.request?.vars?.res) {
+          each(item.root.request.vars.res, (v) => {
+            v.uid = uuid();
+          });
+        }
+        if (item.items?.length) {
+          addUidsToFolderRoot(item.items);
+        }
+      }
+    });
+  };
+
+  addUidsToFolderRoot(collection.items);
+  return collection;
+};
+
+export const processOpenCollection = async (jsonData: any) => {
+  try {
+    let collection = await window.ipcRenderer.invoke('renderer:convert-opencollection-to-bruno', jsonData);
+    collection = hydrateSeqInCollection(collection);
+    collection = updateUidsInCollection(collection);
+    collection = addUidsToRoot(collection);
+    await validateSchema(collection);
+    return collection;
+  } catch (err) {
+    console.error('Error processing OpenCollection:', err);
+    throw new BrunoError('Import OpenCollection failed');
+  }
+};
+
+export const isOpenCollection = (data: any) => {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+
+  if (typeof data.opencollection !== 'string' || !data.opencollection.trim()) {
+    return false;
+  }
+
+  if (typeof data.info !== 'object' || data.info === null) {
+    return false;
+  }
+
+  return true;
+};

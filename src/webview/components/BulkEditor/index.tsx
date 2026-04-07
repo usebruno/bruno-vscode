@@ -1,0 +1,57 @@
+import React, { useMemo } from 'react';
+import get from 'lodash/get';
+import CodeEditor from 'components/CodeEditor';
+import { useTheme } from 'providers/Theme';
+import { useSelector } from 'react-redux';
+import { parseBulkKeyValue, serializeBulkKeyValue } from 'utils/common/bulkKeyValueUtils';
+
+interface BulkEditorProps {
+  params?: unknown;
+  onChange?: (...args: unknown[]) => void;
+  onToggle?: (...args: unknown[]) => void;
+  onSave?: (...args: unknown[]) => void;
+  onRun?: (...args: unknown[]) => void;
+}
+
+
+const BulkEditor = ({
+  params,
+  onChange,
+  onToggle,
+  onSave,
+  onRun
+}: any) => {
+  const preferences = useSelector((state) => state.app.preferences);
+  const { displayedTheme } = useTheme();
+
+  const parsedParams = useMemo(() => serializeBulkKeyValue(params), [params]);
+
+  const handleEdit = (value: any) => {
+    const parsed = parseBulkKeyValue(value);
+    onChange(parsed);
+  };
+
+  return (
+    <>
+      <div className="h-[200px]">
+        <CodeEditor
+          mode="text/plain"
+          theme={displayedTheme}
+          font={get(preferences, 'font.codeFont', 'default')}
+          fontSize={get(preferences, 'font.codeFontSize')}
+          value={parsedParams}
+          onEdit={handleEdit}
+          onSave={onSave}
+          onRun={onRun}
+        />
+      </div>
+      <div className="flex btn-action justify-between items-center mt-3">
+        <button className="text-link select-none ml-auto" onClick={onToggle}>
+          Key/Value Edit
+        </button>
+      </div>
+    </>
+  );
+};
+
+export default BulkEditor;

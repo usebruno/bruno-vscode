@@ -1,0 +1,65 @@
+import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
+import Collection from './Collection';
+import CreateCollection from '../CreateCollection';
+import StyledWrapper from './StyledWrapper';
+import CreateOrOpenCollection from './CreateOrOpenCollection';
+import CollectionSearch from './CollectionSearch/index';
+import { useMemo } from 'react';
+import { normalizePath } from 'utils/common/path';
+
+interface CollectionsProps {
+  showSearch?: boolean;
+}
+
+
+const Collections = ({
+  showSearch
+}: any) => {
+  const [searchText, setSearchText] = useState('');
+  const { collections } = useSelector((state) => state.collections);
+  const { workspaces, activeWorkspaceUid } = useSelector((state) => state.workspaces);
+  const [createCollectionModalOpen, setCreateCollectionModalOpen] = useState(false);
+
+  const activeWorkspace = workspaces.find((w: any) => w.uid === activeWorkspaceUid) || workspaces.find((w: any) => w.type === 'default');
+
+  const workspaceCollections = useMemo(() => {
+    if (!activeWorkspace) return [];
+    return collections.filter((c: any) => activeWorkspace.collections?.some((wc: any) => normalizePath(wc.path) === normalizePath(c.pathname))
+    );
+  }, [activeWorkspace, collections]);
+
+  if (!workspaceCollections || !workspaceCollections.length) {
+    return (
+      <StyledWrapper>
+        <CreateOrOpenCollection />
+      </StyledWrapper>
+    );
+  }
+
+  return (
+    <StyledWrapper data-testid="collections">
+      {createCollectionModalOpen ? (
+        <CreateCollection
+          onClose={() => setCreateCollectionModalOpen(false)}
+        />
+      ) : null}
+
+      {showSearch && (
+        <CollectionSearch searchText={searchText} setSearchText={setSearchText} />
+      )}
+
+      <div className="collections-list">
+        {workspaceCollections && workspaceCollections.length
+          ? workspaceCollections.map((c: any) => {
+              return (
+                <Collection searchText={searchText} collection={c} key={c.uid} />
+              );
+            })
+          : null}
+      </div>
+    </StyledWrapper>
+  );
+};
+
+export default Collections;

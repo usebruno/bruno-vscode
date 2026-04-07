@@ -1,0 +1,63 @@
+import React from 'react';
+import get from 'lodash/get';
+import { useDispatch, useSelector } from 'react-redux';
+import CodeEditor from 'components/CodeEditor';
+import { updateFolderTests } from 'providers/ReduxStore/slices/collections';
+import { saveFolderRoot } from 'providers/ReduxStore/slices/collections/actions';
+import { useTheme } from 'providers/Theme';
+import StyledWrapper from './StyledWrapper';
+import Button from 'ui/Button';
+
+interface TestsProps {
+  collection?: React.ReactNode;
+  folder: unknown;
+}
+
+
+const Tests = ({
+  collection,
+  folder
+}: any) => {
+  const dispatch = useDispatch();
+  const tests = folder.draft ? get(folder, 'draft.root.request.tests', '') : get(folder, 'root.request.tests', '');
+
+  const { displayedTheme } = useTheme();
+  const preferences = useSelector((state) => state.app.preferences);
+
+  const onEdit = (value: any) => {
+    dispatch(
+      updateFolderTests({
+        tests: value,
+        collectionUid: collection.uid,
+        folderUid: folder.uid
+      })
+    );
+  };
+
+  const handleSave = () => dispatch(saveFolderRoot(collection.uid, folder.uid));
+
+  return (
+    <StyledWrapper className="w-full flex flex-col h-full">
+      <div className="text-xs mb-4 text-muted">These tests will run any time a request in this collection is sent.</div>
+      <CodeEditor
+        collection={collection}
+        value={tests || ''}
+        theme={displayedTheme}
+        onEdit={onEdit}
+        mode="javascript"
+        onSave={handleSave}
+        font={get(preferences, 'font.codeFont', 'default')}
+        fontSize={get(preferences, 'font.codeFontSize')}
+        showHintsFor={['req', 'res', 'bru']}
+      />
+
+      <div className="mt-6">
+        <Button type="submit" size="sm" onClick={handleSave}>
+          Save
+        </Button>
+      </div>
+    </StyledWrapper>
+  );
+};
+
+export default Tests;

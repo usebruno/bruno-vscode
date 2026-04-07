@@ -1,0 +1,118 @@
+import { SidebarAccordionProvider } from './SidebarAccordionContext';
+import SidebarContent from './SidebarContent';
+import StyledWrapper from './StyledWrapper';
+
+import { useState, useEffect, useRef } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { updateLeftSidebarWidth, updateIsDragging } from 'providers/ReduxStore/slices/app';
+import CollectionsSection from './Sections/CollectionsSection/index';
+import { RootState } from 'providers/ReduxStore';
+
+const MIN_LEFT_SIDEBAR_WIDTH = 220;
+const MAX_LEFT_SIDEBAR_WIDTH = 600;
+
+interface SidebarSection {
+  id: string;
+  component: React.ComponentType;
+}
+
+const SIDEBAR_SECTIONS: SidebarSection[] = [
+  {
+    id: 'collections',
+    component: CollectionsSection
+  }
+];
+
+const Sidebar = () => {
+  const leftSidebarWidth = useSelector((state: RootState) => state.app.leftSidebarWidth);
+  const sidebarCollapsed = useSelector((state: RootState) => state.app.sidebarCollapsed);
+  const [asideWidth, setAsideWidth] = useState(leftSidebarWidth);
+  const lastWidthRef = useRef(leftSidebarWidth);
+
+  const dispatch = useDispatch();
+  const [dragging, setDragging] = useState(false);
+
+  const currentWidth = sidebarCollapsed ? 0 : asideWidth;
+
+  const clamp = (value: any, min: any, max: any) => Math.min(max, Math.max(min, value));
+
+  const handleMouseMove = (e: any) => {
+    if (!dragging || sidebarCollapsed) return;
+    e.preventDefault();
+    const nextWidth = clamp(e.clientX + 2, MIN_LEFT_SIDEBAR_WIDTH, MAX_LEFT_SIDEBAR_WIDTH);
+    if (Math.abs(nextWidth - lastWidthRef.current) < 3) return;
+    lastWidthRef.current = nextWidth;
+    setAsideWidth(nextWidth);
+  };
+
+  const handleMouseUp = (e: any) => {
+    if (dragging) {
+      e.preventDefault();
+      setDragging(false);
+      dispatch(
+        updateLeftSidebarWidth({
+          leftSidebarWidth: asideWidth
+        })
+      );
+      dispatch(
+        updateIsDragging({
+          isDragging: false
+        })
+      );
+    }
+  };
+  const handleDragbarMouseDown = (e: any) => {
+    e.preventDefault();
+    if (sidebarCollapsed) {
+      return;
+    }
+    setDragging(true);
+    dispatch(
+      updateIsDragging({
+        isDragging: true
+      })
+    );
+  };
+
+  useEffect(() => {
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [dragging, asideWidth]);
+
+  useEffect(() => {
+    setAsideWidth(leftSidebarWidth);
+  }, [leftSidebarWidth]);
+
+  return (
+    <SidebarAccordionProvider defaultExpanded={['collections']}>
+      <StyledWrapper className="flex relative h-full">
+        <aside className="sidebar" style={{ width: currentWidth, transition: dragging ? 'none' : 'width 0.2s ease-in-out' }}>
+          <div className="flex flex-row h-full w-full">
+            <div className="flex flex-col w-full" style={{ width: asideWidth }}>
+              <div className="flex flex-col flex-grow sidebar-sections-container" style={{ minHeight: 0, overflow: 'hidden' }}>
+                <div className="sidebar-sections flex flex-col flex-1">
+                  <SidebarContent
+                    sections={SIDEBAR_SECTIONS}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {!sidebarCollapsed && (
+          <div className="absolute sidebar-drag-handle h-full" onMouseDown={handleDragbarMouseDown}>
+            <div className="drag-request-border" />
+          </div>
+        )}
+      </StyledWrapper>
+    </SidebarAccordionProvider>
+  );
+};
+
+export default Sidebar;
