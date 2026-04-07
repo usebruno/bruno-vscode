@@ -24,6 +24,7 @@ import registerGlobalEnvironmentsIpc from './ipc/global-environments';
 import registerNetworkIpc from './ipc/network/index';
 import registerWorkspaceIpc from './ipc/workspace';
 import { registerCoreHandlers } from './ipc/handlers';
+import { registerCookieHandlers } from './ipc/cookie-handlers';
 
 import collectionWatcher, { setMessageSender as setWatcherMessageSender } from './app/collection-watcher';
 import { setMessageSender as setCollectionsMessageSender, setEventEmitter as setCollectionsEventEmitter } from './app/collections';
@@ -59,6 +60,7 @@ function registerIpcHandlers(): void {
   registerFilesystemIpc();
   registerGlobalEnvironmentsIpc();
   registerNetworkIpc();
+  registerCookieHandlers();
   registerDirtyStateHandlers();
 
   registerWorkspaceIpc({

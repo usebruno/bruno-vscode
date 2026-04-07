@@ -29,3 +29,6 @@ npm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Test
+test-results/
