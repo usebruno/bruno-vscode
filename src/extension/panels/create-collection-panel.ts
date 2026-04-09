@@ -33,7 +33,10 @@ export async function openCreateCollectionPanel(
     'bruno.createCollection',
     'Create Collection',
     vscode.ViewColumn.One,
-    WebviewHelper.getWebviewOptions(context.extensionUri)
+    {
+      ...WebviewHelper.getWebviewOptions(context.extensionUri),
+      retainContextWhenHidden: true
+    }
   );
 
   currentPanel = panel;
