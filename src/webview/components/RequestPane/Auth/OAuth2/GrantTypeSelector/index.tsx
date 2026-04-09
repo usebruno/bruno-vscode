@@ -86,7 +86,7 @@ const GrantTypeSelector = ({
           Grant Type
         </span>
       </div>
-      <div className="inline-flex items-center cursor-pointer grant-type-mode-selector w-fit">
+      <div className="inline-flex items-center cursor-pointer grant-type-mode-selector w-fit" data-testid="oauth2-grant-type-selector">
         <Dropdown onCreate={onDropdownCreate} icon={<Icon />} placement="bottom-end">
           <div
             className="dropdown-item"

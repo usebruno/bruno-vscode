@@ -36,6 +36,7 @@ import { LogsViewProvider } from './views/LogsViewProvider';
 import logsStore from './store/logs';
 import { registerTreeCommands, registerMainCommands } from './commands';
 import { registerDirtyStateHandlers, registerSaveHandler } from './editors/dirty-state-manager';
+import { createOAuth2UriHandler } from './ipc/network/authorize-user-in-system-browser';
 
 let extensionActivated = false;
 
@@ -102,6 +103,9 @@ export function activate(context: vscode.ExtensionContext): void {
   cookiesStore.initializeCookies();
   setupMessageBroadcaster();
   registerIpcHandlers();
+
+  // Register OAuth2 URI handler for authorization code callbacks
+  context.subscriptions.push(vscode.window.registerUriHandler(createOAuth2UriHandler()));
 
   const brunoEditorProvider = new BrunoEditorProvider(context);
 

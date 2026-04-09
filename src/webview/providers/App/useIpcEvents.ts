@@ -389,7 +389,9 @@ const useIpcEvents = () => {
         collectionUid: credData.collectionUid || '',
         itemUid: credData.itemUid || null,
         folderUid: credData.folderUid || null,
-        credentialsId: credData.credentialsId || 'credentials'
+        url: credData.url || '',
+        credentialsId: credData.credentialsId || 'credentials',
+        credentials: credData.credentials || {}
       };
       dispatch(collectionAddOauth2CredentialsByUrl(payload));
     });

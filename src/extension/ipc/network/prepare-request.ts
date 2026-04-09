@@ -265,7 +265,11 @@ const applyAuth = (request: PreparedRequest, auth: BrunoRequest['auth']): void =
       }
       break;
 
-    // digest, oauth2, awsv4 require additional handling
+    case 'oauth2':
+      // Token is already applied by applyOAuth2ToRequest in the execution pipeline
+      break;
+
+    // digest, awsv4 require additional handling
     default:
       console.warn(`Auth mode ${auth.mode} not yet fully implemented`);
   }

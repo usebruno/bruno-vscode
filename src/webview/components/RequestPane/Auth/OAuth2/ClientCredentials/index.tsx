@@ -111,7 +111,7 @@ const OAuth2ClientCredentials = ({
         const { showWarning, warningMessage } = isSensitive(value);
 
         return (
-          <div className="flex items-center gap-4 w-full" key={`input-${key}`}>
+          <div className="flex items-center gap-4 w-full" key={`input-${key}`} data-testid={`oauth2-field-${key}`}>
             <label className="block min-w-[140px]">{label}</label>
             <div className="single-line-editor-wrapper flex-1 flex items-center">
               <SingleLineEditor
@@ -130,9 +130,9 @@ const OAuth2ClientCredentials = ({
           </div>
         );
       })}
-      <div className="flex items-center gap-4 w-full" key="input-credentials-placement">
+      <div className="flex items-center gap-4 w-full" key="input-credentials-placement" data-testid="oauth2-field-credentialsPlacement">
         <label className="block min-w-[140px]">Add Credentials to</label>
-        <div className="inline-flex items-center cursor-pointer token-placement-selector">
+        <div className="inline-flex items-center cursor-pointer token-placement-selector" data-testid="oauth2-credentials-placement-selector">
           <Dropdown onCreate={onDropdownCreate} icon={<CredentialsPlacementIcon />} placement="bottom-end">
             <div
               className="dropdown-item"
@@ -163,7 +163,7 @@ const OAuth2ClientCredentials = ({
           Token
         </span>
       </div>
-      <div className="flex items-center gap-4 w-full" key="input-token-name">
+      <div className="flex items-center gap-4 w-full" key="input-token-name" data-testid="oauth2-field-credentialsId">
         <label className="block min-w-[140px]">Token ID</label>
         <div className="single-line-editor-wrapper flex-1">
           <SingleLineEditor
@@ -178,9 +178,9 @@ const OAuth2ClientCredentials = ({
           />
         </div>
       </div>
-      <div className="flex items-center gap-4 w-full" key="input-token-placement">
+      <div className="flex items-center gap-4 w-full" key="input-token-placement" data-testid="oauth2-field-tokenPlacement">
         <label className="block min-w-[140px]">Add token to</label>
-        <div className="inline-flex items-center cursor-pointer token-placement-selector w-fit">
+        <div className="inline-flex items-center cursor-pointer token-placement-selector w-fit" data-testid="oauth2-token-placement-selector">
           <Dropdown onCreate={onDropdownCreate} icon={<TokenPlacementIcon />} placement="bottom-end">
             <div
               className="dropdown-item"
@@ -206,7 +206,7 @@ const OAuth2ClientCredentials = ({
       {
         tokenPlacement === 'header'
           ? (
-              <div className="flex items-center gap-4 w-full" key="input-token-prefix">
+              <div className="flex items-center gap-4 w-full" key="input-token-prefix" data-testid="oauth2-field-tokenHeaderPrefix">
                 <label className="block min-w-[140px]">Header Prefix</label>
                 <div className="single-line-editor-wrapper flex-1">
                   <SingleLineEditor
@@ -222,7 +222,7 @@ const OAuth2ClientCredentials = ({
               </div>
             )
           : (
-              <div className="flex items-center gap-4 w-full" key="input-token-query-param-key">
+              <div className="flex items-center gap-4 w-full" key="input-token-query-param-key" data-testid="oauth2-field-tokenQueryKey">
                 <label className="block min-w-[140px]">Query Param Key</label>
                 <div className="single-line-editor-wrapper flex-1">
                   <SingleLineEditor
@@ -247,7 +247,7 @@ const OAuth2ClientCredentials = ({
         </span>
       </div>
 
-      <div className="flex items-center gap-4 w-full mb-4">
+      <div className="flex items-center gap-4 w-full mb-4" data-testid="oauth2-field-refreshTokenUrl">
         <label className="block min-w-[140px]">Refresh Token URL</label>
         <div className="single-line-editor-wrapper flex-1">
           <SingleLineEditor

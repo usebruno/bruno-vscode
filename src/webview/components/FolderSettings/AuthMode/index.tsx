@@ -56,11 +56,11 @@ const AuthMode = ({
       label: 'NTLM Auth',
       onClick: () => onModeChange('ntlm')
     },
-    // {
-    //   id: 'oauth2',
-    //   label: 'OAuth 2.0',
-    //   onClick: () => onModeChange('oauth2')
-    // },
+    {
+      id: 'oauth2',
+      label: 'OAuth 2.0',
+      onClick: () => onModeChange('oauth2')
+    },
     {
       id: 'wsse',
       label: 'WSSE Auth',

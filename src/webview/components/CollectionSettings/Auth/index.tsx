@@ -44,9 +44,9 @@ const Auth = ({
       case 'ntlm': {
         return <NTLMAuth collection={collection} />;
       }
-      // case 'oauth2': {
-      //   return <OAuth2 collection={collection} />;
-      // }
+      case 'oauth2': {
+        return <OAuth2 collection={collection} />;
+      }
       case 'wsse': {
         return <WsseAuth collection={collection} />;
       }

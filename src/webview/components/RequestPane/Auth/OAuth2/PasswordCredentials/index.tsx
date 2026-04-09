@@ -115,7 +115,7 @@ const OAuth2PasswordCredentials = ({
         const { showWarning, warningMessage } = isSensitive(value);
 
         return (
-          <div className="flex items-center gap-4 w-full" key={`input-${key}`}>
+          <div className="flex items-center gap-4 w-full" key={`input-${key}`} data-testid={`oauth2-field-${key}`}>
             <label className="block min-w-[140px]">{label}</label>
             <div className="single-line-editor-wrapper flex-1 flex items-center">
               <SingleLineEditor
@@ -134,9 +134,9 @@ const OAuth2PasswordCredentials = ({
           </div>
         );
       })}
-      <div className="flex items-center gap-4 w-full" key="input-credentials-placement">
+      <div className="flex items-center gap-4 w-full" key="input-credentials-placement" data-testid="oauth2-field-credentialsPlacement">
         <label className="block min-w-[140px]">Add Credentials to</label>
-        <div className="inline-flex items-center cursor-pointer token-placement-selector">
+        <div className="inline-flex items-center cursor-pointer token-placement-selector" data-testid="oauth2-credentials-placement-selector">
           <Dropdown onCreate={onDropdownCreate} icon={<CredentialsPlacementIcon />} placement="bottom-end">
             <div
               className="dropdown-item"

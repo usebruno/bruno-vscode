@@ -41,7 +41,8 @@ export type {
   OAuthState,
   CollectionDraft,
   EnvironmentsDraft,
-  SecurityConfig
+  SecurityConfig,
+  OAuth2CredentialEntry
 } from './collection-ext';
 
 export type {

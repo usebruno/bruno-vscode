@@ -178,19 +178,19 @@ const Auth = ({
           />
         );
       }
-      // case 'oauth2': {
-      //   return (
-      //     <>
-      //       <GrantTypeSelector
-      //         request={request}
-      //         updateAuth={updateFolderAuth}
-      //         collection={collection}
-      //         item={folder}
-      //       />
-      //       <GrantTypeComponentMap collection={collection} folder={folder} />
-      //     </>
-      //   );
-      // }
+      case 'oauth2': {
+        return (
+          <>
+            <GrantTypeSelector
+              request={request}
+              updateAuth={updateFolderAuth}
+              collection={collection}
+              item={folder}
+            />
+            <GrantTypeComponentMap collection={collection} folder={folder} />
+          </>
+        );
+      }
       case 'inherit': {
         const source = getEffectiveAuthSource();
         return (

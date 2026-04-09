@@ -77,6 +77,7 @@ export interface OAuth2 {
   refreshTokenUrl?: string | null;
   autoRefreshToken?: boolean | null;
   autoFetchToken?: boolean | null;
+  tokenSource?: 'access_token' | 'id_token' | null;
   additionalParameters?: OAuthAdditionalParameters | null;
 }
 

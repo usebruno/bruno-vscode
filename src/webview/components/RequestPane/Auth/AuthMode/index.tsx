@@ -56,11 +56,11 @@ const AuthMode = ({
       label: 'NTLM Auth',
       onClick: () => onModeChange('ntlm')
     },
-    // {
-    //   id: 'oauth2',
-    //   label: 'OAuth 2.0',
-    //   onClick: () => onModeChange('oauth2')
-    // },
+    {
+      id: 'oauth2',
+      label: 'OAuth 2.0',
+      onClick: () => onModeChange('oauth2')
+    },
     {
       id: 'wsse',
       label: 'WSSE Auth',
@@ -85,7 +85,7 @@ const AuthMode = ({
 
   return (
     <StyledWrapper>
-      <div className="inline-flex items-center cursor-pointer auth-mode-selector">
+      <div className="inline-flex items-center cursor-pointer auth-mode-selector" data-testid="oauth2-auth-mode-selector">
         <MenuDropdown
           items={menuItems}
           placement="bottom-end"

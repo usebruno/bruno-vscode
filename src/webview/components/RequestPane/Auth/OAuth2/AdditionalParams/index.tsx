@@ -252,7 +252,7 @@ const AdditionalParams = ({
                     }}
                     className="mousetrap bg-transparent"
                   >
-                    {sendInOptionsMap[grantType || 'authorization_code'][activeTab].map((optionValue: any) => <option key={optionValue} value={optionValue}>
+                    {(sendInOptionsMap[grantType || 'authorization_code']?.[activeTab] || ['headers', 'queryparams', 'body']).map((optionValue: any) => <option key={optionValue} value={optionValue}>
                       {optionValue}
                     </option>)}
                   </select>

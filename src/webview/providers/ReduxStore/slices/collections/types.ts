@@ -575,13 +575,15 @@ export interface StreamDataReceivedPayload extends ItemUidPayload {
 export interface CollectionAddOauth2CredentialsByUrlPayload extends CollectionUidPayload {
   itemUid?: UID | null;
   folderUid?: UID | null;
+  url: string;
   credentialsId: string;
-  [key: string]: unknown;
+  credentials: Record<string, unknown>;
+  debugInfo?: { data: unknown[] };
 }
 
 export interface CollectionClearOauth2CredentialsByUrlPayload extends CollectionUidPayload {
-  itemUid?: UID | null;
-  folderUid?: UID | null;
+  url: string;
+  credentialsId: string;
 }
 
 export interface CollectionAddEnvFileEventPayload {

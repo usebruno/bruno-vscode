@@ -2727,7 +2727,22 @@ export const hydrateCollectionWithUiStateSnapshot = (payload: any) => (dispatch:
   });
 };
 
-export const fetchOauth2Credentials = (payload: any) => async (dispatch: any, getState: any) => {
+interface FetchOauth2CredentialsPayload {
+  request: Record<string, unknown>;
+  collection: AppCollection;
+  itemUid: string;
+  folderUid?: string | null;
+}
+
+interface OAuth2TokenResponse {
+  credentials: Record<string, unknown>;
+  url: string;
+  collectionUid: string;
+  credentialsId: string;
+  debugInfo?: { data: unknown[] };
+}
+
+export const fetchOauth2Credentials = (payload: FetchOauth2CredentialsPayload): ThunkAction<Promise<Record<string, unknown>>> => async (dispatch, getState) => {
   const { request, collection, itemUid, folderUid } = payload;
   const state = getState();
   const { globalEnvironments, activeGlobalEnvironmentUid } = state.globalEnvironments;
@@ -2736,14 +2751,14 @@ export const fetchOauth2Credentials = (payload: any) => async (dispatch: any, ge
   return new Promise((resolve, reject) => {
     window.ipcRenderer
       .invoke('renderer:fetch-oauth2-credentials', { itemUid, request, collection })
-      .then(({ credentials, url, collectionUid, credentialsId, debugInfo }) => {
+      .then(({ credentials, url, collectionUid, credentialsId, debugInfo }: OAuth2TokenResponse) => {
         dispatch(
           collectionAddOauth2CredentialsByUrl({
             credentials,
             url,
             collectionUid,
             credentialsId,
-            debugInfo: safeParseJSON(safeStringifyJSON(debugInfo)),
+            debugInfo: safeParseJSON(safeStringifyJSON(debugInfo)) as { data: unknown[] } | undefined,
             folderUid: folderUid || null,
             itemUid: !folderUid ? itemUid : null
           })
@@ -2754,7 +2769,7 @@ export const fetchOauth2Credentials = (payload: any) => async (dispatch: any, ge
   });
 };
 
-export const refreshOauth2Credentials = (payload: any) => async (dispatch: any, getState: any) => {
+export const refreshOauth2Credentials = (payload: FetchOauth2CredentialsPayload): ThunkAction<Promise<Record<string, unknown>>> => async (dispatch, getState) => {
   const { request, collection, folderUid, itemUid } = payload;
   const state = getState();
   const { globalEnvironments, activeGlobalEnvironmentUid } = state.globalEnvironments;
@@ -2763,14 +2778,14 @@ export const refreshOauth2Credentials = (payload: any) => async (dispatch: any, 
   return new Promise((resolve, reject) => {
     window.ipcRenderer
       .invoke('renderer:refresh-oauth2-credentials', { itemUid, request, collection })
-      .then(({ credentials, url, collectionUid, debugInfo, credentialsId }) => {
+      .then(({ credentials, url, collectionUid, debugInfo, credentialsId }: OAuth2TokenResponse) => {
         dispatch(
           collectionAddOauth2CredentialsByUrl({
             credentials,
             url,
             collectionUid,
             credentialsId,
-            debugInfo: safeParseJSON(safeStringifyJSON(debugInfo)),
+            debugInfo: safeParseJSON(safeStringifyJSON(debugInfo)) as { data: unknown[] } | undefined,
             folderUid: folderUid || null,
             itemUid: !folderUid ? itemUid : null
           })
@@ -2781,7 +2796,7 @@ export const refreshOauth2Credentials = (payload: any) => async (dispatch: any, 
   });
 };
 
-export const clearOauth2Cache = (payload: any) => async (dispatch: any, getState: any) => {
+export const clearOauth2Cache = (payload: { collectionUid: string; url: string; credentialsId: string }): ThunkAction<Promise<void>> => async (dispatch) => {
   const { collectionUid, url, credentialsId } = payload;
   return new Promise<void>((resolve, reject) => {
     window.ipcRenderer
@@ -2789,7 +2804,9 @@ export const clearOauth2Cache = (payload: any) => async (dispatch: any, getState
       .then(() => {
         dispatch(
           collectionClearOauth2CredentialsByUrl({
-            collectionUid
+            collectionUid,
+            url,
+            credentialsId
           })
         );
         resolve();

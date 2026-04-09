@@ -170,40 +170,38 @@ const OAuth2AuthorizationCode = ({
       </div>
       <div className="flex items-center gap-4 w-full" key="input-callbackUrl">
         <label className="block min-w-[140px]">Callback URL</label>
-        <div className="flex flex-col gap-1 w-full">
-          <div className="single-line-editor-wrapper flex-1 flex items-center">
+        <div className="flex flex-col gap-1 flex-1 min-w-0" title="Callback URL is managed by Bruno and cannot be changed in VS Code">
+          <div className="single-line-editor-wrapper flex-1 flex items-center opacity-50">
             <SingleLineEditor
-              value={callbackUrl}
+              value={callbackUrl || 'https://oauth.usebruno.com/vscode/callback'}
               theme={storedTheme}
               onSave={handleSave}
-              onChange={(val: any) => handleChange('callbackUrl', val)}
+              onChange={() => {}}
               onRun={handleRun}
               collection={collection}
               item={item}
-              placeholder={useSystemBrowser ? 'https://oauth.usebruno.com/callback' : undefined}
               isCompact
+              readOnly
             />
           </div>
+          <span className="text-xs text-muted">Managed by Bruno. Redirects via oauth.usebruno.com</span>
         </div>
       </div>
       <div className="flex items-center gap-4 w-full" key="input-use-system-browser">
         <label className="block min-w-[140px]"></label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 opacity-50" title="VS Code always uses the system browser for OAuth authorization">
           <input
             type="checkbox"
-            checked={Boolean(useSystemBrowser)}
-            onChange={handleUseSystemBrowserToggle}
-            className="cursor-pointer"
+            checked={true}
+            disabled
+            className="cursor-not-allowed"
           />
-          <label
-            className="block cursor-pointer"
-            onClick={(e) => {
-              e.preventDefault();
-              handleUseSystemBrowserToggle({ target: { checked: !useSystemBrowser } });
-            }}
-          >
+          <label className="block cursor-not-allowed">
             Use system browser for OAuth
           </label>
+          <span title="VS Code extensions cannot embed a browser. The system browser is always used for OAuth authorization.">
+            <IconHelp size={14} className="text-gray-400" />
+          </span>
         </div>
       </div>
       {inputsConfig.map((input) => {

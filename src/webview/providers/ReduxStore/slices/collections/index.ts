@@ -22,7 +22,7 @@ import { splitOnFirst, parsePathParams } from 'utils/url';
 import { parseQueryParams } from '@usebruno/common/utils';
 // @ts-expect-error - @usebruno/common/utils may not export buildQueryString in types
 import { buildQueryString as stringifyQueryParams } from '@usebruno/common/utils';
-import type { AppCollection, AppItem, UID, KeyValue, DraftRequestBody, HttpRequestParam, ResponseState, AuthMode } from '@bruno-types';
+import type { AppCollection, AppItem, UID, KeyValue, DraftRequestBody, HttpRequestParam, ResponseState, AuthMode, OAuth2CredentialEntry } from '@bruno-types';
 import type {
   CollectionUidPayload,
   ItemUidPayload,
@@ -2292,22 +2292,33 @@ export const collectionsSlice = createSlice({
     },
 
     collectionAddOauth2CredentialsByUrl: (state, action: PayloadAction<CollectionAddOauth2CredentialsByUrlPayload>) => {
-      const { collectionUid } = action.payload;
+      const { collectionUid, folderUid, itemUid, url, credentials, credentialsId, debugInfo } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
-      if (collection) {
-        if (!collection.oauth2Credentials) {
-          collection.oauth2Credentials = {};
-        }
-        Object.assign(collection.oauth2Credentials, action.payload);
+      if (!collection) return;
+
+      if (!collection.oauth2Credentials || !Array.isArray(collection.oauth2Credentials)) {
+        collection.oauth2Credentials = [];
       }
+
+      // Remove existing credentials for the same combination
+      const filtered = collection.oauth2Credentials.filter(
+        (creds: OAuth2CredentialEntry) => !(creds.url === url && creds.collectionUid === collectionUid && creds.credentialsId === credentialsId)
+      );
+
+      // Add the new credential
+      filtered.push({ collectionUid, folderUid: folderUid || null, itemUid: itemUid || null, url, credentials, credentialsId, debugInfo });
+      collection.oauth2Credentials = filtered;
     },
 
     collectionClearOauth2CredentialsByUrl: (state, action: PayloadAction<CollectionClearOauth2CredentialsByUrlPayload>) => {
-      const { collectionUid } = action.payload;
+      const { collectionUid, url, credentialsId } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
-      if (collection && collection.oauth2Credentials) {
-        collection.oauth2Credentials = {};
-      }
+      if (!collection) return;
+      if (!collection.oauth2Credentials || !Array.isArray(collection.oauth2Credentials)) return;
+
+      collection.oauth2Credentials = collection.oauth2Credentials.filter(
+        (creds: OAuth2CredentialEntry) => !(creds.url === url && creds.collectionUid === collectionUid && creds.credentialsId === credentialsId)
+      );
     },
 
     collectionAddEnvFileEvent: (state, action: PayloadAction<CollectionAddEnvFileEventPayload>) => {

@@ -58,7 +58,7 @@ const TokenSection = ({
             ? <IconChevronDown size={18} className="text-gray-500" />
             : <IconChevronRight size={18} className="text-gray-500" />}
           <div className="flex flex-row justify-between w-full">
-            <h3 className="font-medium">{title}</h3>
+            <h3 className="font-medium" data-testid="oauth2-token-title">{title}</h3>
             {decodedToken?.exp && <ExpiryTimer expiresIn={decodedToken?.exp} />}
           </div>
         </div>

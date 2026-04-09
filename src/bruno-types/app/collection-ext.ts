@@ -12,6 +12,16 @@ export interface RequestSent {
   [key: string]: unknown;
 }
 
+export interface OAuth2CredentialEntry {
+  collectionUid: UID;
+  folderUid?: UID | null;
+  itemUid?: UID | null;
+  url: string;
+  credentialsId: string;
+  credentials: Record<string, unknown>;
+  debugInfo?: { data: unknown[] };
+}
+
 export interface TimelineEntry {
   type: 'request' | 'response' | 'error';
   eventType?: string;
@@ -122,7 +132,7 @@ export interface AppCollection extends Omit<Collection, 'items'> {
   runnerResult?: RunnerResult;
   runnerTags?: string[];
   runnerTagsEnabled?: boolean;
-  oauth2Credentials?: Record<string, unknown>;
+  oauth2Credentials?: OAuth2CredentialEntry[];
   runnerConfig?: Record<string, unknown>;
   globalEnvironmentVariables?: Record<string, string>;
   promptVariables?: Record<string, string> | null;

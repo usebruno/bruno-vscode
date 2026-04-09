@@ -1,19 +1,20 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
-import { cloneDeep, find, get } from 'lodash';
-import { IconLoader2, IconX } from '@tabler/icons';
+import { cloneDeep, find } from 'lodash';
+import { IconX } from '@tabler/icons';
 import { interpolate } from '@usebruno/common';
 import { fetchOauth2Credentials, clearOauth2Cache, refreshOauth2Credentials, cancelOauth2AuthorizationRequest, isOauth2AuthorizationRequestInProgress } from 'providers/ReduxStore/slices/collections/actions';
 import { getAllVariables } from 'utils/collections/index';
 import Button from 'ui/Button';
+import type { AppCollection, AppItem, OAuth2CredentialEntry } from '@bruno-types';
 
 interface Oauth2ActionButtonsProps {
-  item: unknown;
-  request: unknown;
-  collection?: unknown;
-  url?: unknown;
-  credentialsId?: string;
+  item: AppItem;
+  request: Record<string, unknown>;
+  collection: AppCollection;
+  url: string;
+  credentialsId: string;
 }
 
 const Oauth2ActionButtons = ({
@@ -22,19 +23,16 @@ const Oauth2ActionButtons = ({
   collection,
   url: accessTokenUrl,
   credentialsId
-}: any) => {
-  const { uid: collectionUid } = collection;
+}: Oauth2ActionButtonsProps) => {
+  const collectionUid = collection.uid;
 
   const dispatch = useDispatch();
-  const preferences = useSelector((state: any) => state.app.preferences);
   const [fetchingToken, toggleFetchingToken] = useState(false);
   const [refreshingToken, toggleRefreshingToken] = useState(false);
   const [fetchingAuthorizationCode, toggleFetchingAuthorizationCode] = useState(false);
 
-  const useSystemBrowser = get(preferences, 'request.oauth2.useSystemBrowser', false);
-
   useEffect(() => {
-    if (useSystemBrowser && fetchingToken) {
+    if (fetchingToken) {
       const getRequestStatus = async () => {
         try {
           const inProgress = await (dispatch(isOauth2AuthorizationRequestInProgress()) as unknown as Promise<boolean>);
@@ -45,45 +43,52 @@ const Oauth2ActionButtons = ({
       };
       getRequestStatus();
     }
-  }, [useSystemBrowser, fetchingToken, dispatch]);
+  }, [fetchingToken, dispatch]);
+
+  const allVariables = useMemo(() => getAllVariables(collection, item), [collection, item]);
 
   const interpolatedAccessTokenUrl = useMemo(() => {
-    const variables = getAllVariables(collection, item);
-    return interpolate(accessTokenUrl, variables);
-  }, [collection, item, accessTokenUrl]);
+    return (interpolate as (str: string, vars: Record<string, unknown>) => string)(accessTokenUrl, allVariables);
+  }, [accessTokenUrl, allVariables]);
 
-  const credentialsData = find(collection?.oauth2Credentials, (creds) => creds?.url == interpolatedAccessTokenUrl && creds?.collectionUid == collectionUid && creds?.credentialsId == credentialsId);
-  const creds = credentialsData?.credentials || {};
+  const credentialsData = find(
+    collection?.oauth2Credentials as OAuth2CredentialEntry[] | undefined,
+    (creds) => creds?.url === interpolatedAccessTokenUrl && creds?.collectionUid === collectionUid && creds?.credentialsId === credentialsId
+  );
+  const creds = (credentialsData?.credentials || {}) as Record<string, unknown>;
 
   const handleFetchOauth2Credentials = async () => {
-    let requestCopy = cloneDeep(request);
-    requestCopy.oauth2 = requestCopy?.auth.oauth2;
+    const requestCopy = cloneDeep(request) as Record<string, unknown>;
+    const auth = requestCopy.auth as { oauth2?: unknown } | undefined;
+    requestCopy.oauth2 = auth?.oauth2;
     requestCopy.headers = {};
+    // Attach all resolved variables so the backend can interpolate OAuth2 config fields
+    requestCopy.mergedVariables = allVariables;
     toggleFetchingToken(true);
     try {
       const result = await (dispatch(fetchOauth2Credentials({
         itemUid: item.uid,
         request: requestCopy,
-        collection,
-        forceGetToken: true
-      })) as unknown as Promise<{ access_token?: string; error?: string }>);
+        collection
+      })) as unknown as Promise<Record<string, unknown>>);
 
       if (!result || !result.access_token) {
-        const errorMessage = result?.error || 'No access token received from authorization server';
+        const errorMessage = (result?.error as string) || 'No access token received from authorization server';
         console.error(errorMessage);
         toast.error(errorMessage);
         return;
       }
 
       toast.success('Token fetched successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { message?: string };
       console.error('could not fetch the token!');
       console.error(error);
       // Don't show error toast for user cancellation
-      if (error?.message && error.message.includes('cancelled by user')) {
+      if (err?.message && err.message.includes('cancelled by user')) {
         return;
       }
-      toast.error(error?.message || 'An error occurred while fetching token!');
+      toast.error(err?.message || 'An error occurred while fetching token!');
     } finally {
       toggleFetchingToken(false);
       toggleFetchingAuthorizationCode(false);
@@ -91,41 +96,44 @@ const Oauth2ActionButtons = ({
   };
 
   const handleRefreshAccessToken = async () => {
-    let requestCopy = cloneDeep(request);
-    requestCopy.oauth2 = requestCopy?.auth.oauth2;
+    const requestCopy = cloneDeep(request) as Record<string, unknown>;
+    const auth = requestCopy.auth as { oauth2?: unknown } | undefined;
+    requestCopy.oauth2 = auth?.oauth2;
     requestCopy.headers = {};
+    // Attach all resolved variables so the backend can interpolate OAuth2 config fields
+    requestCopy.mergedVariables = allVariables;
     toggleRefreshingToken(true);
     try {
       const result = await (dispatch(refreshOauth2Credentials({
         itemUid: item.uid,
         request: requestCopy,
-        collection,
-        forceGetToken: true
-      })) as unknown as Promise<{ access_token?: string; error?: string }>);
+        collection
+      })) as unknown as Promise<Record<string, unknown>>);
 
       toggleRefreshingToken(false);
 
       if (!result || !result.access_token) {
-        const errorMessage = result?.error || 'No access token received from authorization server';
+        const errorMessage = (result?.error as string) || 'No access token received from authorization server';
         console.error(errorMessage);
         toast.error(errorMessage);
         return;
       }
 
       toast.success('Token refreshed successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { message?: string };
       console.error(error);
       toggleRefreshingToken(false);
-      toast.error(error?.message || 'An error occurred while refreshing token!');
+      toast.error(err?.message || 'An error occurred while refreshing token!');
     }
   };
 
-  const handleClearCache = (e: any) => {
-    (dispatch(clearOauth2Cache({ collectionUid: collection?.uid, url: interpolatedAccessTokenUrl, credentialsId })) as unknown as Promise<void>)
+  const handleClearCache = () => {
+    (dispatch(clearOauth2Cache({ collectionUid, url: interpolatedAccessTokenUrl, credentialsId })) as unknown as Promise<void>)
       .then(() => {
         toast.success('Cleared cache successfully');
       })
-      .catch((err: any) => {
+      .catch((err: { message: string }) => {
         toast.error(err.message);
       });
   };
@@ -152,6 +160,7 @@ const Oauth2ActionButtons = ({
         onClick={handleFetchOauth2Credentials}
         disabled={fetchingToken || refreshingToken}
         loading={fetchingToken}
+        data-testid="oauth2-get-token-btn"
       >
         Get Access Token
       </Button>
@@ -163,12 +172,13 @@ const Oauth2ActionButtons = ({
               onClick={handleRefreshAccessToken}
               disabled={fetchingToken || refreshingToken}
               loading={refreshingToken}
+              data-testid="oauth2-refresh-token-btn"
             >
               Refresh Token
             </Button>
           )
         : null}
-      {useSystemBrowser && fetchingAuthorizationCode
+      {fetchingAuthorizationCode
         ? (
             <Button
               size="sm"
@@ -176,6 +186,7 @@ const Oauth2ActionButtons = ({
               onClick={handleCancelAuthorization}
               icon={<IconX size={16} />}
               iconPosition="left"
+              data-testid="oauth2-cancel-auth-btn"
             >
               Cancel Authorization
             </Button>
@@ -185,6 +196,7 @@ const Oauth2ActionButtons = ({
         color="secondary"
         variant="ghost"
         onClick={handleClearCache}
+        data-testid="oauth2-clear-cache-btn"
       >
         Clear Cache
       </Button>
