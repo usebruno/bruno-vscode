@@ -672,11 +672,11 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
     tests,
     vars,
     assertions,
-    timeout: settings.timeout as number || 0,
+    timeout: (settings.timeout === 'inherit' ? undefined : settings.timeout as number) || 0,
     settings: {
       followRedirects: settings.followRedirects as boolean | undefined,
       maxRedirects: settings.maxRedirects as number | undefined,
-      timeout: settings.timeout as number | undefined,
+      timeout: settings.timeout === 'inherit' ? undefined : settings.timeout as number | undefined,
       encodeUrl: settings.encodeUrl as boolean | undefined
     },
     digestConfig,
