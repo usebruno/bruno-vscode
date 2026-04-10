@@ -8,7 +8,7 @@ import path from 'path';
 import os from 'os';
 import yaml from 'js-yaml';
 import crypto from 'crypto';
-import { writeFile, validateName, isValidCollectionDirectory } from './filesystem';
+import { writeFile, validateName, isValidCollectionDirectory, posixifyPath } from './filesystem';
 import { generateUidBasedOnHash } from './common';
 import { withLock, getWorkspaceLockKey } from './workspace-lock';
 
@@ -131,7 +131,7 @@ const makeRelativePath = (workspacePath: string, absolutePath: string): string =
 };
 
 const normalizeCollectionEntry = (workspacePath: string, collection: CollectionEntry): CollectionEntry => {
-  const relativePath = makeRelativePath(workspacePath, collection.path);
+  const relativePath = posixifyPath(makeRelativePath(workspacePath, collection.path.trim()));
 
   const normalizedCollection: CollectionEntry = {
     name: collection.name,

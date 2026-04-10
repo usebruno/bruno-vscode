@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import path from 'path';
 
 import {
   setMessageSender,
@@ -174,7 +175,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
         const watcherPaths = collectionWatcher.getAllWatcherPaths();
         for (const watchPath of watcherPaths) {
-          if (watchPath === oldPath || watchPath.startsWith(oldPath + '/') || watchPath.startsWith(oldPath + '\\')) {
+          if (path.normalize(watchPath) === path.normalize(oldPath) || path.normalize(watchPath).startsWith(path.normalize(oldPath) + path.sep)) {
             // Calculate the new watch path
             const relativePath = watchPath.substring(oldPath.length);
             const newWatchPath = newPath + relativePath;

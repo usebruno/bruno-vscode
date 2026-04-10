@@ -7,7 +7,8 @@ import {
   isWSLPath,
   normalizeAndResolvePath,
   sizeInMB,
-  getCollectionFormat
+  getCollectionFormat,
+  posixifyPath
 } from '../utils/filesystem';
 
 const {
@@ -66,19 +67,19 @@ const parseDotEnv = (content: string): Record<string, string> => {
 const isDotEnvFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const basename = path.basename(pathname);
-  return dirname === collectionPath && basename === '.env';
+  return path.normalize(dirname) === path.normalize(collectionPath) && basename === '.env';
 };
 
 const isBrunoConfigFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const basename = path.basename(pathname);
-  return dirname === collectionPath && basename === 'bruno.json';
+  return path.normalize(dirname) === path.normalize(collectionPath) && basename === 'bruno.json';
 };
 
 const isEnvironmentsFolder = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const envDirectory = path.join(collectionPath, 'environments');
-  return dirname === envDirectory;
+  return path.normalize(dirname) === path.normalize(envDirectory);
 };
 
 const isFolderRootFile = (pathname: string, collectionPath: string): boolean => {
@@ -97,7 +98,7 @@ const isCollectionRootFile = (pathname: string, collectionPath: string): boolean
   const dirname = path.dirname(pathname);
   const basename = path.basename(pathname);
 
-  if (dirname !== collectionPath) {
+  if (path.normalize(dirname) !== path.normalize(collectionPath)) {
     return false;
   }
   return basename === 'collection.bru' || basename === 'opencollection.yml';
@@ -193,10 +194,11 @@ const addEnvironmentFile = async (
 ): Promise<void> => {
   try {
     const basename = path.basename(pathname);
+    const posixPathname = posixifyPath(pathname);
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixPathname,
         name: basename
       }
     };
@@ -246,10 +248,11 @@ const changeEnvironmentFile = async (
 const unlinkEnvironmentFile = async (pathname: string, collectionUid: string): Promise<void> => {
   try {
     const basename = path.basename(pathname);
+    const posixPathname = posixifyPath(pathname);
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixPathname,
         name: basename
       },
       data: {
@@ -474,10 +477,11 @@ class CollectionWatcher {
   ): Promise<void> {
     try {
       const basename = path.basename(pathname);
+      const posixPathname = posixifyPath(pathname);
       const file: FileData = {
         meta: {
           collectionUid,
-          pathname,
+          pathname: posixPathname,
           name: basename
         }
       };
@@ -526,7 +530,7 @@ class CollectionWatcher {
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixifyPath(pathname),
         name: path.basename(pathname),
         collectionRoot: true
       }
@@ -575,7 +579,7 @@ class CollectionWatcher {
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixifyPath(pathname),
         name: path.basename(pathname),
         folderRoot: true
       }
@@ -608,7 +612,7 @@ class CollectionWatcher {
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixifyPath(pathname),
         name: path.basename(pathname)
       }
     };
@@ -774,8 +778,9 @@ class CollectionWatcher {
 
       const uiStateSnapshotStore = new UiStateSnapshot();
       const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
+      const posixWatchPath = posixifyPath(watchPath);
       const collectionSnapshotState = collectionsSnapshotState?.find(
-        (c: { pathname?: string }) => c?.pathname === watchPath
+        (c: { pathname?: string }) => c?.pathname === watchPath || c?.pathname === posixWatchPath
       );
 
       if (messageSender && collectionSnapshotState) {
@@ -855,7 +860,7 @@ class CollectionWatcher {
     const directory = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixifyPath(pathname),
         name,
         seq,
         uid: getRequestUid(pathname)
@@ -955,14 +960,14 @@ class CollectionWatcher {
       const basename = path.basename(pathname);
       const dirname = path.dirname(pathname);
 
-      if (basename === 'opencollection.yml' && dirname === collectionPath) {
+      if (basename === 'opencollection.yml' && path.normalize(dirname) === path.normalize(collectionPath)) {
         return;
       }
 
       const file: FileData = {
         meta: {
           collectionUid,
-          pathname,
+          pathname: posixifyPath(pathname),
           name: basename
         }
       };
@@ -1021,7 +1026,7 @@ class CollectionWatcher {
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixifyPath(pathname),
         name: path.basename(pathname),
         collectionRoot: true
       }
@@ -1069,7 +1074,7 @@ class CollectionWatcher {
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixifyPath(pathname),
         name: path.basename(pathname),
         folderRoot: true
       }
@@ -1101,7 +1106,7 @@ class CollectionWatcher {
     const file: FileData = {
       meta: {
         collectionUid,
-        pathname,
+        pathname: posixifyPath(pathname),
         name: path.basename(pathname)
       }
     };
@@ -1159,7 +1164,7 @@ class CollectionWatcher {
         console.log('[Watcher] File is now empty, removing from tree:', pathname);
         if (messageSender) {
           messageSender('main:collection-tree-updated', 'unlink', {
-            meta: { collectionUid, pathname }
+            meta: { collectionUid, pathname: posixifyPath(pathname) }
           });
         }
         return;
@@ -1168,7 +1173,7 @@ class CollectionWatcher {
       const file: FileData = {
         meta: {
           collectionUid,
-          pathname,
+          pathname: posixifyPath(pathname),
           name: path.basename(pathname)
         }
       };
@@ -1226,7 +1231,7 @@ class CollectionWatcher {
     const directoriesToAdd: string[] = [];
 
     let currentDir = path.dirname(requestFilePath);
-    while (currentDir !== collectionPath && currentDir.startsWith(collectionPath)) {
+    while (path.normalize(currentDir) !== path.normalize(collectionPath) && currentDir.startsWith(collectionPath)) {
       directoriesToAdd.unshift(currentDir); // Add to front so we process from root to leaf
       currentDir = path.dirname(currentDir);
     }
@@ -1289,7 +1294,7 @@ class CollectionWatcher {
     for (const dir of directoriesToAdd) {
       const dirMeta: FileMeta = {
         collectionUid,
-        pathname: dir,
+        pathname: posixifyPath(dir),
         name: path.basename(dir)
       };
 
@@ -1309,8 +1314,9 @@ class CollectionWatcher {
     // Hydrate UI state snapshot (restore selected environment, etc.)
     const uiStateSnapshotStore = new UiStateSnapshot();
     const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
+    const posixCollectionPath = posixifyPath(collectionPath);
     const collectionSnapshotState = collectionsSnapshotState?.find(
-      (c: { pathname?: string }) => c?.pathname === collectionPath
+      (c: { pathname?: string }) => c?.pathname === collectionPath || c?.pathname === posixCollectionPath
     );
 
     if (sender && collectionSnapshotState) {
@@ -1462,8 +1468,9 @@ class CollectionWatcher {
       // Hydrate UI state snapshot
       const uiStateSnapshotStore = new UiStateSnapshot();
       const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
+      const posixPath = posixifyPath(collectionPath);
       const collectionSnapshotState = collectionsSnapshotState?.find(
-        (c: { pathname?: string }) => c?.pathname === collectionPath
+        (c: { pathname?: string }) => c?.pathname === collectionPath || c?.pathname === posixPath
       );
 
       if (sender && collectionSnapshotState) {
@@ -1488,7 +1495,7 @@ class CollectionWatcher {
   ): Promise<void> {
     const dirMeta: FileMeta = {
       collectionUid,
-      pathname: dirPath,
+      pathname: posixifyPath(dirPath),
       name: path.basename(dirPath)
     };
 

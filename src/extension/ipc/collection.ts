@@ -28,7 +28,8 @@ import {
   isDotEnvFile,
   isBrunoConfigFile,
   isBruEnvironmentConfig,
-  isCollectionRootBruFile
+  isCollectionRootBruFile,
+  posixifyPath
 } from '../utils/filesystem';
 import { openCollectionDialog, openCollectionsByPathname } from '../app/collections';
 import { writeFileViaVSCode, isDocumentRegistered } from '../editors/dirty-state-manager';
@@ -117,11 +118,13 @@ const envHasSecrets = (environment: Environment): boolean => {
 
 const findCollectionPathByItemPath = (filePath: string): string | null => {
   const allCollectionPaths = collectionWatcher.getAllWatcherPaths();
+  const normalizedFilePath = path.normalize(filePath);
 
   const sortedPaths = allCollectionPaths.sort((a, b) => b.length - a.length);
 
   for (const collectionPath of sortedPaths) {
-    if (filePath.startsWith(collectionPath + path.sep) || filePath === collectionPath) {
+    const normalizedCollectionPath = path.normalize(collectionPath);
+    if (normalizedFilePath.startsWith(normalizedCollectionPath + path.sep) || normalizedFilePath === normalizedCollectionPath) {
       return collectionPath;
     }
   }
@@ -200,13 +203,13 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
           // Use the default workspace UID ('default') to match what Redux expects
           const wsUid = defaultWorkspaceManager.getDefaultWorkspaceUid();
           const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, true);
-          broadcastToAllWebviews('main:workspace-config-updated', workspacePath, wsUid, configForClient);
+          broadcastToAllWebviews('main:workspace-config-updated', posixifyPath(workspacePath), wsUid, configForClient);
         } catch (err) {
           console.error('[Collection IPC] Error adding collection to workspace:', err);
         }
       }
 
-      broadcastToAllWebviews('main:collection-opened', dirPath, uid, brunoConfig, true);
+      broadcastToAllWebviews('main:collection-opened', posixifyPath(dirPath), uid, brunoConfig, true);
       emit('main:collection-opened', dirPath, uid, brunoConfig);
 
       return { success: true, collectionPath: dirPath, uid, brunoConfig };
@@ -242,7 +245,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         const newFilePath = path.join(dirPath, relativePath);
 
         const isRootConfigFile = (path.basename(sourceFilePath) === 'opencollection.yml' || path.basename(sourceFilePath) === 'bruno.json')
-          && path.dirname(sourceFilePath) === previousPath;
+          && path.normalize(path.dirname(sourceFilePath)) === path.normalize(previousPath);
 
         if (isRootConfigFile) {
           continue;
@@ -277,7 +280,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       brunoConfig.size = size;
       brunoConfig.filesCount = filesCount;
 
-      broadcastToAllWebviews('main:collection-opened', dirPath, uid, brunoConfig, true);
+      broadcastToAllWebviews('main:collection-opened', posixifyPath(dirPath), uid, brunoConfig, true);
       emit('main:collection-opened', dirPath, uid);
 
       return { success: true, collectionPath: dirPath };
@@ -311,7 +314,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         throw new Error(`Invalid format: ${format}`);
       }
 
-      broadcastToAllWebviews('main:collection-renamed', { collectionPathname, newName });
+      broadcastToAllWebviews('main:collection-renamed', { collectionPathname: posixifyPath(collectionPathname), newName });
 
       return { success: true };
     } catch (error) {
@@ -379,7 +382,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
             : getWorkspaceUid(workspacePath);
           const isDefault = wsUid === 'default';
           const configForClient = prepareWorkspaceConfigForClient(result.updatedConfig, workspacePath, isDefault);
-          broadcastToAllWebviews('main:workspace-config-updated', workspacePath, wsUid, configForClient);
+          broadcastToAllWebviews('main:workspace-config-updated', posixifyPath(workspacePath), wsUid, configForClient);
         } catch (err) {
           console.error('[Collection IPC] Error removing collection from workspace.yml:', err);
         }
@@ -635,10 +638,10 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         // folder, then broadcast addFile for all files in the new folder.
         if (collectionUid && itemCollectionPath) {
           broadcastToAllWebviews('main:collection-tree-updated', 'unlinkDir', {
-            directory: { pathname: oldPath },
+            directory: { pathname: posixifyPath(oldPath) },
             meta: {
               collectionUid,
-              pathname: oldPath,
+              pathname: posixifyPath(oldPath),
               name: path.basename(oldPath)
             }
           });
@@ -657,7 +660,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
                 broadcastToAllWebviews('main:collection-tree-updated', 'addFile', {
                   meta: {
                     collectionUid,
-                    pathname: filePath,
+                    pathname: posixifyPath(filePath),
                     name: basename,
                     folderRoot: true
                   },
@@ -670,7 +673,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
                 broadcastToAllWebviews('main:collection-tree-updated', 'addFile', {
                   meta: {
                     collectionUid,
-                    pathname: filePath,
+                    pathname: posixifyPath(filePath),
                     name: basename
                   },
                   data: requestData,
@@ -750,11 +753,11 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         // only watches file patterns (e.g. **/*.bru), not directories
         broadcastToAllWebviews('main:collection-tree-updated', 'unlinkDir', {
           directory: {
-            pathname: itemPath
+            pathname: posixifyPath(itemPath)
           },
           meta: {
             collectionUid,
-            pathname: itemPath,
+            pathname: posixifyPath(itemPath),
             name: path.basename(itemPath)
           }
         });
@@ -1155,13 +1158,13 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
           const workspaceConfig = readWorkspaceConfig(workspacePath);
           const wsUid = defaultWorkspaceManager.getDefaultWorkspaceUid();
           const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, true);
-          broadcastToAllWebviews('main:workspace-config-updated', workspacePath, wsUid, configForClient);
+          broadcastToAllWebviews('main:workspace-config-updated', posixifyPath(workspacePath), wsUid, configForClient);
         } catch (err) {
           console.error('[Collection IPC] Error adding collection to workspace:', err);
         }
       }
 
-      broadcastToAllWebviews('main:collection-opened', dirPath, uid, brunoConfig, true);
+      broadcastToAllWebviews('main:collection-opened', posixifyPath(dirPath), uid, brunoConfig, true);
       emit('main:collection-opened', dirPath, uid, brunoConfig);
 
       return dirPath;
@@ -1397,13 +1400,13 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
             const workspaceConfig = readWorkspaceConfig(workspacePath);
             const wsUid = defaultWorkspaceManager.getDefaultWorkspaceUid();
             const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, true);
-            broadcastToAllWebviews('main:workspace-config-updated', workspacePath, wsUid, configForClient);
+            broadcastToAllWebviews('main:workspace-config-updated', posixifyPath(workspacePath), wsUid, configForClient);
           } catch (err) {
             console.error('[Collection IPC] Error adding ZIP collection to workspace:', err);
           }
         }
 
-        broadcastToAllWebviews('main:collection-opened', finalCollectionPath, uid, brunoConfig, true);
+        broadcastToAllWebviews('main:collection-opened', posixifyPath(finalCollectionPath), uid, brunoConfig, true);
         emit('main:collection-opened', finalCollectionPath, uid, brunoConfig);
 
         return finalCollectionPath;
@@ -1480,7 +1483,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
                 uid: generateUidBasedOnHash(entryPath),
                 name: entry.name,
                 type: 'folder',
-                pathname: entryPath,
+                pathname: posixifyPath(entryPath),
                 items: buildTree(entryPath)
               });
             } else if (entry.name.endsWith(requestExt)) {
@@ -1528,7 +1531,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
                 uid: generateUidBasedOnHash(entryPath),
                 name: entry.name.replace(requestExt, ''),
                 type: 'request',
-                pathname: entryPath,
+                pathname: posixifyPath(entryPath),
                 method,
                 requestType
               });
@@ -1544,7 +1547,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       return {
         uid,
         name: collectionName,
-        pathname: collectionPath,
+        pathname: posixifyPath(collectionPath),
         items: buildTree(collectionPath)
       };
     } catch (error) {

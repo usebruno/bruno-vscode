@@ -12,6 +12,7 @@ import { openCollection, setMessageSender as setCollectionsMessageSender } from 
 import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
 import UiStateSnapshot from '../store/ui-state-snapshot';
+import { posixifyPath } from '../utils/filesystem';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -103,8 +104,9 @@ export async function openRunnerPanel(
 
       const uiStateSnapshotStore = new UiStateSnapshot();
       const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
+      const posixCollectionRoot = posixifyPath(collectionRoot);
       const collectionSnapshotState = collectionsSnapshotState?.find(
-        (c: { pathname?: string }) => c?.pathname === collectionRoot
+        (c: { pathname?: string }) => c?.pathname === collectionRoot || c?.pathname === posixCollectionRoot
       );
       if (collectionSnapshotState) {
         stateManager.sendTo(panel.webview, 'main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
