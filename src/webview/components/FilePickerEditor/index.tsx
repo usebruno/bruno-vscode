@@ -3,7 +3,7 @@ import path from 'utils/common/path';
 import { useDispatch } from 'react-redux';
 import { browseFiles } from 'providers/ReduxStore/slices/collections/actions';
 import { IconX, IconUpload, IconFile } from '@tabler/icons';
-import { isWindowsOS } from 'utils/common/platform';
+
 import StyledWrapper from './StyledWrapper';
 
 interface FilePickerEditorProps {
@@ -44,8 +44,7 @@ const FilePickerEditor = ({
   const filenames = (isSingleFilePicker ? [value] : value || [])
     .filter((v: any) => v != null && v != '')
     .map((v: any) => {
-      const separator = isWindowsOS() ? '\\' : '/';
-      return v.split(separator).pop();
+      return v.split(/[/\\]/).pop();
     });
 
   // title is shown when hovering over the button

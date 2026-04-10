@@ -1,12 +1,4 @@
-import platform from 'platform';
 import path from 'path';
-
-const isWindowsOS = (): boolean => {
-  const os = platform.os;
-  if (!os || !os.family) return false;
-  const osFamily = os.family.toLowerCase();
-  return osFamily.includes('windows');
-};
 
 /**
  * Cross-Platform Path Standardization for Bruno Configuration Files
@@ -45,7 +37,11 @@ const posixify = (str: string): string => {
   return str.replace(/\\/g, '/');
 };
 
-const brunoPath = isWindowsOS() ? path.win32 : path.posix;
+// All paths from the extension are posixified (forward slashes) before reaching the webview.
+// path-browserify (used in the browser bundle) only supports POSIX operations,
+// so we always use it directly. path.posix may not exist in all polyfills,
+// so we fall back to path itself which is already POSIX in the browser.
+const brunoPath = path.posix || path;
 
 /**
  * Get a relative path from one location to another.

@@ -2651,7 +2651,7 @@ export const importCollectionFromZip = (zipFilePath: string, collectionLocation:
   const collectionPath = await ipcRenderer.invoke('renderer:import-collection-zip', zipFilePath, collectionLocation) as string;
 
   if (activeWorkspace && activeWorkspace.pathname && activeWorkspace.uid !== 'default') {
-    const collectionName = collectionPath.split('/').pop() || collectionPath.split('\\').pop() || 'Collection';
+    const collectionName = collectionPath.split('/').pop() || 'Collection';
     await ipcRenderer.invoke('renderer:add-collection-to-workspace', activeWorkspace.pathname, {
       name: collectionName,
       path: collectionPath

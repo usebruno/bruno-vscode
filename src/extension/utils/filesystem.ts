@@ -359,7 +359,7 @@ export const getCollectionStats = async (directoryPath: string): Promise<Collect
 };
 
 export const copyPath = async (source: string, destination: string): Promise<void> => {
-  const targetPath = `${destination}/${path.basename(source)}`;
+  const targetPath = path.join(destination, path.basename(source));
 
   const targetPathExists = await fsPromises.access(targetPath).then(() => true).catch(() => false);
   if (targetPathExists) {
@@ -428,26 +428,30 @@ export const isLargeFile = (filePath: string, threshold = 10 * 1024 * 1024): boo
 export const isDotEnvFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const basename = path.basename(pathname);
-  return dirname === collectionPath && basename === '.env';
+  return path.normalize(dirname) === path.normalize(collectionPath) && basename === '.env';
 };
 
 export const isBrunoConfigFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const basename = path.basename(pathname);
-  return dirname === collectionPath && (basename === 'bruno.json' || basename === 'opencollection.yml');
+  return path.normalize(dirname) === path.normalize(collectionPath) && (basename === 'bruno.json' || basename === 'opencollection.yml');
 };
 
 export const isBruEnvironmentConfig = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const envDirectory = path.join(collectionPath, 'environments');
   const basename = path.basename(pathname);
-  return dirname === envDirectory && (hasBruExtension(basename) || basename.toLowerCase().endsWith('.yml'));
+  return path.normalize(dirname) === path.normalize(envDirectory) && (hasBruExtension(basename) || basename.toLowerCase().endsWith('.yml'));
 };
 
 export const isCollectionRootBruFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const basename = path.basename(pathname);
-  return dirname === collectionPath && (basename === 'collection.bru' || basename === 'opencollection.yml');
+  return path.normalize(dirname) === path.normalize(collectionPath) && (basename === 'collection.bru' || basename === 'opencollection.yml');
+};
+
+export const posixifyPath = (p: string): string => {
+  return p ? p.replace(/\\/g, '/') : p;
 };
 
 export { isValidPathname };

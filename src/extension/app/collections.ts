@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import * as vscode from 'vscode';
 import * as Yup from 'yup';
-import { isDirectory, getCollectionStats, normalizeAndResolvePath } from '../utils/filesystem';
+import { isDirectory, getCollectionStats, normalizeAndResolvePath, posixifyPath } from '../utils/filesystem';
 import { generateUidBasedOnHash } from '../utils/common';
 import { transformBrunoConfigAfterRead } from '../utils/transformBrunoConfig';
 import LastOpenedCollections from '../store/last-opened-collections';
@@ -200,7 +200,7 @@ export const openCollection = async (
           // Use defaultWorkspaceManager UID ('default') to match what Redux expects
           const wsUid = defaultWorkspaceManager.getDefaultWorkspaceUid();
           const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, true);
-          messageSender('main:workspace-config-updated', workspacePath, wsUid, configForClient);
+          messageSender('main:workspace-config-updated', posixifyPath(workspacePath), wsUid, configForClient);
         }
       } catch (err) {
         console.error('[Collections] Error adding collection to workspace:', err);
@@ -208,7 +208,7 @@ export const openCollection = async (
     }
 
     if (messageSender) {
-      messageSender('main:collection-opened', collectionPath, uid, brunoConfig, true);
+      messageSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, true);
     }
 
     // Emit internal event for collection opened
@@ -302,7 +302,7 @@ export const openCollectionForSingleRequest = async (
 
     // Pass shouldPersist=false for auto-opened collections (via clicking .bru file)
     if (sender) {
-      sender('main:collection-opened', collectionPath, uid, brunoConfig, false);
+      sender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, false);
     }
 
     // Emit internal event with skipFullLoad=true to prevent full collection scan

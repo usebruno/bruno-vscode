@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import yaml from 'js-yaml';
 import { generateUidBasedOnHash, uuid } from '../utils/common';
 import { getWorkspaceUid } from '../utils/workspace-config';
+import { posixifyPath } from '../utils/filesystem';
 const { parseEnvironment } = require('@usebruno/filestore');
 import EnvironmentSecretsStore from '../store/env-secrets';
 import { decryptStringSafe } from '../utils/encryption';
@@ -94,7 +95,7 @@ const handleWorkspaceFileChange = (workspacePath: string): void => {
 
     if (messageSender) {
       messageSender('main:workspace-config-updated', {
-        workspacePath,
+        workspacePath: posixifyPath(workspacePath),
         workspaceUid,
         config: {
           ...workspaceConfig,
@@ -119,7 +120,7 @@ const parseGlobalEnvironmentFile = async (
   const file: EnvironmentFile = {
     meta: {
       workspaceUid,
-      pathname,
+      pathname: posixifyPath(pathname),
       name: basename
     }
   };

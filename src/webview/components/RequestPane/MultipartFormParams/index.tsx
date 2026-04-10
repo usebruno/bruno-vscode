@@ -14,7 +14,7 @@ import { sendRequest, saveRequest } from 'providers/ReduxStore/slices/collection
 import EditableTable from 'components/EditableTable';
 import StyledWrapper from './StyledWrapper';
 import path from 'utils/common/path';
-import { isWindowsOS } from 'utils/common/platform';
+
 
 interface MultipartFormParamsProps {
   item?: React.ReactNode;
@@ -113,9 +113,8 @@ const MultipartFormParams = ({
     const validPaths = paths.filter((v) => v != null && v !== '');
     if (validPaths.length === 0) return null;
 
-    const separator = isWindowsOS() ? '\\' : '/';
     if (validPaths.length === 1) {
-      return validPaths[0].split(separator).pop();
+      return validPaths[0].split(/[/\\]/).pop();
     }
     return `${validPaths.length} file(s)`;
   };

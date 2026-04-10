@@ -3,7 +3,7 @@ import { WebviewHelper } from '../webview/helper';
 import { stateManager } from '../webview/state-manager';
 import { getCollectionName } from '../utils/path';
 import { generateUidBasedOnHash } from '../utils/common';
-import { getCollectionStats } from '../utils/filesystem';
+import { getCollectionStats, posixifyPath } from '../utils/filesystem';
 import { transformBrunoConfigAfterRead } from '../utils/transformBrunoConfig';
 import {
   setCurrentWebview,
@@ -95,7 +95,7 @@ export async function openEnvironmentSettingsPanel(
         brunoConfig.size = size;
         brunoConfig.filesCount = filesCount;
 
-        stateManager.sendTo(panel.webview, 'main:collection-opened', collectionRoot, collectionUid, brunoConfig, false);
+        stateManager.sendTo(panel.webview, 'main:collection-opened', posixifyPath(collectionRoot), collectionUid, brunoConfig, false);
 
         // We need a small delay for the webview to process main:collection-opened first.
         const panelSender = (channel: string, ...args: unknown[]) => {

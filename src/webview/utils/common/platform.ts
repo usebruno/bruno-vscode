@@ -23,7 +23,7 @@ export const resolveRequestFilename = (name: string, extension: string = 'bru'):
 
 export const getSubdirectoriesFromRoot = (rootPath: string, pathname: string): string[] => {
   const relativePath = path.relative(rootPath, pathname);
-  return relativePath ? relativePath.split(path.sep) : [];
+  return relativePath ? relativePath.split('/').filter(Boolean) : [];
 };
 
 export const isWindowsOS = (): boolean => {

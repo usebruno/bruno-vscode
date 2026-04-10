@@ -4,7 +4,7 @@ import path from 'path';
 import * as vscode from 'vscode';
 import yaml from 'js-yaml';
 import { registerHandler, registerEventListener, sendToWebview } from './handlers';
-import { createDirectory, sanitizeName, isValidCollectionDirectory } from '../utils/filesystem';
+import { createDirectory, sanitizeName, isValidCollectionDirectory, posixifyPath } from '../utils/filesystem';
 import LastOpenedWorkspaces from '../store/last-opened-workspaces';
 import { defaultWorkspaceManager } from '../store/default-workspace';
 import { globalEnvironmentsManager } from '../store/workspace-environments';
@@ -68,12 +68,14 @@ const prepareWorkspaceConfigForClient = (
   const collections = workspaceConfig.collections || [];
   const filteredCollections = collections
     .map((collection) => {
-      if (collection.path && !path.isAbsolute(collection.path)) {
-        return { ...collection, path: path.resolve(workspacePath, collection.path) };
+      let resolvedPath = collection.path;
+      if (resolvedPath && !path.isAbsolute(resolvedPath)) {
+        resolvedPath = path.resolve(workspacePath, resolvedPath);
       }
-      return collection;
+      return { ...collection, resolvedPath, path: posixifyPath(resolvedPath) };
     })
-    .filter((collection) => collection.path && isValidCollectionDirectory(collection.path));
+    .filter((collection) => collection.resolvedPath && isValidCollectionDirectory(collection.resolvedPath))
+    .map(({ resolvedPath, ...collection }) => collection);
 
   const config = {
     ...workspaceConfig,
@@ -125,7 +127,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
 
       const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, dirPath, isDefault);
 
-      sendToWebview('main:workspace-opened', dirPath, workspaceUid, configForClient);
+      sendToWebview('main:workspace-opened', posixifyPath(dirPath), workspaceUid, configForClient);
 
       if (workspaceWatcher) {
         workspaceWatcher.addWatcher(dirPath);
@@ -156,7 +158,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
 
       lastOpenedWorkspaces.add(workspacePath);
 
-      sendToWebview('main:workspace-opened', workspacePath, workspaceUid, configForClient);
+      sendToWebview('main:workspace-opened', posixifyPath(workspacePath), workspaceUid, configForClient);
 
       if (workspaceWatcher) {
         workspaceWatcher.addWatcher(workspacePath);
@@ -198,7 +200,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
 
       lastOpenedWorkspaces.add(workspacePath);
 
-      sendToWebview('main:workspace-opened', workspacePath, workspaceUid, configForClient);
+      sendToWebview('main:workspace-opened', posixifyPath(workspacePath), workspaceUid, configForClient);
 
       if (workspaceWatcher) {
         workspaceWatcher.addWatcher(workspacePath);
@@ -421,7 +423,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
       const isDefault = workspaceUid === 'default';
       const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, isDefault);
 
-      sendToWebview('main:workspace-config-updated', workspacePath, workspaceUid, configForClient);
+      sendToWebview('main:workspace-config-updated', posixifyPath(workspacePath), workspaceUid, configForClient);
 
       return updatedCollections;
     } catch (error) {
@@ -472,7 +474,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
       const isDefault = correctWorkspaceUid === 'default';
       const configForClient = prepareWorkspaceConfigForClient(result.updatedConfig as WorkspaceConfig, workspacePath, isDefault);
 
-      sendToWebview('main:workspace-config-updated', workspacePath, correctWorkspaceUid, configForClient);
+      sendToWebview('main:workspace-config-updated', posixifyPath(workspacePath), correctWorkspaceUid, configForClient);
 
       return true;
     } catch (error) {
@@ -498,7 +500,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
               const resolvedPath = path.isAbsolute(c.path)
                 ? c.path
                 : path.resolve(workspacePath, c.path);
-              return resolvedPath === collectionPath;
+              return path.normalize(resolvedPath) === path.normalize(collectionPath);
             });
 
             if (hasCollection) {
@@ -594,7 +596,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
         workspaces.push({
           uid: defaultWorkspaceManager.getDefaultWorkspaceUid(),
           name: config.info?.name || config.name || DEFAULT_WORKSPACE_NAME,
-          pathname: defaultPath
+          pathname: posixifyPath(defaultPath)
         });
       }
 
@@ -608,7 +610,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
             workspaces.push({
               uid: getWorkspaceUid(workspacePath),
               name: config.info?.name || config.name || path.basename(workspacePath),
-              pathname: workspacePath
+              pathname: posixifyPath(workspacePath)
             });
           } catch (error) {
             console.warn('[Sidebar] Error loading workspace:', workspacePath);
@@ -649,7 +651,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
       const isDefault = workspaceUid === 'default';
       const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, targetPath, isDefault);
 
-      sendToWebview('main:workspace-opened', targetPath, workspaceUid, configForClient);
+      sendToWebview('main:workspace-opened', posixifyPath(targetPath), workspaceUid, configForClient);
 
       return { success: true, workspacePath: targetPath };
     } catch (error) {
@@ -700,7 +702,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
 
         const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, defaultPath, true);
 
-        sendToWebview('main:workspace-opened', defaultPath, workspaceUid, configForClient);
+        sendToWebview('main:workspace-opened', posixifyPath(defaultPath), workspaceUid, configForClient);
 
         if (workspaceWatcher) {
           workspaceWatcher.addWatcher(defaultPath);
@@ -727,7 +729,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
             const isDefault = workspaceUid === 'default';
             const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, isDefault);
 
-            sendToWebview('main:workspace-opened', workspacePath, workspaceUid, configForClient);
+            sendToWebview('main:workspace-opened', posixifyPath(workspacePath), workspaceUid, configForClient);
 
             if (workspaceWatcher) {
               workspaceWatcher.addWatcher(workspacePath);

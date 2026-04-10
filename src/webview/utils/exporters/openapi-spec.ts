@@ -48,7 +48,7 @@ export const exportApiSpec = ({
     const { pathname, depth } = item;
     if (!pathname) return;
 
-    const parts = pathname.split('\\');
+    const parts = pathname.split('/');
     const baseDepth = parts.length - depth;
     if (depth === 1) return '';
 

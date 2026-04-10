@@ -2,7 +2,7 @@ import { cloneDeep, isEqual, sortBy, filter, map, isString, findIndex, find, eac
 import { uuid } from 'utils/common';
 import { buildPersistedEnvVariables } from 'utils/environments';
 import { sortByNameThenSequence } from 'utils/common/index';
-import path from 'utils/common/path';
+import path, { normalizePath } from 'utils/common/path';
 // @ts-expect-error - isRequestTagsIncluded may not be exported in type definitions
 import { isRequestTagsIncluded } from '@usebruno/common';
 import type { AppCollection, AppItem, Environment, UID } from '@bruno-types';
@@ -89,7 +89,7 @@ export const findCollectionByUid = (collections: AppCollection[], collectionUid:
 };
 
 export const findCollectionByPathname = (collections: AppCollection[], pathname: string): AppCollection | undefined => {
-  return collections.find((c) => c.pathname === pathname);
+  return collections.find((c) => normalizePath(c.pathname) === normalizePath(pathname));
 };
 
 export const findCollectionByItemUid = (collections: AppCollection[], itemUid: UID): AppCollection | undefined => {
@@ -99,7 +99,7 @@ export const findCollectionByItemUid = (collections: AppCollection[], itemUid: U
 };
 
 export const findItemByPathname = (items: AppItem[] = [], pathname: string): AppItem | undefined => {
-  return items.find((i) => i.pathname === pathname);
+  return items.find((i) => normalizePath(i.pathname) === normalizePath(pathname));
 };
 
 export const findItemInCollectionByPathname = (collection: AppCollection, pathname: string): AppItem | undefined => {
@@ -117,7 +117,7 @@ export const findParentItemInCollectionByPathname = (collection: AppCollection, 
   const flattenedItems = flattenItems(collection.items);
 
   return flattenedItems.find((item) => {
-    return item.items && item.items.find((i) => i.pathname === pathname);
+    return item.items && item.items.find((i) => normalizePath(i.pathname) === normalizePath(pathname));
   });
 };
 
@@ -837,12 +837,13 @@ export const deleteItemInCollection = (itemUid: any, collection: any) => {
 };
 
 export const deleteItemInCollectionByPathname = (pathname: any, collection: any) => {
-  collection.items = filter(collection.items, (i) => i.pathname !== pathname);
+  const normalizedPathname = normalizePath(pathname);
+  collection.items = filter(collection.items, (i) => normalizePath(i.pathname) !== normalizedPathname);
 
   let flattenedItems = flattenItems(collection.items);
   each(flattenedItems, (i) => {
     if (i.items && i.items.length) {
-      i.items = filter(i.items, (i) => i.pathname !== pathname);
+      i.items = filter(i.items, (i) => normalizePath(i.pathname) !== normalizedPathname);
     }
   });
 };
