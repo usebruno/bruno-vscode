@@ -11,6 +11,7 @@ import {
 import { openCollection, setMessageSender as setCollectionsMessageSender } from '../app/collections';
 import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
+import UiStateSnapshot from '../store/ui-state-snapshot';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -88,6 +89,9 @@ export async function openRunnerPanel(
 
       const collectionUid = generateUidBasedOnHash(collectionRoot);
 
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await collectionWatcher.loadEnvironments(collectionRoot, collectionUid, webviewSender);
+
       // If watcher already existed, openCollection won't trigger a scan
       // so we need to manually load all items for this webview
       if (watcherExists) {
@@ -96,6 +100,15 @@ export async function openRunnerPanel(
 
       setCollectionsMessageSender(originalBroadcastSender);
       setWatcherMessageSender(originalBroadcastSender);
+
+      const uiStateSnapshotStore = new UiStateSnapshot();
+      const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
+      const collectionSnapshotState = collectionsSnapshotState?.find(
+        (c: { pathname?: string }) => c?.pathname === collectionRoot
+      );
+      if (collectionSnapshotState) {
+        stateManager.sendTo(panel.webview, 'main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
+      }
 
       setTimeout(() => {
         stateManager.sendTo(panel.webview, 'main:set-view', {
