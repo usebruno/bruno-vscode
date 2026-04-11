@@ -61,6 +61,11 @@ export const hasSubDirectories = (dir: string): boolean => {
 };
 
 export function isWSLPath(pathname: string): boolean {
+  // WSL-to-Windows path normalization only applies when running on Windows.
+  // When running natively in WSL (Linux), paths are regular Linux paths
+  // and should not be converted to Windows UNC format.
+  if (process.platform !== 'win32') return false;
+
   return pathname.startsWith('\\\\') || pathname.startsWith('//') ||
          pathname.startsWith('/wsl.localhost/') || pathname.startsWith('\\wsl.localhost');
 }

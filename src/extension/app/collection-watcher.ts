@@ -4,8 +4,6 @@ import path from 'path';
 import * as vscode from 'vscode';
 import {
   hasRequestExtension,
-  isWSLPath,
-  normalizeAndResolvePath,
   sizeInMB,
   getCollectionFormat,
   posixifyPath
