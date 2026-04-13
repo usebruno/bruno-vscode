@@ -7,6 +7,7 @@ import {
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
+import { storeTransientItem }  from '../panels/transient-request-panel';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -303,6 +304,30 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
           const { collectionPath } = args[0] as { collectionPath?: string };
           if (collectionPath) {
             await vscode.commands.executeCommand('bruno.openEnvironmentSettings', vscode.Uri.file(collectionPath));
+          }
+        }
+        break;
+
+      case 'sidebar:open-transient-request':
+        if (args[0] && typeof args[0] === 'object') {
+          const { itemUid, itemName, collectionUid, collectionPath: transientCollPath, item: transientItem } = args[0] as {
+            itemUid?: string;
+            itemName?: string;
+            collectionUid?: string;
+            collectionPath?: string;
+            item?: Record<string, unknown>;
+          };
+          if (itemUid && collectionUid && transientCollPath) {
+            if (transientItem) {
+              storeTransientItem(itemUid, transientItem);
+            }
+            await vscode.commands.executeCommand(
+              'bruno.openTransientRequest',
+              itemUid,
+              itemName || 'Untitled',
+              collectionUid,
+              transientCollPath
+            );
           }
         }
         break;

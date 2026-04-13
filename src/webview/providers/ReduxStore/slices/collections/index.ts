@@ -1508,6 +1508,23 @@ export const collectionsSlice = createSlice({
       }
     },
 
+    addTransientRequest: (state, action: PayloadAction<{ collectionUid: string; item: any }>) => {
+      const { collectionUid, item } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection) {
+        collection.items = collection.items || [];
+        collection.items.push(item);
+      }
+    },
+
+    removeTransientRequest: (state, action: PayloadAction<{ collectionUid: string; itemUid: string }>) => {
+      const { collectionUid, itemUid } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection && collection.items) {
+        collection.items = collection.items.filter((i: any) => i.uid !== itemUid);
+      }
+    },
+
     collectionAddFileEvent: (state, action: PayloadAction<CollectionAddFileEventPayload>) => {
       const { meta, data, partial, loading, size, error } = action.payload;
       const isCollectionRoot = meta.collectionRoot ? true : false;
@@ -2942,6 +2959,8 @@ export const {
   updateCollectionTagsList,
   resetCollectionRunner,
   updateRunnerTagsDetails,
+  addTransientRequest,
+  removeTransientRequest,
   collectionAddFileEvent,
   collectionChangeFileEvent,
   collectionUnlinkFileEvent,

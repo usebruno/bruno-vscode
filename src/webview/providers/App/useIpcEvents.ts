@@ -18,7 +18,9 @@ import {
   runFolderEvent,
   runRequestEvent,
   scriptEnvironmentUpdateEvent,
-  streamDataReceived
+  streamDataReceived,
+  addTransientRequest,
+  removeTransientRequest
 } from 'providers/ReduxStore/slices/collections';
 import {
   collectionAddEnvFileEvent,
@@ -371,6 +373,19 @@ const useIpcEvents = () => {
       dispatch(updateCookies(val as Parameters<typeof updateCookies>[0]));
     });
 
+    const removeAddTransientRequestListener = ipcRenderer.on('main:add-transient-request', (val: any) => {
+      if (val?.collectionUid && val?.item) {
+        dispatch(addTransientRequest({ collectionUid: val.collectionUid, item: val.item }));
+      }
+    });
+
+    const removeTransientRequestClosedListener = ipcRenderer.on('main:transient-request-closed', (val: any) => {
+      if (val?.collectionUid && val?.itemUid) {
+        dispatch(removeTransientRequest({ collectionUid: val.collectionUid, itemUid: val.itemUid }));
+      }
+    });
+
+
     const removeGlobalEnvironmentsUpdatesListener = ipcRenderer.on('main:load-global-environments', (val: unknown) => {
       dispatch(updateGlobalEnvironments(val));
     });
@@ -609,6 +624,8 @@ const useIpcEvents = () => {
       removePreferencesUpdatesListener();
       removeCookieUpdateListener();
       removeSystemProxyEnvUpdatesListener();
+      removeAddTransientRequestListener();
+      removeTransientRequestClosedListener();
       removeGlobalEnvironmentsUpdatesListener();
       removeSnapshotHydrationListener();
       removeSecurityConfigUpdatedListener();

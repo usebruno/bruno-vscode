@@ -1,6 +1,6 @@
 import React from 'react';
 import { saveRequest, saveCollectionSettings, saveFolderRoot } from '../../slices/collections/actions';
-import { flattenItems, isItemARequest, isItemAFolder } from 'utils/collections';
+import { flattenItems, isItemARequest, isItemAFolder, findItemInCollection, findCollectionByUid } from 'utils/collections';
 
 interface actionsToInterceptProps {
   dispatch?: boolean;
@@ -109,7 +109,7 @@ const saveExistingDrafts = (dispatch: any, getState: any, interval: any) => {
 
     const allItems = flattenItems(collection.items);
     allItems.forEach((item: any) => {
-      if (item.draft) {
+      if (item.draft && !item.isTransient) {
         if (isItemARequest(item)) {
           const key = `request-${item.uid}`;
           scheduleAutoSave(key, () => dispatch(saveRequest(item.uid, collection.uid, true)), interval);
@@ -154,6 +154,10 @@ export const autosaveMiddleware = ({
   let key, save;
 
   if (itemUid) {
+    const collection = findCollectionByUid(getState().collections.collections, collectionUid);
+    const item = collection ? findItemInCollection(collection, itemUid) : null;
+    if ((item as any)?.isTransient) return result;
+
     key = `request-${itemUid}`;
     save = () => dispatch(saveRequest(itemUid, collectionUid, true));
   } else if (folderUid) {

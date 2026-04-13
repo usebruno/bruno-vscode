@@ -386,6 +386,12 @@
         "key": "ctrl+s",
         "mac": "cmd+s",
         "when": "activeCustomEditorId == 'bruno.requestEditor'"
+      },
+      {
+        "command": "bruno.saveFromEditor",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeWebviewPanelId == 'bruno.transientRequest'"
       }
     ]
   },

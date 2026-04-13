@@ -16,7 +16,12 @@ import {
   IconFolder,
   IconSettings,
   IconShare,
-  IconX
+  IconX,
+  IconPlus,
+  IconApi,
+  IconBrandGraphql,
+  IconNetwork,
+  IconPlugConnected
 } from '@tabler/icons';
 import { toggleCollection } from 'providers/ReduxStore/slices/collections';
 import {
@@ -46,6 +51,8 @@ import ActionIcon from 'ui/ActionIcon';
 import MenuDropdown from 'ui/MenuDropdown';
 import { useSidebarAccordion } from 'components/Sidebar/SidebarAccordionContext';
 import { ipcRenderer } from 'utils/ipc';
+import { addTransientRequest } from 'providers/ReduxStore/slices/collections';
+import transientManager from 'utils/transient-manager';
 
 interface CollectionProps {
   collection: any;
@@ -321,8 +328,60 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
     return items.sort((a, b) => a.seq - b.seq);
   };
 
-  const requestItems = sortItemsBySequence(filter(collection.items, (i: any) => isItemARequest(i)));
+  const requestItems = sortItemsBySequence(filter(collection.items, (i: any) => isItemARequest(i) && !i.isTransient));
   const folderItems = sortByNameThenSequence(filter(collection.items, (i: any) => isItemAFolder(i)));
+
+  const newRequestMenuRef = useRef<any>(null);
+
+  const openTransientRequest = (item: any) => {
+    dispatch(addTransientRequest({ collectionUid: collection.uid, item }));
+    ipcRenderer.send('sidebar:open-transient-request', {
+      itemUid: item.uid,
+      itemName: item.name,
+      collectionUid: collection.uid,
+      collectionPath: collection.pathname,
+      item
+    });
+  };
+
+  const transientRequestMenuItems = [
+    {
+      id: 'new-http',
+      leftSection: IconApi,
+      label: 'HTTP',
+      onClick: () => {
+        ensureCollectionIsMounted();
+        openTransientRequest(transientManager.createHttpRequest(collection));
+      }
+    },
+    {
+      id: 'new-graphql',
+      leftSection: IconBrandGraphql,
+      label: 'GraphQL',
+      onClick: () => {
+        ensureCollectionIsMounted();
+        openTransientRequest(transientManager.createGraphQLRequest(collection));
+      }
+    },
+    {
+      id: 'new-grpc',
+      leftSection: IconNetwork,
+      label: 'gRPC',
+      onClick: () => {
+        ensureCollectionIsMounted();
+        openTransientRequest(transientManager.createGrpcRequest(collection));
+      }
+    },
+    {
+      id: 'new-ws',
+      leftSection: IconPlugConnected,
+      label: 'WebSocket',
+      onClick: () => {
+        ensureCollectionIsMounted();
+        openTransientRequest(transientManager.createWebSocketRequest(collection));
+      }
+    }
+  ];
 
   const menuItems = [
     {
@@ -431,7 +490,19 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
           </div>
           {isLoading ? <IconLoader2 className="animate-spin mx-1" size={18} strokeWidth={1.5} /> : null}
         </div>
-        <div>
+        <div className="flex items-center">
+          <MenuDropdown
+            ref={newRequestMenuRef}
+            items={transientRequestMenuItems}
+            placement="bottom-start"
+            appendTo={dropdownContainerRef?.current || document.body}
+            popperOptions={{ strategy: 'fixed' }}
+            data-testid="collection-new-request"
+          >
+            <ActionIcon className="collection-actions" data-testid="collection-new-request-btn">
+              <IconPlus size={16} strokeWidth={2} />
+            </ActionIcon>
+          </MenuDropdown>
           <div className="pr-2">
             <MenuDropdown
               ref={menuDropdownRef}

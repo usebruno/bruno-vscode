@@ -315,6 +315,15 @@ export const saveRequest = (itemUid: string, collectionUid: string, silent = fal
       return reject(new Error('Not able to locate item'));
     }
 
+    if ((item as any).isTransient) {
+      if (!silent) {
+        const { ipcRenderer } = window;
+        const itemToSave = transformRequestToSaveToFilesystem(item);
+        ipcRenderer.send('transient:save-request', itemToSave);
+      }
+      return resolve(undefined);
+    }
+
     // Validate assertion and variable names before saving
     const validationError = validateRequestNames(item);
     if (validationError) {
