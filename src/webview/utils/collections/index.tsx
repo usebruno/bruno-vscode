@@ -1234,6 +1234,7 @@ const getPathParams = (item: any) => {
 export const getTotalRequestCountInCollection = (collection: any) => {
   let count = 0;
   each(collection.items, (item) => {
+    if (item.isTransient) return;
     if (isItemARequest(item)) {
       count++;
     } else if (isItemAFolder(item)) {
@@ -1543,7 +1544,7 @@ export const getRequestItemsForCollectionRun = ({
   }
 
   const requestTypes = ['http-request', 'graphql-request'];
-  requestItems = requestItems.filter((request: any) => requestTypes.includes(request.type));
+  requestItems = requestItems.filter((request: any) => requestTypes.includes(request.type) && !request.isTransient);
 
   if (tags && tags.include && tags.exclude) {
     const includeTags = tags.include ? tags.include : [];
