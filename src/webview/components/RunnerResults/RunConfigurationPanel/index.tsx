@@ -5,7 +5,7 @@ import { IconGripVertical, IconCheck, IconAdjustmentsAlt } from '@tabler/icons';
 import { useDispatch } from 'react-redux';
 import { updateRunnerConfiguration } from 'providers/ReduxStore/slices/collections/actions';
 import StyledWrapper from './StyledWrapper';
-import { isItemARequest } from 'utils/collections';
+import { isItemARequest, findItemInCollection } from 'utils/collections';
 import path from 'utils/common/path';
 import { cloneDeep, get } from 'lodash';
 import Button from 'ui/Button/index';
@@ -178,6 +178,7 @@ const RequestItem = ({
 
 const RunConfigurationPanel = ({
   collection,
+  folderUid,
   selectedItems,
   setSelectedItems
 }: any) => {
@@ -186,7 +187,7 @@ const RunConfigurationPanel = ({
   const [originalRequests, setOriginalRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const flattenRequests = useCallback((collection: any) => {
+  const flattenRequests = useCallback((collection: any, rootItems: any[]) => {
     const result: any = [];
 
     const processItems = (items: any) => {
@@ -209,7 +210,7 @@ const RunConfigurationPanel = ({
       });
     };
 
-    processItems(collection.items);
+    processItems(rootItems);
     return result;
   }, []);
 
@@ -218,7 +219,9 @@ const RunConfigurationPanel = ({
 
     try {
       const structureCopy = cloneDeep(collection);
-      const requests = flattenRequests(structureCopy);
+      const folder = folderUid ? findItemInCollection(structureCopy, folderUid) : null;
+      const rootItems = folder ? (folder as any).items || [] : structureCopy.items;
+      const requests = flattenRequests(structureCopy, rootItems);
 
       const savedConfiguration = get(collection, 'runnerConfiguration', null);
       if (savedConfiguration?.requestItemsOrder?.length > 0) {
@@ -248,7 +251,7 @@ const RunConfigurationPanel = ({
     } finally {
       setIsLoading(false);
     }
-  }, [collection, flattenRequests]);
+  }, [collection, folderUid, flattenRequests]);
 
   const moveItem = useCallback((draggedItemUid: any, hoverIndex: any) => {
     setFlattenedRequests((prevRequests) => {

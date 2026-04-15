@@ -317,9 +317,9 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 
       case 'sidebar:open-collection-runner':
         if (args[0] && typeof args[0] === 'object') {
-          const { collectionPath } = args[0] as { collectionPath?: string };
+          const { collectionPath, folderUid } = args[0] as { collectionPath?: string; folderUid?: string };
           if (collectionPath) {
-            await vscode.commands.executeCommand('bruno.runCollection', vscode.Uri.file(collectionPath));
+            await vscode.commands.executeCommand('bruno.runCollection', vscode.Uri.file(collectionPath), folderUid);
           }
         }
         break;
