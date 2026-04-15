@@ -47,19 +47,6 @@ export async function openGlobalEnvironmentsPanel(
     stateManager.removeWebview(panel.webview);
   });
 
-  let viewSent = false;
-
-  const sendView = () => {
-    if (viewSent) return;
-    viewSent = true;
-
-    setTimeout(() => {
-      stateManager.sendTo(panel.webview, 'main:set-view', {
-        viewType: 'global-environments'
-      });
-    }, 100);
-  };
-
   panel.webview.onDidReceiveMessage(async (message: IpcMessage) => {
     const { type, channel, args, requestId } = message;
 
@@ -82,8 +69,10 @@ export async function openGlobalEnvironmentsPanel(
         });
 
         if (channel === 'renderer:ready') {
+          stateManager.sendTo(panel.webview, 'main:set-view', {
+            viewType: 'global-environments'
+          });
           clearCurrentWebview();
-          sendView();
           return;
         }
       } catch (error) {
@@ -105,6 +94,11 @@ export async function openGlobalEnvironmentsPanel(
         clearCurrentWebview();
       }
     }
+  });
+
+  // Send view data immediately — the IPC event queue buffers it until React mounts.
+  stateManager.sendTo(panel.webview, 'main:set-view', {
+    viewType: 'global-environments'
   });
 }
 

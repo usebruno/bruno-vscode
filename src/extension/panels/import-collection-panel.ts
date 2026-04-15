@@ -51,14 +51,6 @@ export async function openImportCollectionPanel(
     }
   });
 
-  const sendView = () => {
-    setTimeout(() => {
-      stateManager.sendTo(panel.webview, 'main:set-view', {
-        viewType: 'import-collection'
-      });
-    }, 100);
-  };
-
   panel.webview.onDidReceiveMessage(async (message: IpcMessage) => {
     const { type, channel, args, requestId } = message;
 
@@ -81,8 +73,10 @@ export async function openImportCollectionPanel(
         });
 
         if (channel === 'renderer:ready') {
+          stateManager.sendTo(panel.webview, 'main:set-view', {
+            viewType: 'import-collection'
+          });
           clearCurrentWebview();
-          sendView();
           return;
         }
       } catch (error) {
@@ -108,6 +102,11 @@ export async function openImportCollectionPanel(
         clearCurrentWebview();
       }
     }
+  });
+
+  // Send view data immediately — the IPC event queue buffers it until React mounts.
+  stateManager.sendTo(panel.webview, 'main:set-view', {
+    viewType: 'import-collection'
   });
 }
 

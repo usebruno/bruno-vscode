@@ -39,9 +39,6 @@ export class WebviewHelper {
     const libReactUri = webview.asWebviewUri(
       vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'js', 'lib-react.js')
     );
-    const libAxiosUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'js', 'lib-axios.js')
-    );
     const vendorChunkUri = jsChunk ? webview.asWebviewUri(
       vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'js', jsChunk)
     ) : null;
@@ -63,7 +60,6 @@ export class WebviewHelper {
 
     const scriptTags = [
       `<script defer src="${libReactUri}"></script>`,
-      `<script defer src="${libAxiosUri}"></script>`,
       vendorChunkUri ? `<script defer src="${vendorChunkUri}"></script>` : '',
       `<script defer src="${indexUri}"></script>`
     ].filter(Boolean).join('\n  ');
@@ -91,6 +87,15 @@ export class WebviewHelper {
     }
   </style>
   <script>
+    // Early message buffer: captures VS Code postMessage events before
+    // the deferred ipc.ts script loads. Once ipc.ts initializes, it drains
+    // this buffer and sets it to null so no further buffering occurs.
+    window.__brunoMessageBuffer = [];
+    window.addEventListener('message', function(event) {
+      var buf = window.__brunoMessageBuffer;
+      if (buf) buf.push(event.data);
+    });
+
     window.onerror = function(msg, url, line, col, error) {
       console.error('[Bruno] Global error:', msg, url, line, col, error);
       var root = document.getElementById('root');

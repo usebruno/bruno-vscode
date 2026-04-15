@@ -20,8 +20,11 @@ type EventCallback = (...args: unknown[]) => void;
 const pendingRequests = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 const eventListeners = new Map<string, Set<EventCallback>>();
 
-// This handles the case where extension sends events before React mounts
-const eventQueue = new Map<string, Array<unknown[]>>();
+// Ordered queue of events that arrived before React listeners registered.
+// Preserves cross-channel ordering so main:collection-opened is always
+// processed before main:collection-tree-updated regardless of when
+// individual listeners register.
+const pendingEventQueue: Array<{ channel: string; args: unknown[] }> = [];
 
 let vscode: VsCodeApi | null = null;
 
@@ -42,48 +45,88 @@ function getVsCodeApi(): VsCodeApi {
   return vscode;
 }
 
-function initializeMessageHandler(): void {
-  window.addEventListener('message', (event: MessageEvent<IpcMessage>) => {
-    const message = event.data;
+/**
+ * Core message handler — used by both the live event listener and the
+ * early-buffer drain so that every message follows the same code path.
+ */
+function handleMessage(message: IpcMessage): void {
+  if (!message || typeof message !== 'object' || !message.type) {
+    return;
+  }
 
-    // Guard against non-Bruno messages (VS Code sends various system messages)
-    if (!message || typeof message !== 'object' || !message.type) {
-      return;
-    }
-
-    if (message.type === 'response' && message.requestId) {
-      const pending = pendingRequests.get(message.requestId);
-      if (pending) {
-        pendingRequests.delete(message.requestId);
-        if (message.error) {
-          pending.reject(new Error(message.error));
-        } else {
-          pending.resolve(message.result);
-        }
-      }
-    }
-
-    if (message.type === 'event' && message.channel) {
-      const listeners = eventListeners.get(message.channel);
-      const args = message.args || [];
-
-      if (listeners && listeners.size > 0) {
-        listeners.forEach(callback => {
-          try {
-            callback(...args);
-          } catch (err) {
-            console.error(`Error in IPC listener for channel ${message.channel}:`, err);
-          }
-        });
+  if (message.type === 'response' && message.requestId) {
+    const pending = pendingRequests.get(message.requestId);
+    if (pending) {
+      pendingRequests.delete(message.requestId);
+      if (message.error) {
+        pending.reject(new Error(message.error));
       } else {
-        // No listeners yet - queue the event for later replay
-        if (!eventQueue.has(message.channel)) {
-          eventQueue.set(message.channel, []);
-        }
-        eventQueue.get(message.channel)!.push(args);
+        pending.resolve(message.result);
       }
     }
+  }
+
+  if (message.type === 'event' && message.channel) {
+    const listeners = eventListeners.get(message.channel);
+    const args = message.args || [];
+
+    if (listeners && listeners.size > 0) {
+      listeners.forEach(callback => {
+        try {
+          callback(...args);
+        } catch (err) {
+          console.error(`Error in IPC listener for channel ${message.channel}:`, err);
+        }
+      });
+    } else {
+      // No listeners yet — push into ordered queue for later replay
+      pendingEventQueue.push({ channel: message.channel, args });
+    }
+  }
+}
+
+/**
+ * Drain any events from the ordered queue that now have a listener.
+ * Called synchronously when a new listener registers, ensuring that
+ * events replay in the exact order the extension sent them.
+ */
+function flushPendingEvents(): void {
+  let i = 0;
+  while (i < pendingEventQueue.length) {
+    const { channel, args } = pendingEventQueue[i];
+    const listeners = eventListeners.get(channel);
+    if (listeners && listeners.size > 0) {
+      pendingEventQueue.splice(i, 1);
+      listeners.forEach(callback => {
+        try {
+          callback(...args);
+        } catch (err) {
+          console.error(`Error replaying event for channel ${channel}:`, err);
+        }
+      });
+    } else {
+      i++;
+    }
+  }
+}
+
+function initializeMessageHandler(): void {
+  // Register the live message handler
+  window.addEventListener('message', (event: MessageEvent<IpcMessage>) => {
+    handleMessage(event.data);
   });
+
+  // Drain the early message buffer that the inline HTML script captured
+  // before this deferred script loaded. Set it to null so the inline
+  // handler stops buffering (all future messages go through our listener).
+  const earlyMessages = (window as unknown as { __brunoMessageBuffer?: IpcMessage[] | null }).__brunoMessageBuffer;
+  (window as unknown as { __brunoMessageBuffer?: null }).__brunoMessageBuffer = null;
+
+  if (earlyMessages && earlyMessages.length > 0) {
+    for (const message of earlyMessages) {
+      handleMessage(message);
+    }
+  }
 }
 
 try {
@@ -128,20 +171,11 @@ export const ipcRenderer = {
     }
     eventListeners.get(channel)!.add(callback);
 
-    // Replay any queued events for this channel
-    const queuedEvents = eventQueue.get(channel);
-    if (queuedEvents && queuedEvents.length > 0) {
-      setTimeout(() => {
-        queuedEvents.forEach(args => {
-          try {
-            callback(...args);
-          } catch (err) {
-            console.error(`Error replaying queued event for channel ${channel}:`, err);
-          }
-        });
-        eventQueue.delete(channel);
-      }, 0);
-    }
+    // Synchronously flush any pending events that now have listeners.
+    // This preserves cross-channel ordering: if collection-opened was
+    // queued before tree-updated, it replays first regardless of which
+    // listener registers first.
+    flushPendingEvents();
 
     return () => {
       const listeners = eventListeners.get(channel);
