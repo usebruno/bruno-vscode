@@ -51,19 +51,6 @@ export async function openCreateCollectionPanel(
     }
   });
 
-  let viewSent = false;
-
-  const sendView = () => {
-    if (viewSent) return;
-    viewSent = true;
-
-    setTimeout(() => {
-      stateManager.sendTo(panel.webview, 'main:set-view', {
-        viewType: 'create-collection'
-      });
-    }, 100);
-  };
-
   panel.webview.onDidReceiveMessage(async (message: IpcMessage) => {
     const { type, channel, args, requestId } = message;
 
@@ -86,8 +73,11 @@ export async function openCreateCollectionPanel(
         });
 
         if (channel === 'renderer:ready') {
+          // Re-send as fallback in case the proactive send was missed
+          stateManager.sendTo(panel.webview, 'main:set-view', {
+            viewType: 'create-collection'
+          });
           clearCurrentWebview();
-          sendView();
           return;
         }
       } catch (error) {
@@ -113,6 +103,11 @@ export async function openCreateCollectionPanel(
         clearCurrentWebview();
       }
     }
+  });
+
+  // Send view data immediately — the IPC event queue buffers it until React mounts.
+  stateManager.sendTo(panel.webview, 'main:set-view', {
+    viewType: 'create-collection'
   });
 }
 

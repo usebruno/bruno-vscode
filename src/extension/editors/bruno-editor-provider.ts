@@ -27,7 +27,7 @@ interface IpcMessage {
   requestId?: string;
 }
 
-interface PendingLoad {
+interface CollectionLoadParams {
   filePath: string;
   collectionRoot: string;
   isVariablesMode: boolean;
@@ -35,7 +35,8 @@ interface PendingLoad {
 }
 
 const pendingVariablesModeRequests = new Map<string, { collectionRoot: string }>();
-const pendingLoads = new Map<vscode.Webview, PendingLoad>();
+// Stores view data per webview so renderer:ready can re-send as fallback
+const viewDataByWebview = new Map<vscode.Webview, Record<string, unknown>>();
 
 export function setPendingVariablesMode(filePath: string, collectionRoot: string): void {
   pendingVariablesModeRequests.set(filePath, { collectionRoot });
@@ -75,7 +76,7 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.onDidDispose(() => {
       stateManager.removeWebview(webviewPanel.webview);
       unregisterDocument(document.uri.fsPath);
-      pendingLoads.delete(webviewPanel.webview);
+      viewDataByWebview.delete(webviewPanel.webview);
     });
 
     const collectionRoot = findCollectionRoot(filePath);
@@ -86,21 +87,22 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
     }
     const isVariablesMode = !!pendingVariables;
 
+    webviewPanel.webview.onDidReceiveMessage((message: IpcMessage) => {
+      this._handleMessage(webviewPanel.webview, document, message);
+    });
+
+    // Start collection loading immediately in parallel with webview initialization.
     if (collectionRoot) {
-      pendingLoads.set(webviewPanel.webview, {
+      this._loadCollection({
         filePath,
         collectionRoot,
         isVariablesMode,
         webviewPanel
       });
     }
-
-    webviewPanel.webview.onDidReceiveMessage((message: IpcMessage) => {
-      this._handleMessage(webviewPanel.webview, document, message);
-    });
   }
 
-  private async _loadCollection(pending: PendingLoad): Promise<void> {
+  private async _loadCollection(pending: CollectionLoadParams): Promise<void> {
     const { filePath, collectionRoot, isVariablesMode, webviewPanel } = pending;
 
     const webviewSender = (channel: string, ...args: unknown[]) => {
@@ -178,6 +180,7 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
           };
         }
 
+        viewDataByWebview.set(webviewPanel.webview, viewData);
         stateManager.sendTo(webviewPanel.webview, 'main:set-view', viewData);
       }
     } catch (error) {
@@ -211,12 +214,14 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
         });
 
         if (channel === 'renderer:ready') {
-          clearCurrentWebview();
-          const pending = pendingLoads.get(webview);
-          if (pending) {
-            pendingLoads.delete(webview);
-            await this._loadCollection(pending);
+          // Collection loading already started in resolveCustomTextEditor.
+          // The renderer:ready handler (preferences/global-envs) was invoked above.
+          // Re-send view data as fallback in case the proactive send was missed.
+          const storedViewData = viewDataByWebview.get(webview);
+          if (storedViewData) {
+            stateManager.sendTo(webview, 'main:set-view', storedViewData);
           }
+          clearCurrentWebview();
           return;
         }
       } catch (error) {

@@ -64,6 +64,12 @@ export async function openExportCollectionPanel(
     stateManager.broadcast(channel, ...args);
   };
 
+  const viewData = {
+    viewType: 'export-collection',
+    collectionUid,
+    collectionPath
+  };
+
   let collectionLoaded = false;
 
   const loadCollection = async () => {
@@ -89,14 +95,7 @@ export async function openExportCollectionPanel(
       setCollectionsMessageSender(originalBroadcastSender);
       setWatcherMessageSender(originalBroadcastSender);
 
-      // Wait for items to finish loading before showing the view
-      setTimeout(() => {
-        stateManager.sendTo(panel.webview, 'main:set-view', {
-          viewType: 'export-collection',
-          collectionUid,
-          collectionPath
-        });
-      }, 500);
+      stateManager.sendTo(panel.webview, 'main:set-view', viewData);
     } catch (error) {
       console.error('ExportCollectionPanel: Error opening collection:', error);
       setCollectionsMessageSender(originalBroadcastSender);
@@ -151,8 +150,8 @@ export async function openExportCollectionPanel(
         });
 
         if (channel === 'renderer:ready') {
+          stateManager.sendTo(panel.webview, 'main:set-view', viewData);
           clearCurrentWebview();
-          await loadCollection();
           return;
         }
       } catch (error) {
@@ -179,6 +178,9 @@ export async function openExportCollectionPanel(
       }
     }
   });
+
+  // Start collection loading immediately in parallel with webview initialization.
+  loadCollection();
 }
 
 export function closeExportCollectionPanel(): void {

@@ -184,10 +184,6 @@ export const openCollection = async (
 
     brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionPath) as unknown as BrunoConfig;
 
-    const { size, filesCount } = await getCollectionStats(collectionPath);
-    brunoConfig.size = size;
-    brunoConfig.filesCount = filesCount;
-
     const lastOpenedStore = new LastOpenedCollections();
     lastOpenedStore.add(collectionPath);
 
@@ -216,14 +212,18 @@ export const openCollection = async (
       eventEmitter('main:collection-opened', collectionPath, uid, brunoConfig);
     }
 
-    // Skip if watcher already exists (e.g. when re-sending collection data to a new webview).
+    // Add watcher immediately — the webview's ordered event queue guarantees
+    // main:collection-opened is processed before any tree events from the watcher.
     if (!watcherExists) {
-      // Short delay to let the webview process collection-opened and create collection in Redux.
-      // The webview's pending events queue will buffer any tree events that arrive before the collection exists.
-      setTimeout(() => {
-        watcher.addWatcher(collectionPath, uid, brunoConfig);
-      }, 150);
+      watcher.addWatcher(collectionPath, uid, brunoConfig);
     }
+
+    // Compute collection stats in the background (not needed for initial render)
+    getCollectionStats(collectionPath).then(({ size, filesCount }) => {
+      if (messageSender) {
+        messageSender('main:collection-stats-updated', posixifyPath(collectionPath), uid, { size, filesCount });
+      }
+    }).catch(() => {});
 
     return { alreadyOpen: watcherExists };
   } catch (err) {
@@ -296,11 +296,9 @@ export const openCollectionForSingleRequest = async (
 
     brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionPath) as unknown as BrunoConfig;
 
-    const { size, filesCount } = await getCollectionStats(collectionPath);
-    brunoConfig.size = size;
-    brunoConfig.filesCount = filesCount;
-
-    // Pass shouldPersist=false for auto-opened collections (via clicking .bru file)
+    // Send collection-opened immediately without waiting for stats.
+    // getCollectionStats walks the entire directory tree which blocks the
+    // critical path.  Stats are computed in the background and sent later.
     if (sender) {
       sender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, false);
     }
@@ -311,18 +309,21 @@ export const openCollectionForSingleRequest = async (
       eventEmitter('main:collection-opened', collectionPath, uid, brunoConfig, true /* skipFullLoad */);
     }
 
-    // Short delay to let the webview process collection-opened and create collection in Redux.
-    // The webview's pending events queue will buffer any tree events that arrive before the collection exists.
-    setTimeout(async () => {
-      try {
-        // Pass the targetSender so file events also go to the right webview
-        await watcher.loadSingleRequest(requestFilePath, uid, collectionPath, targetSender);
+    // Load the single request immediately — the webview's ordered event queue
+    // guarantees main:collection-opened is processed before tree events.
+    try {
+      await watcher.loadSingleRequest(requestFilePath, uid, collectionPath, targetSender);
+      watcher.setupWatchersOnly(collectionPath, uid);
+    } catch (err) {
+      console.error('[openCollectionForSingleRequest] Error loading single request:', err);
+    }
 
-        watcher.setupWatchersOnly(collectionPath, uid);
-      } catch (err) {
-        console.error('[openCollectionForSingleRequest] Error loading single request:', err);
+    // Compute collection stats in the background (not needed for initial render)
+    getCollectionStats(collectionPath).then(({ size, filesCount }) => {
+      if (sender) {
+        sender('main:collection-stats-updated', posixifyPath(collectionPath), uid, { size, filesCount });
       }
-    }, 150);
+    }).catch(() => {});
 
     return uid;
   } catch (err) {
@@ -330,6 +331,31 @@ export const openCollectionForSingleRequest = async (
     if (!options.dontSendDisplayErrors && sender) {
       sender('main:display-error', error.message || 'An error occurred while opening the local collection');
     }
+    return null;
+  }
+};
+
+export const loadCollectionMetadata = async (
+  collectionPath: string,
+  targetSender: MessageSender
+): Promise<string | null> => {
+  try {
+    let brunoConfig = await getCollectionConfigFile(collectionPath);
+    const uid = generateUidBasedOnHash(collectionPath);
+
+    const defaultIgnores = ['node_modules', '.git'];
+    const userIgnores = brunoConfig.ignore || [];
+    brunoConfig.ignore = [...new Set([...defaultIgnores, ...userIgnores])];
+
+    brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionPath) as unknown as BrunoConfig;
+
+    targetSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, false);
+
+    return uid;
+  } catch (err) {
+    const error = err as Error;
+    console.error('[loadCollectionMetadata] Error:', error.message);
+    targetSender('main:display-error', error.message || 'An error occurred while loading collection');
     return null;
   }
 };

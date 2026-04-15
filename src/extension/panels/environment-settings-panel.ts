@@ -3,7 +3,7 @@ import { WebviewHelper } from '../webview/helper';
 import { stateManager } from '../webview/state-manager';
 import { getCollectionName } from '../utils/path';
 import { generateUidBasedOnHash } from '../utils/common';
-import { getCollectionStats, posixifyPath } from '../utils/filesystem';
+import { posixifyPath } from '../utils/filesystem';
 import { transformBrunoConfigAfterRead } from '../utils/transformBrunoConfig';
 import {
   setCurrentWebview,
@@ -69,13 +69,19 @@ export async function openEnvironmentSettingsPanel(
   panel.webview.html = WebviewHelper.getHtmlForWebview(panel.webview, context.extensionUri);
   stateManager.addWebview(panel.webview);
 
+  const collectionUid = generateUidBasedOnHash(collectionRoot);
+
+  const viewData = {
+    viewType: 'environment-settings',
+    collectionUid,
+    collectionPath: collectionRoot
+  };
+
   let collectionLoaded = false;
 
   const loadCollection = async () => {
     if (collectionLoaded) return;
     collectionLoaded = true;
-
-    const collectionUid = generateUidBasedOnHash(collectionRoot);
 
     try {
       if (collectionWatcher.hasWatcher(collectionRoot)) {
@@ -91,17 +97,11 @@ export async function openEnvironmentSettingsPanel(
 
         brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionRoot);
 
-        const { size, filesCount } = await getCollectionStats(collectionRoot);
-        brunoConfig.size = size;
-        brunoConfig.filesCount = filesCount;
-
         stateManager.sendTo(panel.webview, 'main:collection-opened', posixifyPath(collectionRoot), collectionUid, brunoConfig, false);
 
-        // We need a small delay for the webview to process main:collection-opened first.
         const panelSender = (channel: string, ...args: unknown[]) => {
           stateManager.sendTo(panel.webview, channel, ...args);
         };
-        await new Promise(resolve => setTimeout(resolve, 300));
         await collectionWatcher.loadEnvironments(collectionRoot, collectionUid, panelSender);
 
         // The panel is registered with stateManager so it will receive all future
@@ -127,13 +127,7 @@ export async function openEnvironmentSettingsPanel(
         }
       }
 
-      setTimeout(() => {
-        stateManager.sendTo(panel.webview, 'main:set-view', {
-          viewType: 'environment-settings',
-          collectionUid,
-          collectionPath: collectionRoot
-        });
-      }, 500);
+      stateManager.sendTo(panel.webview, 'main:set-view', viewData);
     } catch (error) {
       console.error('EnvironmentSettingsPanel: Error opening collection:', error);
     }
@@ -144,33 +138,26 @@ export async function openEnvironmentSettingsPanel(
       try {
         setCurrentWebview(panel.webview);
 
-        if (message.channel === 'renderer:ready') {
-          const result = await handleInvoke(message.channel, message.args || []);
-
-          panel.webview.postMessage({
-            type: 'response',
-            requestId: message.requestId,
-            result
-          });
-
-          clearCurrentWebview();
-          await loadCollection();
-          return;
-        }
-
         let result: unknown;
         if (hasHandler(message.channel)) {
           result = await handleInvoke(message.channel, message.args || []);
         } else {
           result = null;
         }
-        clearCurrentWebview();
 
         panel.webview.postMessage({
           type: 'response',
           requestId: message.requestId,
           result
         });
+
+        if (message.channel === 'renderer:ready') {
+          stateManager.sendTo(panel.webview, 'main:set-view', viewData);
+          clearCurrentWebview();
+          return;
+        }
+
+        clearCurrentWebview();
       } catch (error) {
         clearCurrentWebview();
         panel.webview.postMessage({
@@ -183,6 +170,9 @@ export async function openEnvironmentSettingsPanel(
       handleIpcSend(message.channel, message.args || []);
     }
   });
+
+  // Start collection loading immediately in parallel with webview initialization.
+  loadCollection();
 }
 
 export function getActiveEnvironmentPanel(collectionRoot: string): vscode.WebviewPanel | undefined {

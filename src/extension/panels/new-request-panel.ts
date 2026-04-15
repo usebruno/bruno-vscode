@@ -7,9 +7,7 @@ import {
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
-import { openCollection, setMessageSender as setCollectionsMessageSender } from '../app/collections';
-import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
-import collectionWatcher from '../app/collection-watcher';
+import { loadCollectionMetadata } from '../app/collections';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -57,42 +55,11 @@ export async function openNewRequestPanel(
     }
   });
 
-  const webviewSender = (channel: string, ...args: unknown[]) => {
-    stateManager.sendTo(panel.webview, channel, ...args);
-  };
-
-  const originalBroadcastSender = (channel: string, ...args: unknown[]) => {
-    stateManager.broadcast(channel, ...args);
-  };
-
-  let collectionLoaded = false;
-
-  const loadCollection = async () => {
-    if (collectionLoaded) return;
-    collectionLoaded = true;
-
-    setCollectionsMessageSender(webviewSender);
-    setWatcherMessageSender(webviewSender);
-
-    try {
-      await openCollection(collectionWatcher, collectionPath);
-
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
-
-      setTimeout(() => {
-        stateManager.sendTo(panel.webview, 'main:set-view', {
-          viewType: 'new-request',
-          collectionUid,
-          collectionPath,
-          itemUid: itemUid || null
-        });
-      }, 500);
-    } catch (error) {
-      console.error('NewRequestPanel: Error opening collection:', error);
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
-    }
+  const viewData = {
+    viewType: 'new-request',
+    collectionUid,
+    collectionPath,
+    itemUid: itemUid || null
   };
 
   panel.webview.onDidReceiveMessage(async (message: IpcMessage) => {
@@ -117,8 +84,9 @@ export async function openNewRequestPanel(
         });
 
         if (channel === 'renderer:ready') {
+          // Re-send view data as fallback in case the proactive send was missed
+          stateManager.sendTo(panel.webview, 'main:set-view', viewData);
           clearCurrentWebview();
-          await loadCollection();
           return;
         }
       } catch (error) {
@@ -145,6 +113,16 @@ export async function openNewRequestPanel(
       }
     }
   });
+
+  // NewRequestView only needs collection metadata (uid, name, presets).
+  // Load metadata only — no watcher, no tree scanning, no tree events.
+  const webviewSender = (channel: string, ...args: unknown[]) => {
+    stateManager.sendTo(panel.webview, channel, ...args);
+  };
+  loadCollectionMetadata(collectionPath, webviewSender);
+
+  // Send view data immediately.
+  stateManager.sendTo(panel.webview, 'main:set-view', viewData);
 }
 
 export function closeNewRequestPanel(): void {

@@ -7,9 +7,7 @@ import {
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
-import { openCollection, setMessageSender as setCollectionsMessageSender } from '../app/collections';
-import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
-import collectionWatcher from '../app/collection-watcher';
+import { loadCollectionMetadata } from '../app/collections';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -56,41 +54,10 @@ export async function openCloneCollectionPanel(
     }
   });
 
-  const webviewSender = (channel: string, ...args: unknown[]) => {
-    stateManager.sendTo(panel.webview, channel, ...args);
-  };
-
-  const originalBroadcastSender = (channel: string, ...args: unknown[]) => {
-    stateManager.broadcast(channel, ...args);
-  };
-
-  let collectionLoaded = false;
-
-  const loadCollection = async () => {
-    if (collectionLoaded) return;
-    collectionLoaded = true;
-
-    setCollectionsMessageSender(webviewSender);
-    setWatcherMessageSender(webviewSender);
-
-    try {
-      await openCollection(collectionWatcher, collectionPath);
-
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
-
-      setTimeout(() => {
-        stateManager.sendTo(panel.webview, 'main:set-view', {
-          viewType: 'clone-collection',
-          collectionUid,
-          collectionPath
-        });
-      }, 500);
-    } catch (error) {
-      console.error('CloneCollectionPanel: Error opening collection:', error);
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
-    }
+  const viewData = {
+    viewType: 'clone-collection',
+    collectionUid,
+    collectionPath
   };
 
   const handleLocalInvoke = async (channel: string, _args: unknown[]): Promise<unknown> => {
@@ -136,8 +103,8 @@ export async function openCloneCollectionPanel(
         });
 
         if (channel === 'renderer:ready') {
+          stateManager.sendTo(panel.webview, 'main:set-view', viewData);
           clearCurrentWebview();
-          await loadCollection();
           return;
         }
       } catch (error) {
@@ -164,6 +131,15 @@ export async function openCloneCollectionPanel(
       }
     }
   });
+
+  // CloneCollectionView only needs collection name and pathname.
+  // Load metadata only - no watcher, no tree scanning.
+  const webviewSender = (channel: string, ...args: unknown[]) => {
+    stateManager.sendTo(panel.webview, channel, ...args);
+  };
+  loadCollectionMetadata(collectionPath, webviewSender);
+
+  stateManager.sendTo(panel.webview, 'main:set-view', viewData);
 }
 
 export function closeCloneCollectionPanel(): void {
