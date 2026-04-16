@@ -32,19 +32,22 @@ function handleIpcSend(channel: string, args: unknown[]): void {
 export async function openRunnerPanel(
   context: vscode.ExtensionContext,
   collectionRoot: string,
-  _targetPath: string
+  _targetPath: string,
+  folderUid?: string
 ): Promise<void> {
-  const existingPanel = activeRunnerPanels.get(collectionRoot);
+  const panelKey = folderUid ? `${collectionRoot}::${folderUid}` : collectionRoot;
+  const existingPanel = activeRunnerPanels.get(panelKey);
   if (existingPanel) {
     existingPanel.reveal();
     return;
   }
 
   const collectionName = getCollectionName(collectionRoot);
+  const panelTitle = folderUid ? `Folder Runner: ${collectionName}` : `Runner: ${collectionName}`;
 
   const panel = vscode.window.createWebviewPanel(
     'bruno.runnerPanel',
-    `Runner: ${collectionName}`,
+    panelTitle,
     vscode.ViewColumn.One,
     {
       enableScripts: true,
@@ -54,10 +57,10 @@ export async function openRunnerPanel(
   );
 
   panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'bruno-icon.png');
-  activeRunnerPanels.set(collectionRoot, panel);
+  activeRunnerPanels.set(panelKey, panel);
 
   panel.onDidDispose(() => {
-    activeRunnerPanels.delete(collectionRoot);
+    activeRunnerPanels.delete(panelKey);
     stateManager.removeWebview(panel.webview);
   });
 
@@ -116,7 +119,8 @@ export async function openRunnerPanel(
         stateManager.sendTo(panel.webview, 'main:set-view', {
           viewType: 'collection-runner',
           collectionUid,
-          collectionPath: collectionRoot
+          collectionPath: collectionRoot,
+          folderUid
         });
       }, 500);
     } catch (error) {
