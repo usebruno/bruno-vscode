@@ -3,6 +3,9 @@ import {
   openBrunoSidebar,
   createCollection,
   removeCollection,
+  createFolder,
+  deleteItem,
+  expandCollection,
 } from '../utils/actions';
 
 test.describe('Collection removal', () => {
@@ -72,6 +75,29 @@ test.describe('Collection removal', () => {
       .locator('[data-testid="sidebar-collection-row"]')
       .filter({ hasText: collectionName });
     await expect(matches).toHaveCount(1);
+  });
+
+  test('Deleted folder disappears from the sidebar', async ({ page, tmpDir }) => {
+    const sidebar = await openBrunoSidebar(page);
+    const collectionName = 'Folder Delete Test';
+    const folderName = 'my-folder';
+
+    // Create a collection and a folder inside it
+    await createCollection(page, sidebar, collectionName, tmpDir);
+    await createFolder(sidebar, collectionName, folderName);
+
+    // Expand the collection to see the folder
+    await expandCollection(sidebar, collectionName);
+    const folderRow = sidebar
+      .locator('[data-testid="sidebar-collection-item-row"]')
+      .filter({ hasText: folderName });
+    await expect(folderRow).toBeVisible({ timeout: 10_000 });
+
+    // Delete the folder
+    await deleteItem(sidebar, folderName);
+
+    // Verify it's gone
+    await expect(folderRow).not.toBeVisible({ timeout: 10_000 });
   });
 
 });
