@@ -623,7 +623,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
 
         // Collect request files before rename for UID mapping updates
         const itemCollectionPath = collectionPath;
-        const collectionUid = itemCollectionPath ? generateUidBasedOnHash(itemCollectionPath) : null;
+        const collectionUid = itemCollectionPath ? generateUidBasedOnHash(path.resolve(itemCollectionPath)) : null;
         const requestFiles = itemCollectionPath ? searchForRequestFiles(oldPath, itemCollectionPath) : [];
 
         fs.renameSync(oldPath, newPath);
@@ -736,7 +736,9 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         }
       };
 
-      const collectionUid = generateUidBasedOnHash(collectionPath);
+      // path.resolve converts posixified paths (from Redux) back to native separators
+      // so the UID matches what was generated when the collection was first opened
+      const collectionUid = generateUidBasedOnHash(path.resolve(collectionPath));
       const stats = fs.statSync(itemPath);
       if (stats.isDirectory()) {
         const requestFiles = await searchForRequestFiles(itemPath, collectionPath);
@@ -1427,7 +1429,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         return null;
       }
 
-      const uid = generateUidBasedOnHash(collectionPath);
+      const uid = generateUidBasedOnHash(path.resolve(collectionPath));
       const collectionName = path.basename(collectionPath);
 
       const buildTree = (dirPath: string): Array<{

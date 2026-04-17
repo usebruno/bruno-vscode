@@ -318,16 +318,17 @@ const addCollectionToWorkspace = async (
       config.collections = [];
     }
 
-    const normalizedCollection: CollectionEntry = {
-      name: collection.name.trim(),
-      path: collection.path.trim()
-    };
+    const normalizedCollection = normalizeCollectionEntry(workspacePath, collection);
 
     if (collection.remote && typeof collection.remote === 'string') {
       normalizedCollection.remote = collection.remote.trim();
     }
 
-    const existingIndex = config.collections.findIndex((c) => c.path === normalizedCollection.path);
+    // Compare normalized paths to avoid duplicates from absolute/relative mismatches
+    const existingIndex = config.collections.findIndex((c) => {
+      const existingNormalized = normalizeCollectionEntry(workspacePath, c);
+      return existingNormalized.path === normalizedCollection.path;
+    });
 
     if (existingIndex >= 0) {
       config.collections[existingIndex] = normalizedCollection;

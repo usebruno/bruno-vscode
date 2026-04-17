@@ -405,6 +405,154 @@ export async function sendRequest(
 }
 
 /**
+ * Mock the next `sidebar:confirm-remove` IPC call to auto-confirm removal.
+ * Bypasses the native VS Code modal dialog which is hard to interact with in e2e.
+ */
+async function mockConfirmRemove(frame: Frame): Promise<void> {
+  await frame.evaluate(() => {
+    const ipc = (window as any).ipcRenderer;
+    const originalInvoke = ipc.invoke.bind(ipc);
+    ipc.invoke = async (channel: string, ...args: any[]) => {
+      if (channel === 'sidebar:confirm-remove') {
+        ipc.invoke = originalInvoke;
+        return true;
+      }
+      return originalInvoke(channel, ...args);
+    };
+  });
+}
+
+/**
+ * Remove a collection from the sidebar by opening the context menu,
+ * clicking Remove, and auto-confirming via IPC mock.
+ *
+ * @param page - Playwright Page (VS Code workbench)
+ * @param sidebar - The sidebar webview Frame
+ * @param collectionName - Name of the collection to remove
+ */
+export async function removeCollection(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string
+): Promise<void> {
+  const collectionRow = sidebar
+    .locator('[data-testid="sidebar-collection-row"]')
+    .filter({ hasText: collectionName });
+  await collectionRow.hover();
+
+  // Mock the confirmation dialog before triggering removal
+  await mockConfirmRemove(sidebar);
+
+  // Open the 3-dot context menu
+  await collectionRow.locator('[data-testid="collection-actions"]').click();
+
+  // Click "Remove" from the dropdown
+  await sidebar.locator('[role="menuitem"]').filter({ hasText: 'Remove' }).click();
+
+  // Wait for the collection to disappear from the sidebar
+  await expect(collectionRow).not.toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Mock the next `sidebar:prompt-new-folder` IPC call to return a folder name.
+ * Bypasses the native VS Code input box.
+ */
+async function mockNewFolderPrompt(frame: Frame, folderName: string): Promise<void> {
+  await frame.evaluate((name) => {
+    const ipc = (window as any).ipcRenderer;
+    const originalInvoke = ipc.invoke.bind(ipc);
+    ipc.invoke = async (channel: string, ...args: any[]) => {
+      if (channel === 'sidebar:prompt-new-folder') {
+        ipc.invoke = originalInvoke;
+        return name;
+      }
+      return originalInvoke(channel, ...args);
+    };
+  }, folderName);
+}
+
+/**
+ * Mock the next `sidebar:confirm-delete` IPC call to auto-confirm deletion.
+ * Bypasses the native VS Code confirmation dialog.
+ */
+async function mockConfirmDelete(frame: Frame): Promise<void> {
+  await frame.evaluate(() => {
+    const ipc = (window as any).ipcRenderer;
+    const originalInvoke = ipc.invoke.bind(ipc);
+    ipc.invoke = async (channel: string, ...args: any[]) => {
+      if (channel === 'sidebar:confirm-delete') {
+        ipc.invoke = originalInvoke;
+        return true;
+      }
+      return originalInvoke(channel, ...args);
+    };
+  });
+}
+
+/**
+ * Create a new folder inside a collection via the sidebar context menu.
+ *
+ * @param sidebar - The sidebar webview Frame
+ * @param collectionName - Name of the parent collection
+ * @param folderName - Name for the new folder
+ */
+export async function createFolder(
+  sidebar: Frame,
+  collectionName: string,
+  folderName: string
+): Promise<void> {
+  // Expand collection first so it's mounted
+  await expandCollection(sidebar, collectionName);
+
+  const collectionRow = sidebar
+    .locator('[data-testid="sidebar-collection-row"]')
+    .filter({ hasText: collectionName });
+  await collectionRow.hover();
+
+  // Mock the folder name input before opening the menu
+  await mockNewFolderPrompt(sidebar, folderName);
+
+  // Open the 3-dot context menu
+  await collectionRow.locator('[data-testid="collection-actions"]').click();
+
+  // Click "New Folder"
+  await sidebar.locator('[role="menuitem"]').filter({ hasText: 'New Folder' }).click();
+
+  // Wait for the folder to appear in the sidebar
+  await expect(
+    sidebar.locator('[data-testid="sidebar-collection-item-row"]').filter({ hasText: folderName })
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Delete a folder or request from the sidebar by right-clicking and confirming.
+ *
+ * @param sidebar - The sidebar webview Frame
+ * @param itemName - Name of the folder/request to delete
+ */
+export async function deleteItem(
+  sidebar: Frame,
+  itemName: string
+): Promise<void> {
+  const itemRow = sidebar
+    .locator('[data-testid="sidebar-collection-item-row"]')
+    .filter({ hasText: itemName });
+  await itemRow.hover();
+
+  // Mock the confirmation dialog
+  await mockConfirmDelete(sidebar);
+
+  // Open the context menu (3-dot icon on the item)
+  await itemRow.locator('[data-testid="collection-item-menu"]').click();
+
+  // Click "Delete"
+  await sidebar.locator('[role="menuitem"]').filter({ hasText: 'Delete' }).click();
+
+  // Wait for the item to disappear
+  await expect(itemRow).not.toBeVisible({ timeout: 15_000 });
+}
+
+/**
  * Run a VS Code command via the Command Palette.
  */
 export async function runCommand(page: Page, command: string): Promise<void> {

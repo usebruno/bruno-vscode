@@ -74,6 +74,10 @@ function writeVSCodeSettings(userDataDir: string): void {
       'workbench.editor.untitled.hint': 'hidden',
       'security.workspace.trust.enabled': false,
       'extensions.ignoreRecommendations': true,
+      'github.copilot.enable': false,
+      'workbench.welcomePage.walkthroughs.openOnInstall': false,
+      'workbench.accounts.experimental.showEntitlements': false,
+      'accessibility.signUpPlaceholder': false,
     }, null, 2)
   );
 }
@@ -111,6 +115,19 @@ async function waitForWorkbench(page: Page): Promise<void> {
   await page.waitForSelector('.monaco-workbench', { timeout: 30_000 });
   // Wait for the activity bar to be rendered
   await page.waitForSelector('.activitybar', { timeout: 20_000 });
+
+  // Dismiss the GitHub sign-in dialog if it appears (VS Code 1.116+)
+  try {
+    const skipButton = page.locator('text=Skip');
+    const continueButton = page.locator('text=Continue without Signing In');
+    const dismissTarget = skipButton.or(continueButton);
+    await dismissTarget.first().click({ timeout: 3_000 });
+    // Wait for the dialog to close
+    await page.waitForTimeout(1_000);
+  } catch {
+    // Dialog didn't appear — that's fine
+  }
+
   // Small extra buffer for extension activation
   await new Promise(r => setTimeout(r, 2_000));
 }

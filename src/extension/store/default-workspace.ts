@@ -221,22 +221,25 @@ class DefaultWorkspaceManager {
       config.collections = [];
     }
 
-    const exists = config.collections.some(c => c.path === collectionPath);
+    // Normalize to relative path for consistent storage
+    let relativePath = collectionPath;
+    try {
+      const rel = path.relative(workspacePath!, collectionPath);
+      if (!rel.startsWith('..')) {
+        relativePath = rel;
+      }
+    } catch { }
+
+    // Check for existing entry by resolving stored paths to absolute for comparison
+    const exists = config.collections.some(c => {
+      const resolved = path.isAbsolute(c.path)
+        ? c.path
+        : path.resolve(workspacePath!, c.path);
+      return path.normalize(resolved) === path.normalize(collectionPath);
+    });
     if (exists) return true;
 
     const name = collectionName || path.basename(collectionPath);
-
-    let relativePath = collectionPath;
-    try {
-      relativePath = path.relative(workspacePath!, collectionPath);
-      // If the relative path goes outside the workspace, use absolute path
-      if (relativePath.startsWith('..')) {
-        relativePath = collectionPath;
-      }
-    } catch {
-      relativePath = collectionPath;
-    }
-
     config.collections.push({
       name,
       path: relativePath
@@ -255,7 +258,7 @@ class DefaultWorkspaceManager {
       const resolvedPath = path.isAbsolute(c.path)
         ? c.path
         : path.resolve(workspacePath!, c.path);
-      return resolvedPath !== collectionPath;
+      return path.normalize(resolvedPath) !== path.normalize(collectionPath);
     });
 
     return this.saveWorkspaceConfig(config);
