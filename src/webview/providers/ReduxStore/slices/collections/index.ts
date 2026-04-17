@@ -1464,6 +1464,12 @@ export const collectionsSlice = createSlice({
           if (!item.tags.includes(tag)) {
             item.tags.push(tag);
           }
+          if (item.draft) {
+            if (!item.draft.tags) item.draft.tags = [];
+            if (!item.draft.tags.includes(tag)) {
+              item.draft.tags.push(tag);
+            }
+          }
         }
       }
     },
@@ -1473,8 +1479,13 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (collection) {
         const item = findItemInCollection(collection, itemUid);
-        if (item && item.tags) {
-          item.tags = item.tags.filter(t => t !== tag);
+        if (item) {
+          if (item.tags) {
+            item.tags = item.tags.filter(t => t !== tag);
+          }
+          if (item.draft?.tags) {
+            item.draft.tags = item.draft.tags.filter(t => t !== tag);
+          }
         }
       }
     },

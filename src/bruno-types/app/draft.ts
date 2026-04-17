@@ -52,6 +52,7 @@ export interface ItemDraft {
   request?: Request | DraftRequest | null;
   settings?: ItemSettings;
   examples?: Example[];
+  tags?: string[];
   root?: FolderRoot | null;
 }
 
