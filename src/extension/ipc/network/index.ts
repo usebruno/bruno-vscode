@@ -1,12 +1,12 @@
 
 import { AxiosResponse, AxiosError } from 'axios';
-import { registerHandler, sendToWebview } from '../handlers';
+import { registerHandler, sendToWebview, broadcastToAllWebviews } from '../handlers';
 import { prepareRequest, BrunoRequest as PrepareRequestType } from './prepare-request';
 import { interpolateVars } from './interpolate-vars';
 import { createAxiosInstance, AxiosInstanceOptions } from './axios-instance';
 import { saveCancelToken, deleteCancelToken, cancelTokens } from '../../utils/cancel-token';
 import { cookiesStore } from '../../store/cookies';
-import { getCookieStringForUrl, saveCookies } from '../../utils/cookies';
+import { getCookieStringForUrl, saveCookies, getDomainsWithCookies } from '../../utils/cookies';
 import { createFormData, formatMultipartData } from '../../utils/form-data';
 import { getPreferences } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
@@ -423,8 +423,10 @@ const executeRequest = async (
       const setCookieHeaders = response.headers['set-cookie'];
       if (setCookieHeaders) {
         addTimelineEvent('Processing cookies');
-        // Persist cookies to VS Code storage
+        // Persist cookies and notify all webviews so the Cookie UI updates
         cookiesStore.saveCookieJar();
+        const domainsWithCookies = await getDomainsWithCookies();
+        broadcastToAllWebviews('main:cookies-update', JSON.parse(JSON.stringify(domainsWithCookies)));
       }
     }
 
