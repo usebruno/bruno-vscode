@@ -18,7 +18,6 @@ import {
   getCollectionFormat,
   searchForRequestFiles,
   validateName,
-  getCollectionStats,
   sizeInMB,
   safeWriteFileSync,
   copyPath,
@@ -78,11 +77,6 @@ const environmentSecretsStore = new EnvironmentSecretsStore();
 const collectionSecurityStore = new CollectionSecurityStore();
 const uiStateSnapshotStore = new UiStateSnapshotStore();
 
-// Limits for async loading
-const MAX_COLLECTION_SIZE_IN_MB = 20;
-const MAX_SINGLE_FILE_SIZE_IN_COLLECTION_IN_MB = 5;
-const MAX_COLLECTION_FILES_COUNT = 2000;
-
 interface Environment {
   name: string;
   variables: Array<{ name: string; value: string; secret?: boolean; uid?: string }>;
@@ -94,8 +88,6 @@ interface BrunoConfig {
   name: string;
   type: string;
   ignore?: string[];
-  size?: number;
-  filesCount?: number;
   [key: string]: unknown;
 }
 
@@ -105,7 +97,7 @@ type MessageSender = (channel: string, ...args: unknown[]) => void;
 interface CollectionWatcherInterface {
   hasWatcher(path: string): boolean;
   getAllWatcherPaths(): string[];
-  addWatcher(watchPath: string, collectionUid: string, brunoConfig?: object, useWorkerThread?: boolean): void;
+  addWatcher(watchPath: string, collectionUid: string, brunoConfig?: object): void;
   removeWatcher(watchPath: string, collectionUid?: string): void;
   loadSingleRequest?(requestFilePath: string, collectionUid: string, collectionPath: string, targetSender?: MessageSender): Promise<void>;
   setupWatchersOnly?(watchPath: string, collectionUid: string): void;
@@ -187,10 +179,6 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       } else {
         throw new Error(`Invalid format: ${format}`);
       }
-
-      const { size, filesCount } = await getCollectionStats(dirPath);
-      brunoConfig.size = size;
-      brunoConfig.filesCount = filesCount;
 
       const lastOpenedStore = new LastOpenedCollections();
       lastOpenedStore.add(dirPath);
@@ -275,10 +263,6 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         const content = await stringifyJson(brunoConfig);
         await writeFile(path.join(dirPath, 'bruno.json'), content);
       }
-
-      const { size, filesCount } = await getCollectionStats(dirPath);
-      brunoConfig.size = size;
-      brunoConfig.filesCount = filesCount;
 
       broadcastToAllWebviews('main:collection-opened', posixifyPath(dirPath), uid, brunoConfig, true);
       emit('main:collection-opened', dirPath, uid);
@@ -965,9 +949,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
 
     if (watcher && typeof collectionPath === 'string' && typeof uid === 'string') {
-      const { size, filesCount } = (brunoConfig as BrunoConfig) || { size: 0, filesCount: 0 };
-      const useWorkerThread = (size || 0) >= MAX_COLLECTION_SIZE_IN_MB || (filesCount || 0) >= MAX_COLLECTION_FILES_COUNT;
-      watcher.addWatcher(collectionPath, uid, brunoConfig as object, useWorkerThread);
+      watcher.addWatcher(collectionPath, uid, brunoConfig as object);
     }
   });
 
@@ -1143,10 +1125,6 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       };
 
       await writeItems(collection.items, dirPath);
-
-      const { size, filesCount } = await getCollectionStats(dirPath);
-      brunoConfig.size = size;
-      brunoConfig.filesCount = filesCount;
 
       const lastOpenedStore = new LastOpenedCollections();
       lastOpenedStore.add(dirPath);
@@ -1386,9 +1364,6 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         }
 
         const uid = generateUidBasedOnHash(finalCollectionPath);
-        const { size, filesCount } = await getCollectionStats(finalCollectionPath);
-        brunoConfig.size = size;
-        brunoConfig.filesCount = filesCount;
 
         const lastOpenedStore = new LastOpenedCollections();
         lastOpenedStore.add(finalCollectionPath);

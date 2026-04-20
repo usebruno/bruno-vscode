@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import * as vscode from 'vscode';
 import * as Yup from 'yup';
-import { isDirectory, getCollectionStats, normalizeAndResolvePath, posixifyPath } from '../utils/filesystem';
+import { isDirectory, normalizeAndResolvePath, posixifyPath } from '../utils/filesystem';
 import { generateUidBasedOnHash } from '../utils/common';
 import { transformBrunoConfigAfterRead } from '../utils/transformBrunoConfig';
 import LastOpenedCollections from '../store/last-opened-collections';
@@ -19,7 +19,7 @@ type MessageSender = (channel: string, ...args: unknown[]) => void;
 
 interface CollectionWatcher {
   hasWatcher(collectionPath: string): boolean;
-  addWatcher(watchPath: string, collectionUid: string, brunoConfig?: BrunoConfig, useWorkerThread?: boolean): void;
+  addWatcher(watchPath: string, collectionUid: string, brunoConfig?: BrunoConfig): void;
   loadSingleRequest(requestFilePath: string, collectionUid: string, collectionPath: string, targetSender?: MessageSender): Promise<void>;
   setupWatchersOnly(watchPath: string, collectionUid: string): void;
 }
@@ -33,8 +33,6 @@ interface BrunoConfig {
   version?: string;
   opencollection?: string;
   ignore?: string[];
-  size?: number;
-  filesCount?: number;
   [key: string]: unknown;
 }
 
@@ -218,13 +216,6 @@ export const openCollection = async (
       watcher.addWatcher(collectionPath, uid, brunoConfig);
     }
 
-    // Compute collection stats in the background (not needed for initial render)
-    getCollectionStats(collectionPath).then(({ size, filesCount }) => {
-      if (messageSender) {
-        messageSender('main:collection-stats-updated', posixifyPath(collectionPath), uid, { size, filesCount });
-      }
-    }).catch(() => {});
-
     return { alreadyOpen: watcherExists };
   } catch (err) {
     const error = err as Error;
@@ -296,9 +287,6 @@ export const openCollectionForSingleRequest = async (
 
     brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionPath) as unknown as BrunoConfig;
 
-    // Send collection-opened immediately without waiting for stats.
-    // getCollectionStats walks the entire directory tree which blocks the
-    // critical path.  Stats are computed in the background and sent later.
     if (sender) {
       sender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, false);
     }
@@ -317,13 +305,6 @@ export const openCollectionForSingleRequest = async (
     } catch (err) {
       console.error('[openCollectionForSingleRequest] Error loading single request:', err);
     }
-
-    // Compute collection stats in the background (not needed for initial render)
-    getCollectionStats(collectionPath).then(({ size, filesCount }) => {
-      if (sender) {
-        sender('main:collection-stats-updated', posixifyPath(collectionPath), uid, { size, filesCount });
-      }
-    }).catch(() => {});
 
     return uid;
   } catch (err) {

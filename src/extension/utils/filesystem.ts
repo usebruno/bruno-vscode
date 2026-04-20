@@ -7,12 +7,6 @@ import * as vscode from 'vscode';
 
 type CollectionFormat = 'bru' | 'yml';
 
-interface CollectionStats {
-  size: number;
-  filesCount: number;
-  maxFileSize: number;
-}
-
 export const exists = async (p: string): Promise<boolean> => {
   try {
     await fsPromises.access(p);
@@ -313,54 +307,6 @@ export const safeToRename = (oldPath: string, newPath: string): boolean => {
 
 export const sizeInMB = (size: number): number => {
   return size / (1024 * 1024);
-};
-
-export const getCollectionStats = async (directoryPath: string): Promise<CollectionStats> => {
-  let size = 0;
-  let filesCount = 0;
-  let maxFileSize = 0;
-
-  let targetExt = '.bru';
-  try {
-    const format = getCollectionFormat(directoryPath);
-    targetExt = format === 'yml' ? '.yml' : '.bru';
-  } catch {
-    // If format can't be determined, default to .bru
-  }
-
-  async function calculateStats(directory: string): Promise<void> {
-    const entries = await fsPromises.readdir(directory, { withFileTypes: true });
-
-    const tasks = entries.map(async (entry) => {
-      const fullPath = path.join(directory, entry.name);
-
-      if (entry.isDirectory()) {
-        if (['node_modules', '.git'].includes(entry.name)) {
-          return;
-        }
-        await calculateStats(fullPath);
-      }
-
-      if (path.extname(fullPath) === targetExt) {
-        const stats = await fsPromises.stat(fullPath);
-        size += stats.size;
-        if (maxFileSize < stats.size) {
-          maxFileSize = stats.size;
-        }
-        filesCount += 1;
-      }
-    });
-
-    await Promise.all(tasks);
-  }
-
-  await calculateStats(directoryPath);
-
-  return {
-    size: sizeInMB(size),
-    filesCount,
-    maxFileSize: sizeInMB(maxFileSize)
-  };
 };
 
 export const copyPath = async (source: string, destination: string): Promise<void> => {

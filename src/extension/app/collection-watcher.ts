@@ -438,7 +438,6 @@ class CollectionWatcher {
     pathname: string,
     collectionUid: string,
     collectionPath: string,
-    useWorkerThread: boolean,
     sender: MessageSender | null
   ): Promise<void> {
     if (isBrunoConfigFile(pathname, collectionPath)) {
@@ -468,7 +467,7 @@ class CollectionWatcher {
 
     const format = getCollectionFormat(collectionPath);
     if (hasRequestExtension(pathname, format)) {
-      await this.handleRequestFileWithSender(pathname, collectionUid, collectionPath, useWorkerThread, sender);
+      await this.handleRequestFileWithSender(pathname, collectionUid, collectionPath, sender);
     }
   }
 
@@ -607,7 +606,6 @@ class CollectionWatcher {
     pathname: string,
     collectionUid: string,
     collectionPath: string,
-    useWorkerThread: boolean,
     sender: MessageSender | null
   ): Promise<void> {
     this.addFileToProcessing(collectionUid, pathname);
@@ -663,8 +661,7 @@ class CollectionWatcher {
   addWatcher(
     watchPath: string,
     collectionUid: string,
-    brunoConfig?: BrunoConfig,
-    useWorkerThread = false
+    brunoConfig?: BrunoConfig
   ): void {
     // If we've already done a full scan for this path, skip — the tree is
     // already populated in every webview and re-scanning would flip
@@ -697,7 +694,7 @@ class CollectionWatcher {
     const dotEnvPattern = new vscode.RelativePattern(watchPath, '.env');
 
     const requestWatcher = vscode.workspace.createFileSystemWatcher(requestPattern);
-    requestWatcher.onDidCreate(uri => this.handleFileAdd(uri.fsPath, collectionUid, watchPath, useWorkerThread));
+    requestWatcher.onDidCreate(uri => this.handleFileAdd(uri.fsPath, collectionUid, watchPath));
     requestWatcher.onDidChange(uri => this.handleFileChange(uri.fsPath, collectionUid, watchPath));
     requestWatcher.onDidDelete(uri => this.handleFileUnlink(uri.fsPath, collectionUid, watchPath));
     watchers.push(requestWatcher);
@@ -726,13 +723,12 @@ class CollectionWatcher {
     this.pathToCollectionUid.set(watchPath, collectionUid);
 
     // Initial scan of collection
-    this.performInitialScan(watchPath, collectionUid, useWorkerThread);
+    this.performInitialScan(watchPath, collectionUid);
   }
 
   private async performInitialScan(
     watchPath: string,
-    collectionUid: string,
-    useWorkerThread: boolean
+    collectionUid: string
   ): Promise<void> {
     const format = getCollectionFormat(watchPath);
     const extension = format === 'yml' ? 'yml' : 'bru';
@@ -767,7 +763,7 @@ class CollectionWatcher {
       // Process config/env/root files first (sequential - sets up collection state)
       const hasDotEnv = priorityFiles.some(f => isDotEnvFile(f, watchPath));
       for (const filePath of priorityFiles) {
-        await this.handleFileAdd(filePath, collectionUid, watchPath, useWorkerThread);
+        await this.handleFileAdd(filePath, collectionUid, watchPath);
       }
 
       // If no .env file was found, still send system process.env variables
@@ -906,8 +902,7 @@ class CollectionWatcher {
   private async handleFileAdd(
     pathname: string,
     collectionUid: string,
-    collectionPath: string,
-    useWorkerThread: boolean
+    collectionPath: string
   ): Promise<void> {
     if (isBrunoConfigFile(pathname, collectionPath)) {
       await this.handleBrunoConfigChange(pathname, collectionUid, collectionPath);
@@ -936,7 +931,7 @@ class CollectionWatcher {
 
     const format = getCollectionFormat(collectionPath);
     if (hasRequestExtension(pathname, format)) {
-      await this.handleRequestFile(pathname, collectionUid, collectionPath, useWorkerThread);
+      await this.handleRequestFile(pathname, collectionUid, collectionPath);
     }
   }
 
@@ -1188,8 +1183,7 @@ class CollectionWatcher {
   private async handleRequestFile(
     pathname: string,
     collectionUid: string,
-    collectionPath: string,
-    useWorkerThread: boolean
+    collectionPath: string
   ): Promise<void> {
     this.addFileToProcessing(collectionUid, pathname);
 
@@ -1405,7 +1399,7 @@ class CollectionWatcher {
 
     // Then process all files (collection root, folder.bru, request, environments)
     for (const filePath of filesToLoad) {
-      await this.handleFileAddWithSender(filePath, collectionUid, collectionPath, false, sender);
+      await this.handleFileAddWithSender(filePath, collectionUid, collectionPath, sender);
     }
 
     // Complete discovery (uses targetSender)
@@ -1475,7 +1469,7 @@ class CollectionWatcher {
     const dotEnvPattern = new vscode.RelativePattern(watchPath, '.env');
 
     const requestWatcher = vscode.workspace.createFileSystemWatcher(requestPattern);
-    requestWatcher.onDidCreate(uri => this.handleFileAdd(uri.fsPath, collectionUid, watchPath, false));
+    requestWatcher.onDidCreate(uri => this.handleFileAdd(uri.fsPath, collectionUid, watchPath));
     requestWatcher.onDidChange(uri => this.handleFileChange(uri.fsPath, collectionUid, watchPath));
     requestWatcher.onDidDelete(uri => this.handleFileUnlink(uri.fsPath, collectionUid, watchPath));
     watchers.push(requestWatcher);
@@ -1545,7 +1539,7 @@ class CollectionWatcher {
       // Process priority files first
       const hasDotEnv = priorityFiles.some(f => isDotEnvFile(f, collectionPath));
       for (const filePath of priorityFiles) {
-        await this.handleFileAddWithSender(filePath, collectionUid, collectionPath, false, sender);
+        await this.handleFileAddWithSender(filePath, collectionUid, collectionPath, sender);
       }
 
       // If no .env file, still send process.env variables
