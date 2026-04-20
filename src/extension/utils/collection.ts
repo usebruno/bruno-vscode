@@ -445,6 +445,8 @@ const getTreePathFromCollectionToItem = (collection: Collection, _item: Item): I
   return path;
 };
 
+const HTTP_METHOD_BLOCK_REGEX = /^\s*(get|post|put|delete|patch|options|head|trace|connect)\s*\{/mi;
+
 const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
   try {
     const metaRegex = /meta\s*{\s*([\s\S]*?)\s*}/;
@@ -466,8 +468,20 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
         requestType = 'http-request';
       } else if (requestType === 'graphql') {
         requestType = 'graphql-request';
+      } else if (requestType === 'grpc') {
+        requestType = 'grpc-request';
+      } else if (requestType === 'ws' || requestType === 'websocket') {
+        requestType = 'ws-request';
       } else {
         requestType = 'http-request';
+      }
+
+      // Extract HTTP method via regex so the sidebar can render the method
+      // badge without paying for a full parse of every request file.
+      let method = '';
+      const methodMatch = data.match(HTTP_METHOD_BLOCK_REGEX);
+      if (methodMatch) {
+        method = methodMatch[1].toLowerCase();
       }
 
       const sequence = metaJson.seq as number;
@@ -478,7 +492,7 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
         settings: {},
         tags: metaJson.tags || [],
         request: {
-          method: '',
+          method,
           url: '',
           params: [],
           headers: [],
@@ -499,11 +513,75 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
   }
 };
 
+const YML_METHOD_BLOCKS = ['http', 'graphql', 'grpc', 'ws', 'websocket', 'sse'];
+
+const parseYmlFileMeta = (data: string): Record<string, unknown> | null => {
+  try {
+    // Extract the `info:` block (name / type / seq). YAML keeps top-level
+    // keys left-flush, so capture every indented line that follows until
+    // we hit another top-level key or EOF.
+    const infoMatch = data.match(/^info:\s*\n((?:[ \t]+[^\n]*\n?)+)/m);
+    if (!infoMatch) return null;
+
+    const infoJson: Record<string, string> = {};
+    infoMatch[1].split('\n').forEach((line) => {
+      const kv = line.match(/^\s+([a-zA-Z0-9_]+)\s*:\s*(.*?)\s*$/);
+      if (kv) {
+        infoJson[kv[1]] = kv[2].replace(/^["']|["']$/g, '');
+      }
+    });
+
+    let requestType = infoJson.type;
+    if (requestType === 'http') requestType = 'http-request';
+    else if (requestType === 'graphql') requestType = 'graphql-request';
+    else if (requestType === 'grpc') requestType = 'grpc-request';
+    else if (requestType === 'ws' || requestType === 'websocket') requestType = 'ws-request';
+    else requestType = 'http-request';
+
+    // Find the first top-level method block (http:, graphql:, ...) and
+    // pull its `method:` field if present.
+    let method = '';
+    for (const block of YML_METHOD_BLOCKS) {
+      const blockMatch = data.match(new RegExp(`^${block}:\\s*\\n((?:[ \\t]+[^\\n]*\\n?)+)`, 'm'));
+      if (blockMatch) {
+        const methodLine = blockMatch[1].match(/^\s+method\s*:\s*(\S+)/m);
+        if (methodLine) {
+          method = methodLine[1].replace(/^["']|["']$/g, '').toLowerCase();
+        }
+        break;
+      }
+    }
+
+    const seq = Number(infoJson.seq);
+    return {
+      type: requestType,
+      name: infoJson.name,
+      seq: !isNaN(seq) ? seq : 1,
+      settings: {},
+      tags: [],
+      request: {
+        method,
+        url: '',
+        params: [],
+        headers: [],
+        auth: { mode: 'none' },
+        body: { mode: 'none' },
+        script: {},
+        vars: {},
+        assertions: [],
+        tests: '',
+        docs: ''
+      }
+    };
+  } catch (err) {
+    console.error('Error parsing YML file meta:', err);
+    return null;
+  }
+};
+
 const parseFileMeta = (data: string, format = 'bru'): Record<string, unknown> | null => {
   if (format === 'yml') {
-    // TODO: Implement YAML parsing when needed
-    console.warn('YAML meta parsing not yet implemented');
-    return null;
+    return parseYmlFileMeta(data);
   }
   return parseBruFileMeta(data);
 };

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import range from 'lodash/range';
 import filter from 'lodash/filter';
@@ -17,7 +17,7 @@ import {
   IconTrash,
   IconSettings
 } from '@tabler/icons';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector, useDispatch, useStore } from 'react-redux';
 import { addTab, focusTab, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
 import {
   handleCollectionItemDrop,
@@ -66,9 +66,19 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
   const isTabForItemPresent = useSelector(_isTabForItemPresentSelector, isEqual);
 
   const isSidebarDragging = useSelector((state: any) => state.app.isDragging);
-  const collection = useSelector((state: any) => state.collections.collections?.find((c: any) => c.uid === collectionUid));
-  const { hasCopiedItems } = useSelector((state: any) => state.app.clipboard);
+  const hasCopiedItems = useSelector((state: any) => state.app.clipboard.hasCopiedItems);
   const dispatch = useDispatch();
+  const store = useStore();
+
+  // Resolve the parent collection on-demand inside handlers. Subscribing via
+  // useSelector to the whole collection object would re-render this item on
+  // every dispatch that touches the collection (immer produces a new ref
+  // for the collection whenever any descendant item changes) — catastrophic
+  // for sidebars with thousands of requests.
+  const getCollection = useCallback(
+    () => (store.getState() as any).collections.collections?.find((c: any) => c.uid === collectionUid),
+    [store, collectionUid]
+  );
 
   const ref = useRef<HTMLDivElement>(null);
   const menuDropdownRef = useRef<any>(null);
@@ -217,7 +227,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         // Open folder settings in VSCode editor
         ipcRenderer.send('sidebar:open-folder-settings', {
           collectionUid,
-          collectionPath: collection?.pathname,
+          collectionPath: collectionPathname,
           folderUid: item.uid,
           folderPath: item.pathname
         });
@@ -295,7 +305,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
   const handlePasteItem = () => {
     let targetFolderUid = item.uid;
     if (!isFolder) {
-      const parentFolder = findParentItemInCollection(collection, item.uid);
+      const parentFolder = findParentItemInCollection(getCollection(), item.uid);
       targetFolderUid = parentFolder ? parentFolder.uid : null;
     }
 
@@ -388,7 +398,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
       if (isSidebarMode()) {
         ipcRenderer.send('sidebar:open-folder-settings', {
           collectionUid,
-          collectionPath: collection?.pathname,
+          collectionPath: collectionPathname,
           folderUid: item.uid,
           folderPath: item.pathname
         });
@@ -426,7 +436,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
   const handleFocus = () => setIsKeyboardFocused(true);
   const handleBlur = () => setIsKeyboardFocused(false);
 
-  const buildMenuItems = () => {
+  const menuItems = useMemo(() => {
     const items: any[] = [];
 
     if (isFolder) {
@@ -450,7 +460,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
           onClick: () => {
             ipcRenderer.send('sidebar:open-collection-runner', {
               collectionUid,
-              collectionPath: collection?.pathname,
+              collectionPath: collectionPathname,
               folderUid: item.uid
             });
           }
@@ -525,7 +535,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     });
 
     return items;
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, hasCopiedItems, collectionUid, collectionPathname]);
 
   const className = classnames('flex flex-col w-full', {
     'is-sidebar-dragging': isSidebarDragging
@@ -543,13 +554,13 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     }
   }
 
-  const sortItemsBySequence = (items: any[] = []) => {
-    return items.sort((a, b) => a.seq - b.seq);
-  };
-
-  const folderItems = sortByNameThenSequence(filter(item.items, (i: any) => isItemAFolder(i)));
-  const requestItems = sortItemsBySequence(filter(item.items, (i: any) => isItemARequest(i)));
-  const indents = range(item.depth);
+  const { folderItems, requestItems } = useMemo(() => {
+    const children = item.items || [];
+    const folders = sortByNameThenSequence(filter(children, (i: any) => isItemAFolder(i)));
+    const requests = filter(children, (i: any) => isItemARequest(i)).sort((a: any, b: any) => a.seq - b.seq);
+    return { folderItems: folders, requestItems: requests };
+  }, [item.items]);
+  const indents = useMemo(() => range(item.depth), [item.depth]);
   const showEmptyFolderMessage = isFolder && !hasSearchText && !folderItems?.length && !requestItems?.length;
 
   return (
@@ -611,7 +622,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
           <div className="pr-2">
             <MenuDropdown
               ref={menuDropdownRef}
-              items={buildMenuItems()}
+              items={menuItems}
               placement="bottom-start"
               data-testid="collection-item-menu"
               popperOptions={{ strategy: 'fixed' }}

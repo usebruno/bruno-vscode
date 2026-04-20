@@ -1942,6 +1942,89 @@ get {
   });
 
   // GraphQL schema file loading
+  registerHandler('renderer:load-request', async (args) => {
+    const [{ collectionUid, pathname }] = args as [{ collectionUid: string; pathname: string }];
+
+    if (!hasRequestExtension(pathname)) {
+      return;
+    }
+
+    try {
+      const fileStats = fs.statSync(pathname);
+      const collectionPath = findCollectionPathByItemPath(pathname);
+      const format = collectionPath ? getCollectionFormat(collectionPath) : 'bru';
+      const bruContent = fs.readFileSync(pathname, 'utf8');
+
+      const fullData = await parseRequest(bruContent, { format });
+      hydrateRequestWithUuid(fullData, pathname);
+      broadcastToAllWebviews('main:collection-tree-updated', 'change', {
+        meta: {
+          collectionUid,
+          pathname: posixifyPath(pathname),
+          name: path.basename(pathname)
+        },
+        data: fullData,
+        partial: false,
+        loading: false,
+        size: sizeInMB(fileStats?.size)
+      });
+    } catch (error) {
+      try {
+        const bruContent = fs.readFileSync(pathname, 'utf8');
+        const metaJson = parseBruFileMeta(bruContent);
+        if (metaJson) {
+          hydrateRequestWithUuid(metaJson as any, pathname);
+          broadcastToAllWebviews('main:collection-tree-updated', 'change', {
+            meta: {
+              collectionUid,
+              pathname: posixifyPath(pathname),
+              name: path.basename(pathname)
+            },
+            data: metaJson,
+            partial: true,
+            loading: false
+          });
+        }
+      } catch (_e) {
+        // swallow — surface the original parse error below
+      }
+      console.error('[Collection IPC] Error loading request:', pathname, error);
+      throw error;
+    }
+  });
+
+  registerHandler('renderer:load-request-via-worker', async (args) => {
+    const [{ collectionUid, pathname }] = args as [{ collectionUid: string; pathname: string }];
+
+    if (!hasRequestExtension(pathname)) {
+      return;
+    }
+
+    try {
+      const fileStats = fs.statSync(pathname);
+      const collectionPath = findCollectionPathByItemPath(pathname);
+      const format = collectionPath ? getCollectionFormat(collectionPath) : 'bru';
+      const bruContent = fs.readFileSync(pathname, 'utf8');
+
+      const fullData = await parseRequestViaWorker(bruContent, { format, filename: pathname });
+      hydrateRequestWithUuid(fullData, pathname);
+      broadcastToAllWebviews('main:collection-tree-updated', 'change', {
+        meta: {
+          collectionUid,
+          pathname: posixifyPath(pathname),
+          name: path.basename(pathname)
+        },
+        data: fullData,
+        partial: false,
+        loading: false,
+        size: sizeInMB(fileStats?.size)
+      });
+    } catch (error) {
+      console.error('[Collection IPC] Error loading request via worker:', pathname, error);
+      throw error;
+    }
+  });
+
   registerHandler('renderer:load-gql-schema-file', async () => {
     try {
       const result = await vscode.window.showOpenDialog({

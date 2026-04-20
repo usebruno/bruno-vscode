@@ -8,6 +8,7 @@ import {
   brunoConfigUpdateEvent,
   collectionAddDirectoryEvent,
   collectionAddFileEvent,
+  collectionAddFilesEvent,
   collectionChangeFileEvent,
   collectionRenamedEvent,
   collectionUnlinkDirectoryEvent,
@@ -116,6 +117,9 @@ const useIpcEvents = () => {
       if (type === 'addFile') {
         dispatch(collectionAddFileEvent(val as CollectionAddFileEventPayload));
       }
+      if (type === 'addFiles') {
+        dispatch(collectionAddFilesEvent(val as CollectionAddFileEventPayload[]));
+      }
       if (type === 'change') {
         dispatch(collectionChangeFileEvent(val as CollectionChangeFileEventPayload));
       }
@@ -172,8 +176,15 @@ const useIpcEvents = () => {
     };
 
     const _collectionTreeUpdated = (type: string, val: unknown) => {
-      const eventData = val as { meta?: { collectionUid?: string }; collectionUid?: string };
-      const collectionUid = eventData?.meta?.collectionUid || eventData?.collectionUid;
+      let collectionUid: string | undefined;
+
+      if (type === 'addFiles' && Array.isArray(val) && val.length > 0) {
+        const first = val[0] as { meta?: { collectionUid?: string }; collectionUid?: string };
+        collectionUid = first?.meta?.collectionUid || first?.collectionUid;
+      } else {
+        const eventData = val as { meta?: { collectionUid?: string }; collectionUid?: string };
+        collectionUid = eventData?.meta?.collectionUid || eventData?.collectionUid;
+      }
 
       if (!collectionUid) {
         console.warn('[DEBUG Webview] Tree event missing collectionUid:', type, val);

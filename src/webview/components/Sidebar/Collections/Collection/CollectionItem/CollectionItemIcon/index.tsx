@@ -19,6 +19,14 @@ const CollectionItemIcon = ({
     return <IconLoader2 className="animate-spin w-fit mr-2" size={18} strokeWidth={1.5} />;
   }
 
+  // When we have a request type (from the lightweight meta parse), render
+  // the method badge. `partial` just means the full file isn't parsed yet —
+  // the sidebar still has enough info to show GET/POST/etc.
+  const hasType = ['http-request', 'graphql-request', 'grpc-request', 'ws-request'].includes(item?.type);
+  if (hasType) {
+    return <RequestMethod item={item} />;
+  }
+
   if (item?.partial) {
     return <StyledWrapper><IconAlertTriangle size={18} className="w-fit mr-2 partial" strokeWidth={1.5} /></StyledWrapper>;
   }

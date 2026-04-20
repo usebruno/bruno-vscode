@@ -2478,38 +2478,40 @@ export const openCollectionEvent = (uid: any, pathname: any, brunoConfig: any, s
       brunoConfig: brunoConfig
     };
 
-    ipcRenderer.invoke('renderer:get-collection-security-config', pathname).then((securityConfig: any) => {
-      collectionSchema
-        .validate(collection)
-        .then(() => dispatch(_createCollection({ ...collection, securityConfig })))
-        .then(() => {
-          // Only persist to VS Code storage if shouldPersist is true
-          // This is false for auto-opened collections (when clicking .bru files)
-          // and true for manually opened collections (via Open Collection button)
-          if (shouldPersist) {
-            ipcRenderer.invoke('renderer:add-last-opened-collection', pathname).catch((err) => {
-              console.error('Failed to persist collection to storage', err);
-            });
+    // Create the collection in Redux synchronously so tree events (addFiles /
+    // addFile) arriving immediately after main:collection-opened find it. The
+    // security config round-trip used to gate this and the batched initial
+    // scan would occasionally outrun it, causing events to retry and drop.
+    // Load securityConfig asynchronously and merge it in when it arrives.
+    dispatch(_createCollection({ ...collection, securityConfig: {} }));
+    resolve();
 
-            // The extension side handles persisting to workspace.yml and sends
-            // main:workspace-config-updated which will also update Redux eventually.
-            const currentState = getState();
-            const activeWorkspaceUid = currentState.workspaces.activeWorkspaceUid;
-            const activeWorkspace = currentState.workspaces.workspaces.find(
-              (w: any) => w.uid === activeWorkspaceUid
-            );
+    ipcRenderer.invoke('renderer:get-collection-security-config', pathname)
+      .then((securityConfig: any) => {
+        if (securityConfig) {
+          dispatch(setCollectionSecurityConfig({ collectionUid: uid, securityConfig }));
+        }
+      })
+      .catch(() => {});
 
-            if (activeWorkspace) {
-              dispatch(addCollectionToWorkspace({
-                workspaceUid: activeWorkspaceUid,
-                collection: { uid, path: pathname }
-              }));
-            }
-          }
-          resolve();
-        })
-        .catch(reject);
-    });
+    if (shouldPersist) {
+      ipcRenderer.invoke('renderer:add-last-opened-collection', pathname).catch((err) => {
+        console.error('Failed to persist collection to storage', err);
+      });
+
+      const currentState = getState();
+      const activeWorkspaceUid = currentState.workspaces.activeWorkspaceUid;
+      const activeWorkspace = currentState.workspaces.workspaces.find(
+        (w: any) => w.uid === activeWorkspaceUid
+      );
+
+      if (activeWorkspace) {
+        dispatch(addCollectionToWorkspace({
+          workspaceUid: activeWorkspaceUid,
+          collection: { uid, path: pathname }
+        }));
+      }
+    }
   });
 };
 

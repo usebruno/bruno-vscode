@@ -275,6 +275,11 @@ class CollectionWatcher {
   private watchers: Map<string, vscode.FileSystemWatcher[]> = new Map();
   private loadingStates: Map<string, LoadingState> = new Map();
   private pathToCollectionUid: Map<string, string> = new Map();
+  // Tracks collections we've already performed a full tree scan for.
+  // `setupWatchersOnly` (used by the single-request fast path) registers
+  // watchers without scanning — so we can't rely on `watchers.has(path)`
+  // to decide whether a scan is needed.
+  private scannedCollections: Set<string> = new Set();
 
   initializeLoadingState(collectionUid: string): void {
     if (!this.loadingStates.has(collectionUid)) {
@@ -661,6 +666,15 @@ class CollectionWatcher {
     brunoConfig?: BrunoConfig,
     useWorkerThread = false
   ): void {
+    // If we've already done a full scan for this path, skip — the tree is
+    // already populated in every webview and re-scanning would flip
+    // isLoading back to true (spurious sidebar spinner) and duplicate the
+    // Redux dispatch churn. Watchers existing without a scan is a valid
+    // state (setupWatchersOnly) — in that case we still need to scan.
+    if (this.scannedCollections.has(watchPath)) {
+      return;
+    }
+
     if (this.watchers.has(watchPath)) {
       const existingWatchers = this.watchers.get(watchPath)!;
       existingWatchers.forEach(w => w.dispose());
@@ -765,14 +779,32 @@ class CollectionWatcher {
         });
       }
 
-      // Process request files in parallel batches for faster loading
-      const BATCH_SIZE = 5;
-      for (let i = 0; i < requestFiles.length; i += BATCH_SIZE) {
-        const batch = requestFiles.slice(i, i + BATCH_SIZE);
-        await Promise.all(
-          batch.map(filePath => this.handleFileAdd(filePath, collectionUid, watchPath, useWorkerThread))
+      // Parse request files in parallel but emit them to the webview in
+      // larger batches via a single 'addFiles' event. Thousands of individual
+      // Redux dispatches + React re-renders is what froze VS Code; collapsing
+      // them into one dispatch per ~500 files keeps the UI responsive.
+      const PARSE_PARALLELISM = 20;
+      const EMIT_BATCH_SIZE = 500;
+      const pending: FileData[] = [];
+      const flushPending = (): void => {
+        if (!pending.length) return;
+        if (messageSender) {
+          messageSender('main:collection-tree-updated', 'addFiles', pending.slice());
+        }
+        pending.length = 0;
+      };
+
+      for (let i = 0; i < requestFiles.length; i += PARSE_PARALLELISM) {
+        const chunk = requestFiles.slice(i, i + PARSE_PARALLELISM);
+        const results = await Promise.all(
+          chunk.map(filePath => this.parseRequestFileForInitialScan(filePath, collectionUid, watchPath))
         );
+        for (const fileData of results) {
+          if (fileData) pending.push(fileData);
+          if (pending.length >= EMIT_BATCH_SIZE) flushPending();
+        }
       }
+      flushPending();
 
       const uiStateSnapshotStore = new UiStateSnapshot();
       const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
@@ -785,6 +817,7 @@ class CollectionWatcher {
         messageSender('main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
       }
 
+      this.scannedCollections.add(watchPath);
       this.completeCollectionDiscovery(collectionUid);
     } catch (error) {
       console.error('[Watcher] Error during initial scan:', error);
@@ -1093,6 +1126,65 @@ class CollectionWatcher {
     }
   }
 
+  /**
+   * Parse a request file for the initial collection scan without emitting
+   * the result. Returns a FileData the caller can push into a batched
+   * 'addFiles' broadcast — this avoids sending one IPC message + Redux
+   * dispatch + React render per file for large collections.
+   */
+  private async parseRequestFileForInitialScan(
+    pathname: string,
+    collectionUid: string,
+    collectionPath: string
+  ): Promise<FileData | null> {
+    this.addFileToProcessing(collectionUid, pathname);
+
+    const file: FileData = {
+      meta: {
+        collectionUid,
+        pathname: posixifyPath(pathname),
+        name: path.basename(pathname)
+      }
+    };
+
+    try {
+      // Async I/O so the N parallel parses in performInitialScan actually
+      // overlap instead of serializing on the sync fs calls.
+      const [fileStats, content] = await Promise.all([
+        fs.promises.stat(pathname),
+        fs.promises.readFile(pathname, 'utf8')
+      ]);
+
+      if (!content.trim()) {
+        return null;
+      }
+
+      const format = getCollectionFormat(collectionPath);
+      const metaData = parseFileMeta(content, format);
+      if (!metaData) {
+        file.data = { name: path.basename(pathname), type: 'http-request' };
+      } else {
+        file.data = metaData;
+      }
+      file.partial = true;
+      file.loading = false;
+      file.size = sizeInMB(fileStats?.size);
+      hydrateRequestWithUuid(file.data, pathname);
+      return file;
+    } catch (error) {
+      const err = error as Error;
+      console.error('[Watcher] Error parsing file:', pathname, err.message);
+      file.data = { name: path.basename(pathname), type: 'http-request' };
+      file.error = { message: err?.message };
+      file.partial = true;
+      file.loading = false;
+      hydrateRequestWithUuid(file.data, pathname);
+      return file;
+    } finally {
+      this.markFileAsProcessed(collectionUid, pathname);
+    }
+  }
+
   private async handleRequestFile(
     pathname: string,
     collectionUid: string,
@@ -1122,9 +1214,19 @@ class CollectionWatcher {
 
       const format = getCollectionFormat(collectionPath);
 
-      file.data = await parseRequest(content, { format });
-
-      file.partial = false;
+      // Only extract metadata (name + type + seq + method) for the initial
+      // sidebar tree. A full parse (body, headers, scripts, tests, etc.)
+      // happens on demand via renderer:load-request when the user opens the
+      // request. Collections with thousands of requests would otherwise
+      // freeze VS Code while every file is fully parsed up-front.
+      const metaData = parseFileMeta(content, format);
+      if (!metaData) {
+        file.data = { name: path.basename(pathname), type: 'http-request' };
+        file.partial = true;
+      } else {
+        file.data = metaData;
+        file.partial = true;
+      }
       file.loading = false;
       file.size = sizeInMB(fileStats?.size);
       hydrateRequestWithUuid(file.data, pathname);
@@ -1454,14 +1556,30 @@ class CollectionWatcher {
         });
       }
 
-      // Process request files in parallel batches
-      const BATCH_SIZE = 5;
-      for (let i = 0; i < requestFiles.length; i += BATCH_SIZE) {
-        const batch = requestFiles.slice(i, i + BATCH_SIZE);
-        await Promise.all(
-          batch.map(filePath => this.handleFileAddWithSender(filePath, collectionUid, collectionPath, false, sender))
+      // Same batched-emit strategy as performInitialScan — one IPC +
+      // Redux dispatch per ~500 files instead of one per file.
+      const PARSE_PARALLELISM = 20;
+      const EMIT_BATCH_SIZE = 500;
+      const pending: FileData[] = [];
+      const flushPending = (): void => {
+        if (!pending.length) return;
+        if (sender) {
+          sender('main:collection-tree-updated', 'addFiles', pending.slice());
+        }
+        pending.length = 0;
+      };
+
+      for (let i = 0; i < requestFiles.length; i += PARSE_PARALLELISM) {
+        const chunk = requestFiles.slice(i, i + PARSE_PARALLELISM);
+        const results = await Promise.all(
+          chunk.map(filePath => this.parseRequestFileForInitialScan(filePath, collectionUid, collectionPath))
         );
+        for (const fileData of results) {
+          if (fileData) pending.push(fileData);
+          if (pending.length >= EMIT_BATCH_SIZE) flushPending();
+        }
       }
+      flushPending();
 
       // Hydrate UI state snapshot
       const uiStateSnapshotStore = new UiStateSnapshot();
@@ -1510,6 +1628,7 @@ class CollectionWatcher {
     }
 
     this.pathToCollectionUid.delete(watchPath);
+    this.scannedCollections.delete(watchPath);
 
     if (collectionUid) {
       this.cleanupLoadingState(collectionUid);
@@ -1537,6 +1656,7 @@ class CollectionWatcher {
       this.watchers.delete(oldPath);
     }
     this.pathToCollectionUid.delete(oldPath);
+    this.scannedCollections.delete(oldPath);
 
     // Notify the webview about the path change
     if (messageSender) {
@@ -1558,6 +1678,7 @@ class CollectionWatcher {
     this.watchers.clear();
     this.loadingStates.clear();
     this.pathToCollectionUid.clear();
+    this.scannedCollections.clear();
   }
 }
 
