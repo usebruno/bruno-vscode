@@ -7,6 +7,7 @@ import {
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
+import { storeTransientItem }  from '../panels/transient-request-panel';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -307,6 +308,30 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
         }
         break;
 
+      case 'sidebar:open-transient-request':
+        if (args[0] && typeof args[0] === 'object') {
+          const { itemUid, itemName, collectionUid, collectionPath: transientCollPath, item: transientItem } = args[0] as {
+            itemUid?: string;
+            itemName?: string;
+            collectionUid?: string;
+            collectionPath?: string;
+            item?: Record<string, unknown>;
+          };
+          if (itemUid && collectionUid && transientCollPath) {
+            if (transientItem) {
+              storeTransientItem(itemUid, transientItem);
+            }
+            await vscode.commands.executeCommand(
+              'bruno.openTransientRequest',
+              itemUid,
+              itemName || 'Untitled',
+              collectionUid,
+              transientCollPath
+            );
+          }
+        }
+        break;
+
       case 'sidebar:open-create-collection':
         await vscode.commands.executeCommand('bruno.openCreateCollection');
         break;
@@ -317,9 +342,9 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 
       case 'sidebar:open-collection-runner':
         if (args[0] && typeof args[0] === 'object') {
-          const { collectionPath } = args[0] as { collectionPath?: string };
+          const { collectionPath, folderUid } = args[0] as { collectionPath?: string; folderUid?: string };
           if (collectionPath) {
-            await vscode.commands.executeCommand('bruno.runCollection', vscode.Uri.file(collectionPath));
+            await vscode.commands.executeCommand('bruno.runCollection', vscode.Uri.file(collectionPath), folderUid);
           }
         }
         break;

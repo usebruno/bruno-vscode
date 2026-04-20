@@ -11,8 +11,11 @@ import { createFormData, formatMultipartData } from '../../utils/form-data';
 import { getPreferences } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
 import { getCertsAndProxyConfig } from './cert-utils';
-import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, Item } from '../../utils/collection';
+import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, hydrateRequestWithUuid, Item } from '../../utils/collection';
+import { getCollectionFormat } from '../../utils/filesystem';
+import fs from 'fs';
 import path from 'path';
+const { parseRequest: parseRequestFromFilestore } = require('@usebruno/filestore');
 import { registerOAuth2Handlers, applyOAuth2ToRequest } from './oauth2-handlers';
 import { runPreRequestScript, runPostResponseVars, runPostResponseScript, runTests, runAssertions } from '../../utils/script-runner';
 import { v4 as uuidv4 } from 'uuid';
@@ -583,6 +586,44 @@ const getRequestData = (body: BrunoRequest['body']): unknown => {
 
     default:
       return undefined;
+  }
+};
+
+/**
+ * When the sidebar scan uses meta-only parse (to keep large collections fast),
+ * items in the cloned collection arrive at the runner with `partial: true` and
+ * an empty/missing `request` object. Before executing, we read the file and
+ * run the full parse to populate body/headers/scripts/auth/vars. Mutates
+ * `item` in place on the runner's local clone — does not affect webview state.
+ */
+const hydrateItemRequestFromDisk = async (
+  item: Record<string, unknown>,
+  collectionPath: string
+): Promise<void> => {
+  if (!item) return;
+  const existingRequest = item.request as Record<string, unknown> | undefined;
+  const isHydrated = !item.partial && existingRequest && Object.keys(existingRequest).length > 0;
+  if (isHydrated) return;
+
+  const pathname = item.pathname as string | undefined;
+  if (!pathname) return;
+
+  try {
+    const format = getCollectionFormat(collectionPath);
+    const content = await fs.promises.readFile(pathname, 'utf8');
+    const parsed = await parseRequestFromFilestore(content, { format }) as Record<string, unknown>;
+    // Preserve the runner-relevant fields we already have on `item` (uid, seq,
+    // draft, etc.) while pulling in name/type/request/tags/examples/... from
+    // the fresh parse.
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key === 'uid') continue;
+      item[key] = value;
+    }
+    item.partial = false;
+    hydrateRequestWithUuid(item as never, pathname);
+  } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Runner] Failed to hydrate item from disk:', pathname, errMessage);
   }
 };
 
@@ -1668,6 +1709,8 @@ const registerNetworkIpc = (): void => {
           ...eventData
         });
 
+        await hydrateItemRequestFromDisk(item, collectionPath);
+
         if (item.type === 'grpc-request') {
           sendToWebview('main:run-folder-event', {
             type: 'runner-request-skipped',
@@ -1724,7 +1767,8 @@ const registerNetworkIpc = (): void => {
             if (!foundItem) {
               throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
             }
-            const innerItem = cloneDeep(foundItem);
+            const innerItem = cloneDeep(foundItem) as unknown as Record<string, unknown>;
+            await hydrateItemRequestFromDisk(innerItem, collectionPath);
             const innerRequest = prepareItemRequest(innerItem, collection);
             const innerScriptRequest = {
               ...innerRequest,
@@ -1747,7 +1791,7 @@ const registerNetworkIpc = (): void => {
               cancelTokenUid,
               collectionUid,
               collectionPath,
-              itemUid: innerItem.uid,
+              itemUid: innerItem.uid as string,
               itemPathname,
               envVars,
               collectionVariables: innerScriptRequest.collectionVariables || {},
@@ -1762,7 +1806,7 @@ const registerNetworkIpc = (): void => {
               collectionUid,
               collectionPath,
               collectionName: collection.name as string || '',
-              itemUid: innerItem.uid,
+              itemUid: innerItem.uid as string,
               requestUid: uuidv4(),
               envVars: envVars as Record<string, unknown>,
               runtimeVariables: runnerRuntimeVariables, // Shared with parent

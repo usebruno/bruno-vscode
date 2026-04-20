@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import classnames from 'classnames';
 import filter from 'lodash/filter';
@@ -16,11 +16,15 @@ import {
   IconFolder,
   IconSettings,
   IconShare,
-  IconX
+  IconX,
+  IconPlus,
+  IconApi,
+  IconBrandGraphql,
+  IconNetwork,
+  IconPlugConnected
 } from '@tabler/icons';
 import { toggleCollection } from 'providers/ReduxStore/slices/collections';
 import {
-  mountCollection,
   moveCollectionAndPersist,
   handleCollectionItemDrop,
   pasteItem,
@@ -46,6 +50,8 @@ import ActionIcon from 'ui/ActionIcon';
 import MenuDropdown from 'ui/MenuDropdown';
 import { useSidebarAccordion } from 'components/Sidebar/SidebarAccordionContext';
 import { ipcRenderer } from 'utils/ipc';
+import { addTransientRequest } from 'providers/ReduxStore/slices/collections';
+import transientManager from 'utils/transient-manager';
 
 interface CollectionProps {
   collection: any;
@@ -65,22 +71,10 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   const menuDropdownRef = useRef<any>(null);
 
   const handleRun = () => {
-    ensureCollectionIsMounted();
     ipcRenderer.send('sidebar:open-collection-runner', {
       collectionUid: collection.uid,
       collectionPath: collection.pathname
     });
-  };
-
-  const ensureCollectionIsMounted = () => {
-    if (collection.mountStatus === 'mounted') {
-      return;
-    }
-    dispatch(mountCollection({
-      collectionUid: collection.uid,
-      collectionPathname: collection.pathname,
-      brunoConfig: collection.brunoConfig
-    }));
   };
 
   const hasSearchText = searchText && searchText?.trim?.()?.length;
@@ -94,8 +88,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
     if (event.detail !== 1) return;
     const isChevronClick = (event.target as HTMLElement).closest('svg')?.classList.contains('chevron-icon');
     setTimeout(scrollToTheActiveTab, 50);
-
-    ensureCollectionIsMounted();
 
     if (collection.collapsed) {
       dispatch(toggleCollection(collection.uid));
@@ -118,7 +110,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   const handleCollectionCollapse = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    ensureCollectionIsMounted();
     dispatch(toggleCollection(collection.uid));
   };
 
@@ -133,7 +124,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   };
 
   const viewCollectionSettings = () => {
-    ensureCollectionIsMounted();
     ipcRenderer.send('sidebar:open-collection-settings', {
       collectionUid: collection.uid,
       collectionPath: collection.pathname
@@ -176,7 +166,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   };
 
   const handleNewFolder = async () => {
-    ensureCollectionIsMounted();
     try {
       const folderName = await ipcRenderer.invoke('sidebar:prompt-new-folder', {}) as string | null;
       if (folderName) {
@@ -190,7 +179,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   };
 
   const handleNewRequest = () => {
-    ensureCollectionIsMounted();
     ipcRenderer.send('sidebar:open-new-request', {
       collectionUid: collection.uid,
       collectionPath: collection.pathname,
@@ -199,7 +187,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   };
 
   const handleExportCollection = () => {
-    ensureCollectionIsMounted();
     ipcRenderer.send('sidebar:open-export-collection', {
       collectionUid: collection.uid,
       collectionPath: collection.pathname
@@ -222,7 +209,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   };
 
   const handleClone = () => {
-    ensureCollectionIsMounted();
     ipcRenderer.send('sidebar:open-clone-collection', {
       collectionUid: collection.uid,
       collectionPath: collection.pathname
@@ -317,14 +303,54 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
     'collection-keyboard-focused': isKeyboardFocused
   });
 
-  const sortItemsBySequence = (items: any[] = []) => {
-    return items.sort((a, b) => a.seq - b.seq);
+  const { folderItems, requestItems } = useMemo(() => {
+    const items = collection.items || [];
+    const folders = sortByNameThenSequence(filter(items, (i: any) => isItemAFolder(i)));
+    const requests = sortByNameThenSequence(filter(items, (i: any) => isItemARequest(i) && !i.isTransient));
+    return { folderItems: folders, requestItems: requests };
+  }, [collection.items]);
+
+  const newRequestMenuRef = useRef<any>(null);
+
+  const openTransientRequest = (item: any) => {
+    dispatch(addTransientRequest({ collectionUid: collection.uid, item }));
+    ipcRenderer.send('sidebar:open-transient-request', {
+      itemUid: item.uid,
+      itemName: item.name,
+      collectionUid: collection.uid,
+      collectionPath: collection.pathname,
+      item
+    });
   };
 
-  const requestItems = sortItemsBySequence(filter(collection.items, (i: any) => isItemARequest(i)));
-  const folderItems = sortByNameThenSequence(filter(collection.items, (i: any) => isItemAFolder(i)));
+  const transientRequestMenuItems = useMemo(() => [
+    {
+      id: 'new-http',
+      leftSection: IconApi,
+      label: 'HTTP',
+      onClick: () => openTransientRequest(transientManager.createHttpRequest(collection))
+    },
+    {
+      id: 'new-graphql',
+      leftSection: IconBrandGraphql,
+      label: 'GraphQL',
+      onClick: () => openTransientRequest(transientManager.createGraphQLRequest(collection))
+    },
+    {
+      id: 'new-grpc',
+      leftSection: IconNetwork,
+      label: 'gRPC',
+      onClick: () => openTransientRequest(transientManager.createGrpcRequest(collection))
+    },
+    {
+      id: 'new-ws',
+      leftSection: IconPlugConnected,
+      label: 'WebSocket',
+      onClick: () => openTransientRequest(transientManager.createWebSocketRequest(collection))
+    }
+  ], [collection.uid]);
 
-  const menuItems = [
+  const menuItems = useMemo(() => [
     {
       id: 'new-request',
       leftSection: IconFilePlus,
@@ -393,7 +419,7 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
       label: 'Remove',
       onClick: handleRemove
     }
-  ];
+  ], [hasCopiedItems, collection.uid]);
 
   return (
     <StyledWrapper className="flex flex-col" id={`collection-${collection.name.replace(/\s+/g, '-').toLowerCase()}`}>
@@ -431,7 +457,19 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
           </div>
           {isLoading ? <IconLoader2 className="animate-spin mx-1" size={18} strokeWidth={1.5} /> : null}
         </div>
-        <div>
+        <div className="flex items-center">
+          <MenuDropdown
+            ref={newRequestMenuRef}
+            items={transientRequestMenuItems}
+            placement="bottom-start"
+            appendTo={dropdownContainerRef?.current || document.body}
+            popperOptions={{ strategy: 'fixed' }}
+            data-testid="collection-new-request"
+          >
+            <ActionIcon className="collection-actions" data-testid="collection-new-request-btn">
+              <IconPlus size={16} strokeWidth={2} />
+            </ActionIcon>
+          </MenuDropdown>
           <div className="pr-2">
             <MenuDropdown
               ref={menuDropdownRef}
@@ -464,4 +502,4 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   );
 };
 
-export default Collection;
+export default React.memo(Collection);

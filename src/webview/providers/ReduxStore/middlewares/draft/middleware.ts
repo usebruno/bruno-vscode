@@ -1,5 +1,7 @@
 import React from 'react';
 import { handleMakeTabParmanent } from './utils';
+import { findCollectionByUid, findItemInCollection } from 'utils/collections';
+import { hasRequestChanges }from 'utils/collections';
 
 interface actionsToInterceptProps {
   dispatch?: boolean;
@@ -85,6 +87,21 @@ const actionsToIntercept = [
   'collections/updateCollectionProtobuf',
   'collections/updateCollectionProxy'
 ];
+const transientSyncTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+const scheduleTransientSync = (item: any) => {
+  if (!item?.uid) return;
+  clearTimeout(transientSyncTimers[item.uid]);
+  transientSyncTimers[item.uid] = setTimeout(() => {
+    try {
+      window.ipcRenderer.send('transient:item-updated', {
+        itemUid: item.uid,
+        item: JSON.parse(JSON.stringify(item))
+      });
+    } catch {}
+    delete transientSyncTimers[item.uid];
+  }, 250);
+};
 
 export const draftDetectMiddleware = ({
   dispatch,
@@ -95,5 +112,17 @@ export const draftDetectMiddleware = ({
     handleMakeTabParmanent(state, action, dispatch);
   }
   const result = next(action);
+
+  if (actionsToIntercept.includes(action.type)) {
+    const { itemUid, collectionUid } = action.payload || {};
+    if (itemUid && collectionUid) {
+      const collection = findCollectionByUid(getState().collections.collections, collectionUid);
+      const item = collection ? findItemInCollection(collection, itemUid) : null;
+      if ((item as any)?.isTransient) {
+        scheduleTransientSync(item);
+      }
+    }
+  }
+
   return result;
 };

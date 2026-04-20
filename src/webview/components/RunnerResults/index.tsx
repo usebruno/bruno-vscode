@@ -93,7 +93,8 @@ const FilterButton = ({
 );
 
 export default function RunnerResults({
-  collection
+  collection,
+  folderUid
 }: any) {
   const dispatch = useDispatch();
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -112,7 +113,10 @@ export default function RunnerResults({
 
   const areTagsAdded = tags.include.length > 0 || tags.exclude.length > 0;
 
-  const requestItemsForCollectionRun = getRequestItemsForCollectionRun({ recursive: true, tags, items: collection.items });
+  const folder = folderUid ? findItemInCollection(collection, folderUid) : null;
+  const runScopeItems = folder ? (folder as any).items || [] : collection.items;
+
+  const requestItemsForCollectionRun = getRequestItemsForCollectionRun({ recursive: true, tags, items: runScopeItems });
   const totalRequestItemsCountForCollectionRun = requestItemsForCollectionRun.length;
   const shouldDisableCollectionRun = totalRequestItemsCountForCollectionRun <= 0;
 
@@ -210,10 +214,10 @@ export default function RunnerResults({
   const runCollection = () => {
     if (configureMode && selectedRequestItems.length > 0) {
       dispatch(updateRunnerConfiguration(collection.uid, selectedRequestItems, selectedRequestItems, delay));
-      dispatch(runCollectionFolder(collection.uid, null, true, Number(delay), tagsEnabled && tags, selectedRequestItems));
+      dispatch(runCollectionFolder(collection.uid, folderUid || null, true, Number(delay), tagsEnabled && tags, selectedRequestItems));
     } else {
       dispatch(updateRunnerConfiguration(collection.uid, [], [], delay));
-      dispatch(runCollectionFolder(collection.uid, null, true, Number(delay), tagsEnabled && tags, undefined));
+      dispatch(runCollectionFolder(collection.uid, folderUid || null, true, Number(delay), tagsEnabled && tags, undefined));
     }
   };
 
@@ -260,7 +264,8 @@ export default function RunnerResults({
     }
   }, [tagsEnabled]);
 
-  const totalRequestsInCollection = getTotalRequestCountInCollection(collectionCopy);
+  const folderCopy = folderUid ? findItemInCollection(collectionCopy, folderUid) : null;
+  const totalRequestsInCollection = getTotalRequestCountInCollection(folderCopy || collectionCopy);
   const filterCounts: Record<string, number> = {
     all: items.length,
     passed: items.filter(allTestsPassed).length,
@@ -339,6 +344,7 @@ export default function RunnerResults({
             <div className="run-config-panel w-1/2 border-l">
               <RunConfigurationPanel
                 collection={collection}
+                folderUid={folderUid}
                 selectedItems={selectedRequestItems}
                 setSelectedItems={setSelectedRequestItems}
               />

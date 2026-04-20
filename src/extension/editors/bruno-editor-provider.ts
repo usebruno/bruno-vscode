@@ -73,6 +73,13 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
 
     registerDocument(document);
 
+    stateManager.setActiveEditorWebview(webviewPanel.webview);
+    webviewPanel.onDidChangeViewState((e) => {
+      if (e.webviewPanel.active) {
+        stateManager.setActiveEditorWebview(webviewPanel.webview);
+      }
+    });
+
     webviewPanel.onDidDispose(() => {
       stateManager.removeWebview(webviewPanel.webview);
       unregisterDocument(document.uri.fsPath);

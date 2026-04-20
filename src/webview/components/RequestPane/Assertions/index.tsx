@@ -8,7 +8,6 @@ import SingleLineEditor from 'components/SingleLineEditor';
 import AssertionOperator from './AssertionOperator';
 import EditableTable from 'components/EditableTable';
 import StyledWrapper from './StyledWrapper';
-import { variableNameRegex } from 'utils/common/regex';
 
 interface unaryOperatorsProps {
   item?: React.ReactNode;
@@ -86,15 +85,6 @@ const Assertions = ({
       updateReorderedItem
     }));
   }, [dispatch, collection.uid, item.uid]);
-
-  const getRowError = useCallback((row: any, index: any, key: any) => {
-    if (key !== 'name') return null;
-    if (!row.name || row.name.trim() === '') return null;
-    if (!variableNameRegex.test(row.name)) {
-      return 'Expression contains invalid characters. Must only contain alphanumeric characters, "-", "_", "."';
-    }
-    return null;
-  }, []);
 
   const columns = [
     {
@@ -191,7 +181,6 @@ const Assertions = ({
         rows={assertions || []}
         onChange={handleAssertionsChange}
         defaultRow={defaultRow}
-        getRowError={getRowError}
         reorderable={true}
         onReorder={handleAssertionDrag}
         testId="assertions-table"

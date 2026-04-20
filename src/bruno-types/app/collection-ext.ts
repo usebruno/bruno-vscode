@@ -97,6 +97,7 @@ export interface AppItem extends Item {
   requestStartTime?: number | null;
   requestUid?: UID | null;
   requestSent?: RequestSent | null;
+  isTransient?: boolean;
   /** Only metadata loaded, no full content yet */
   partial?: boolean;
   /** File size in MB (for large files) */

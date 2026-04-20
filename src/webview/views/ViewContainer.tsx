@@ -285,7 +285,7 @@ const ViewContainer: React.FC<ViewContainerProps> = ({ viewData }) => {
       return (
         <>
           <CollectionToolBar collection={collection} />
-          <RunnerResults collection={collection} />
+          <RunnerResults collection={collection} folderUid={folderUid} />
         </>
       );
 

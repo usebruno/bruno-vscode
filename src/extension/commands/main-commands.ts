@@ -92,7 +92,7 @@ export function registerMainCommands(
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.runCollection', async (uri: vscode.Uri) => {
+    vscode.commands.registerCommand('bruno.runCollection', async (uri: vscode.Uri, folderUid?: string) => {
       if (!uri) {
         vscode.window.showWarningMessage('No folder selected');
         return;
@@ -116,7 +116,7 @@ export function registerMainCommands(
         return;
       }
 
-      await openRunnerPanel(context, collectionRoot, targetPath);
+      await openRunnerPanel(context, collectionRoot, targetPath, folderUid);
     })
   );
 
@@ -267,7 +267,10 @@ export function registerMainCommands(
   // which conflicts with Bruno's IPC-based save mechanism
   context.subscriptions.push(
     vscode.commands.registerCommand('bruno.saveFromEditor', () => {
-      stateManager.broadcast('main:trigger-save');
+      const activeWebview = stateManager.lastActiveEditorWebview;
+      if (activeWebview) {
+        stateManager.sendTo(activeWebview, 'main:trigger-save');
+      }
     })
   );
 }

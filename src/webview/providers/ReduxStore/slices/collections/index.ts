@@ -224,7 +224,12 @@ export const collectionsSlice = createSlice({
       collection.settingsSelectedTab = 'overview';
       collection.folderLevelSettingsSelectedTab = {};
       collection.allTags = [];
-      collection.mountStatus = 'unmounted';
+      // In the VS Code extension, the extension-side watcher begins loading
+      // collection items as soon as main:collection-opened fires — there is
+      // no renderer:mount-collection IPC handler. Initialize as 'mounted' so
+      // middleware gated on mountStatus runs and the sidebar doesn't dispatch
+      // redundant mount actions on every click (which re-renders every item).
+      collection.mountStatus = 'mounted';
 
       if (collection.brunoConfig?.opencollection) {
         collection.format = 'yml';
@@ -480,6 +485,9 @@ export const collectionsSlice = createSlice({
         const item = findItemInCollection(collection, itemUid);
         if (item && isItemARequest(item)) {
           const draft = ensureDraft(item);
+          if (draft.request) {
+            (draft.request as { url: string }).url = url;
+          }
           if (draft.request && 'params' in draft.request) {
             type ParamType = { uid?: string; name: string; value: string; enabled?: boolean; type?: string };
             const httpRequest = draft.request as { url: string; params: ParamType[] };
@@ -1461,6 +1469,12 @@ export const collectionsSlice = createSlice({
           if (!item.tags.includes(tag)) {
             item.tags.push(tag);
           }
+          if (item.draft) {
+            if (!item.draft.tags) item.draft.tags = [];
+            if (!item.draft.tags.includes(tag)) {
+              item.draft.tags.push(tag);
+            }
+          }
         }
       }
     },
@@ -1470,8 +1484,13 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (collection) {
         const item = findItemInCollection(collection, itemUid);
-        if (item && item.tags) {
-          item.tags = item.tags.filter(t => t !== tag);
+        if (item) {
+          if (item.tags) {
+            item.tags = item.tags.filter(t => t !== tag);
+          }
+          if (item.draft?.tags) {
+            item.draft.tags = item.draft.tags.filter(t => t !== tag);
+          }
         }
       }
     },
@@ -1505,6 +1524,23 @@ export const collectionsSlice = createSlice({
         if (tagsEnabled !== undefined) {
           collection.runnerTagsEnabled = tagsEnabled;
         }
+      }
+    },
+
+    addTransientRequest: (state, action: PayloadAction<{ collectionUid: string; item: any }>) => {
+      const { collectionUid, item } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection) {
+        collection.items = collection.items || [];
+        collection.items.push(item);
+      }
+    },
+
+    removeTransientRequest: (state, action: PayloadAction<{ collectionUid: string; itemUid: string }>) => {
+      const { collectionUid, itemUid } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection && collection.items) {
+        collection.items = collection.items.filter((i: any) => i.uid !== itemUid);
       }
     },
 
@@ -1640,6 +1676,135 @@ export const collectionsSlice = createSlice({
           } as AppItem);
         }
       }
+      addDepth(collection.items);
+    },
+
+    // Batched variant of collectionAddFileEvent. The extension's initial
+    // scan coalesces hundreds of request files into one payload so React
+    // renders once for the whole batch instead of once per file. Depth is
+    // computed a single time at the end rather than per insertion.
+    collectionAddFilesEvent: (state, action: PayloadAction<CollectionAddFileEventPayload[]>) => {
+      const payloads = action.payload;
+      if (!Array.isArray(payloads) || payloads.length === 0) return;
+
+      const collection = findCollectionByUid(state.collections, payloads[0].meta.collectionUid);
+      if (!collection) return;
+
+      for (const payload of payloads) {
+        const { meta, data, partial, loading, size, error } = payload;
+        const isCollectionRoot = meta.collectionRoot ? true : false;
+        const isFolderRoot = meta.folderRoot ? true : false;
+
+        if (isCollectionRoot) {
+          collection.root = data as any;
+          continue;
+        }
+
+        if (isFolderRoot) {
+          const folderPath = path.dirname(meta.pathname);
+          let folderItem = findItemInCollectionByPathname(collection, folderPath);
+          if (!folderItem) {
+            const subDirectories = getSubdirectoriesFromRoot(collection.pathname, folderPath);
+            let currentPath = collection.pathname;
+            let currentSubItems = collection.items;
+            for (const directoryName of subDirectories) {
+              let childItem = currentSubItems.find((f) => f.type === 'folder' && f.filename === directoryName);
+              currentPath = path.join(currentPath, directoryName);
+              if (!childItem) {
+                childItem = {
+                  uid: generateUidBasedOnHash(currentPath) as UID,
+                  pathname: currentPath,
+                  name: directoryName,
+                  filename: directoryName,
+                  collapsed: true,
+                  type: 'folder',
+                  items: []
+                } as AppItem;
+                currentSubItems.push(childItem);
+              }
+              if (!childItem.items) childItem.items = [];
+              currentSubItems = childItem.items;
+            }
+            folderItem = findItemInCollectionByPathname(collection, folderPath);
+          }
+          if (folderItem) {
+            const parsedName = (data as any)?.meta?.name;
+            if (parsedName && parsedName !== 'Untitled Folder') {
+              folderItem.name = parsedName;
+            }
+            folderItem.root = data as any;
+            if ((data as any)?.meta?.seq) {
+              folderItem.seq = (data as any).meta.seq;
+            }
+          }
+          continue;
+        }
+
+        const dirname = path.dirname(meta.pathname);
+        const subDirectories = getSubdirectoriesFromRoot(collection.pathname, dirname);
+        let currentPath = collection.pathname;
+        let currentSubItems = collection.items;
+        for (const directoryName of subDirectories) {
+          let childItem = currentSubItems.find((f) => f.type === 'folder' && f.filename === directoryName);
+          currentPath = path.join(currentPath, directoryName);
+          if (!childItem) {
+            childItem = {
+              uid: generateUidBasedOnHash(currentPath) as UID,
+              pathname: currentPath,
+              name: directoryName,
+              filename: directoryName,
+              collapsed: true,
+              type: 'folder',
+              items: []
+            } as AppItem;
+            currentSubItems.push(childItem);
+          }
+          if (!childItem.items) childItem.items = [];
+          currentSubItems = childItem.items;
+        }
+
+        if (meta.name !== 'folder.bru' && !currentSubItems.find((f) => f.name === data?.name)) {
+          const currentItem = find(currentSubItems, (i) => i.uid === data?.uid);
+          if (currentItem) {
+            const existingDraft = currentItem.draft;
+            const existingResponse = currentItem.response;
+            currentItem.name = data?.name;
+            currentItem.type = data?.type;
+            currentItem.seq = data?.seq;
+            currentItem.tags = (data as any)?.tags;
+            currentItem.request = data?.request;
+            currentItem.filename = meta.name;
+            currentItem.pathname = meta.pathname;
+            currentItem.settings = data?.settings;
+            currentItem.examples = (data as any)?.examples;
+            currentItem.partial = partial;
+            currentItem.loading = loading;
+            currentItem.size = size;
+            currentItem.error = error;
+            if (existingDraft) currentItem.draft = existingDraft;
+            if (existingResponse) currentItem.response = existingResponse;
+          } else {
+            currentSubItems.push({
+              uid: data?.uid as UID,
+              name: data?.name,
+              type: data?.type,
+              seq: data?.seq,
+              tags: (data as any)?.tags,
+              request: data?.request,
+              settings: data?.settings,
+              examples: (data as any)?.examples,
+              filename: meta.name,
+              pathname: meta.pathname,
+              draft: null,
+              partial,
+              loading,
+              size,
+              error
+            } as AppItem);
+          }
+        }
+      }
+
       addDepth(collection.items);
     },
 
@@ -2942,7 +3107,10 @@ export const {
   updateCollectionTagsList,
   resetCollectionRunner,
   updateRunnerTagsDetails,
+  addTransientRequest,
+  removeTransientRequest,
   collectionAddFileEvent,
+  collectionAddFilesEvent,
   collectionChangeFileEvent,
   collectionUnlinkFileEvent,
   collectionAddDirectoryEvent,

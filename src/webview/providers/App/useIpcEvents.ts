@@ -8,6 +8,7 @@ import {
   brunoConfigUpdateEvent,
   collectionAddDirectoryEvent,
   collectionAddFileEvent,
+  collectionAddFilesEvent,
   collectionChangeFileEvent,
   collectionRenamedEvent,
   collectionUnlinkDirectoryEvent,
@@ -18,7 +19,9 @@ import {
   runFolderEvent,
   runRequestEvent,
   scriptEnvironmentUpdateEvent,
-  streamDataReceived
+  streamDataReceived,
+  addTransientRequest,
+  removeTransientRequest
 } from 'providers/ReduxStore/slices/collections';
 import {
   collectionAddEnvFileEvent,
@@ -114,6 +117,9 @@ const useIpcEvents = () => {
       if (type === 'addFile') {
         dispatch(collectionAddFileEvent(val as CollectionAddFileEventPayload));
       }
+      if (type === 'addFiles') {
+        dispatch(collectionAddFilesEvent(val as CollectionAddFileEventPayload[]));
+      }
       if (type === 'change') {
         dispatch(collectionChangeFileEvent(val as CollectionChangeFileEventPayload));
       }
@@ -170,8 +176,15 @@ const useIpcEvents = () => {
     };
 
     const _collectionTreeUpdated = (type: string, val: unknown) => {
-      const eventData = val as { meta?: { collectionUid?: string }; collectionUid?: string };
-      const collectionUid = eventData?.meta?.collectionUid || eventData?.collectionUid;
+      let collectionUid: string | undefined;
+
+      if (type === 'addFiles' && Array.isArray(val) && val.length > 0) {
+        const first = val[0] as { meta?: { collectionUid?: string }; collectionUid?: string };
+        collectionUid = first?.meta?.collectionUid || first?.collectionUid;
+      } else {
+        const eventData = val as { meta?: { collectionUid?: string }; collectionUid?: string };
+        collectionUid = eventData?.meta?.collectionUid || eventData?.collectionUid;
+      }
 
       if (!collectionUid) {
         console.warn('[DEBUG Webview] Tree event missing collectionUid:', type, val);
@@ -370,6 +383,39 @@ const useIpcEvents = () => {
       // Cookie type is internal to app slice, cast through Parameters utility
       dispatch(updateCookies(val as Parameters<typeof updateCookies>[0]));
     });
+
+    const removeAddTransientRequestListener = ipcRenderer.on('main:add-transient-request', (val: any) => {
+      if (!val?.collectionUid || !val?.item) return;
+
+      const MAX_RETRIES = 80;
+      const RETRY_DELAY_MS = 50;
+      let retryCount = 0;
+
+      const tryAdd = () => {
+        retryCount++;
+        if (collectionExists(val.collectionUid)) {
+        dispatch(addTransientRequest({ collectionUid: val.collectionUid, item: val.item }));
+          // Signal the extension host that the item is in Redux
+          ipcRenderer.send('transient:item-ready', {
+            itemUid: val.item.uid,
+            collectionUid: val.collectionUid
+          });
+        } else if (retryCount < MAX_RETRIES) {
+          setTimeout(tryAdd, RETRY_DELAY_MS);
+        } else {
+          console.error('[Bruno] Collection not found for transient request after max retries:', val.collectionUid);
+        }
+      };
+
+      tryAdd();
+    });
+
+    const removeTransientRequestClosedListener = ipcRenderer.on('main:transient-request-closed', (val: any) => {
+      if (val?.collectionUid && val?.itemUid) {
+        dispatch(removeTransientRequest({ collectionUid: val.collectionUid, itemUid: val.itemUid }));
+      }
+    });
+
 
     const removeGlobalEnvironmentsUpdatesListener = ipcRenderer.on('main:load-global-environments', (val: unknown) => {
       dispatch(updateGlobalEnvironments(val));
@@ -609,6 +655,8 @@ const useIpcEvents = () => {
       removePreferencesUpdatesListener();
       removeCookieUpdateListener();
       removeSystemProxyEnvUpdatesListener();
+      removeAddTransientRequestListener();
+      removeTransientRequestClosedListener();
       removeGlobalEnvironmentsUpdatesListener();
       removeSnapshotHydrationListener();
       removeSecurityConfigUpdatedListener();

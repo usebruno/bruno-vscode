@@ -11,6 +11,7 @@ interface IpcResponse {
 
 export class WebviewStateManager {
   private webviews: Set<vscode.Webview> = new Set();
+  private _lastActiveEditorWebview: vscode.Webview | null = null;
 
   addWebview(webview: vscode.Webview): void {
     this.webviews.add(webview);
@@ -18,6 +19,17 @@ export class WebviewStateManager {
 
   removeWebview(webview: vscode.Webview): void {
     this.webviews.delete(webview);
+    if (this._lastActiveEditorWebview === webview) {
+      this._lastActiveEditorWebview = null;
+    }
+  }
+
+  setActiveEditorWebview(webview: vscode.Webview): void {
+    this._lastActiveEditorWebview = webview;
+  }
+
+  get lastActiveEditorWebview(): vscode.Webview | null {
+    return this._lastActiveEditorWebview;
   }
 
   broadcast(channel: string, ...args: unknown[]): void {
