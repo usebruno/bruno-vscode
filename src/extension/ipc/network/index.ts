@@ -634,10 +634,11 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
   const request = (_item.draft ? (_item.draft as Record<string, unknown>).request : _item.request) as Record<string, unknown> || {};
 
   const requestTreePath = getTreePathFromCollectionToItem(_collection as never, _item as never);
+  const scriptFlow = (_collection as any)?.brunoConfig?.scripts?.flow ?? 'sandwich';
 
   mergeHeaders(_collection as never, request as never, requestTreePath);
   mergeVars(_collection as never, request as never, requestTreePath);
-  mergeScripts(_collection as never, request as never, requestTreePath, 'sandwich');
+  mergeScripts(_collection as never, request as never, requestTreePath, scriptFlow);
   mergeAuth(_collection as never, request as never, requestTreePath);
 
   const headers = (get(request, 'headers', []) || []) as Array<{ name: string; value: string; enabled?: boolean }>;
