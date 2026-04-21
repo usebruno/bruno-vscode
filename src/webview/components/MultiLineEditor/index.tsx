@@ -9,6 +9,7 @@ import { setupLinkAware } from 'utils/codemirror/linkAware';
 import { IconEye, IconEyeOff } from '@tabler/icons';
 import type { Collection, Item } from '@bruno-types/collection';
 
+import 'utils/codemirror/setup';
 const CodeMirror = require('codemirror');
 
 interface MultiLineEditorProps {

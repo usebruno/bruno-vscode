@@ -671,12 +671,28 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
     }
   });
 
-  // Flag to prevent workspace initialization running multiple times
+  // Caches the valid workspace paths discovered on first init so every
+  // subsequent renderer:ready can replay workspace-opened to its calling
+  // webview without re-reading workspace.yml files from disk.
+  const knownWorkspacePaths = new Set<string>();
   let workspaceInitialized = false;
 
   registerEventListener('main:renderer-ready', async () => {
-    // Only initialize workspace once, not for every webview that calls renderer:ready
+    // Fast path: on subsequent panel opens, every new webview needs
+    // workspace-opened in its own Redux store. Replay from cache to the
+    // current webview only — no fs reads, no watcher churn, no broadcasts.
     if (workspaceInitialized) {
+      for (const workspacePath of knownWorkspacePaths) {
+        try {
+          const workspaceConfig = readWorkspaceConfig(workspacePath);
+          const workspaceUid = getWorkspaceUid(workspacePath);
+          const isDefault = workspaceUid === 'default';
+          const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, isDefault);
+          sendToWebview('main:workspace-opened', posixifyPath(workspacePath), workspaceUid, configForClient);
+        } catch (error) {
+          console.error(`[Workspace] Error replaying workspace ${workspacePath}:`, error);
+        }
+      }
       return;
     }
     workspaceInitialized = true;
@@ -703,6 +719,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
         const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, defaultPath, true);
 
         sendToWebview('main:workspace-opened', posixifyPath(defaultPath), workspaceUid, configForClient);
+        knownWorkspacePaths.add(defaultPath);
 
         if (workspaceWatcher) {
           workspaceWatcher.addWatcher(defaultPath);
@@ -730,6 +747,7 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
             const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, isDefault);
 
             sendToWebview('main:workspace-opened', posixifyPath(workspacePath), workspaceUid, configForClient);
+            knownWorkspacePaths.add(workspacePath);
 
             if (workspaceWatcher) {
               workspaceWatcher.addWatcher(workspacePath);

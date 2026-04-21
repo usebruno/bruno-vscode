@@ -192,7 +192,10 @@ export const humanizeDate = (dateString: string | null | undefined): string => {
 };
 
 export const generateUidBasedOnHash = (str: string): string => {
-  const hash = simpleHash(str);
+  // Normalize path separators so raw and posix forms hash identically.
+  // Mirrors the extension-host implementation — see extension/utils/common.ts.
+  const normalized = str ? str.replace(/\\/g, '/') : str;
+  const hash = simpleHash(normalized);
 
   return `${hash}`.padEnd(21, '0');
 };

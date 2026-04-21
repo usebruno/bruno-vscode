@@ -2,67 +2,67 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 
+interface ExtractedAssets {
+  scripts: string[];
+  styles: string[];
+}
+
 export class WebviewHelper {
-  private static findChunkFiles(extensionUri: vscode.Uri): { jsChunk: string | null; cssChunk: string | null } {
-    const jsDir = path.join(extensionUri.fsPath, 'dist', 'webview', 'static', 'js');
-    const cssDir = path.join(extensionUri.fsPath, 'dist', 'webview', 'static', 'css');
+  private static extractAssetsFromHtml(htmlPath: string): ExtractedAssets {
+    const scripts: string[] = [];
+    const styles: string[] = [];
 
-    let jsChunk: string | null = null;
-    let cssChunk: string | null = null;
-
-    if (fs.existsSync(jsDir)) {
-      const jsFiles = fs.readdirSync(jsDir);
-      for (const file of jsFiles) {
-        if (file.endsWith('.js') && !file.startsWith('lib-') && file !== 'index.js') {
-          jsChunk = file;
-          break;
-        }
-      }
+    if (!fs.existsSync(htmlPath)) {
+      return { scripts, styles };
     }
 
-    if (fs.existsSync(cssDir)) {
-      const cssFiles = fs.readdirSync(cssDir);
-      for (const file of cssFiles) {
-        if (file.endsWith('.css') && file !== 'index.css') {
-          cssChunk = file;
-          break;
-        }
-      }
+    const html = fs.readFileSync(htmlPath, 'utf8');
+
+    const scriptRe = /<script[^>]*\ssrc=["']([^"']+)["'][^>]*>\s*<\/script>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = scriptRe.exec(html)) !== null) {
+      scripts.push(m[1]);
     }
 
-    return { jsChunk, cssChunk };
+    const linkRe = /<link[^>]*\shref=["']([^"']+\.css)["'][^>]*>/gi;
+    while ((m = linkRe.exec(html)) !== null) {
+      styles.push(m[1]);
+    }
+
+    return { scripts, styles };
   }
 
   static getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-    const { jsChunk, cssChunk } = this.findChunkFiles(extensionUri);
+    return this.buildHtml(webview, extensionUri, 'index');
+  }
 
-    const libReactUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'js', 'lib-react.js')
-    );
-    const vendorChunkUri = jsChunk ? webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'js', jsChunk)
-    ) : null;
-    const indexUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'js', 'index.js')
-    );
+  static getHtmlForSimplePanel(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+    return this.buildHtml(webview, extensionUri, 'simple');
+  }
 
-    const vendorChunkCssUri = cssChunk ? webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'css', cssChunk)
-    ) : null;
-    const indexCssUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'static', 'css', 'index.css')
-    );
+  private static buildHtml(
+    webview: vscode.Webview,
+    extensionUri: vscode.Uri,
+    entryName: 'index' | 'simple'
+  ): string {
+    const distRoot = path.join(extensionUri.fsPath, 'dist', 'webview');
+    const htmlPath = path.join(distRoot, `${entryName}.html`);
+    const { scripts, styles } = this.extractAssetsFromHtml(htmlPath);
 
-    const cssLinks = [
-      vendorChunkCssUri ? `<link href="${vendorChunkCssUri}" rel="stylesheet">` : '',
-      `<link href="${indexCssUri}" rel="stylesheet">`
-    ].filter(Boolean).join('\n  ');
+    const toWebviewUri = (relativeAssetPath: string) => {
+      const segments = relativeAssetPath.split('/').filter(Boolean);
+      return webview.asWebviewUri(
+        vscode.Uri.joinPath(extensionUri, 'dist', 'webview', ...segments)
+      );
+    };
 
-    const scriptTags = [
-      `<script defer src="${libReactUri}"></script>`,
-      vendorChunkUri ? `<script defer src="${vendorChunkUri}"></script>` : '',
-      `<script defer src="${indexUri}"></script>`
-    ].filter(Boolean).join('\n  ');
+    const cssLinks = styles
+      .map((s) => `<link href="${toWebviewUri(s)}" rel="stylesheet">`)
+      .join('\n  ');
+
+    const scriptTags = scripts
+      .map((s) => `<script defer src="${toWebviewUri(s)}"></script>`)
+      .join('\n  ');
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -87,9 +87,6 @@ export class WebviewHelper {
     }
   </style>
   <script>
-    // Early message buffer: captures VS Code postMessage events before
-    // the deferred ipc.ts script loads. Once ipc.ts initializes, it drains
-    // this buffer and sets it to null so no further buffering occurs.
     window.__brunoMessageBuffer = [];
     window.addEventListener('message', function(event) {
       var buf = window.__brunoMessageBuffer;

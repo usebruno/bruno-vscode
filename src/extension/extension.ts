@@ -24,6 +24,7 @@ import registerFilesystemIpc from './ipc/filesystem';
 import registerGlobalEnvironmentsIpc from './ipc/global-environments';
 import registerNetworkIpc from './ipc/network/index';
 import registerWorkspaceIpc from './ipc/workspace';
+import registerSimplePanelIpc from './ipc/simple-panel';
 import { registerCoreHandlers } from './ipc/handlers';
 
 import collectionWatcher, { setMessageSender as setWatcherMessageSender } from './app/collection-watcher';
@@ -69,6 +70,8 @@ function registerIpcHandlers(): void {
     addWatcher: (_workspacePath: string) => {},
     removeWatcher: (_workspacePath: string) => {}
   });
+
+  registerSimplePanelIpc();
 }
 
 function setupMessageBroadcaster(): void {

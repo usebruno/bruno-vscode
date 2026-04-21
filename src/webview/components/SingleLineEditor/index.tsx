@@ -9,6 +9,7 @@ import { IconEye, IconEyeOff } from '@tabler/icons';
 import { setupLinkAware } from 'utils/codemirror/linkAware';
 import type { Collection, Item } from '@bruno-types';
 
+import 'utils/codemirror/setup';
 const CodeMirror = require('codemirror');
 
 interface SingleLineEditorProps {

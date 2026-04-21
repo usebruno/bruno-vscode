@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import find from 'lodash/find';
 import toast from 'react-hot-toast';
 import { useSelector, useDispatch } from 'react-redux';
@@ -6,25 +6,30 @@ import { produce } from 'immer';
 
 import { ViewData, ViewType, viewRequiresCollection, viewRequiresItem, viewRequiresFolder } from './types';
 
-import GraphQLRequestPane from 'components/RequestPane/GraphQLRequestPane';
-import HttpRequestPane from 'components/RequestPane/HttpRequestPane';
-import GrpcRequestPane from 'components/RequestPane/GrpcRequestPane';
-import WSRequestPane from 'components/RequestPane/WSRequestPane';
-import QueryUrl from 'components/RequestPane/QueryUrl';
-import GrpcQueryUrl from 'components/RequestPane/GrpcQueryUrl';
-import WsQueryUrl from 'components/RequestPane/WsQueryUrl';
+// Heavy panes (CodeMirror/GraphiQL consumers) are lazy-loaded so simple panels
+// like Create/Import/Clone/NewRequest/Export never parse them.
+const GraphQLRequestPane = lazy(() => import('components/RequestPane/GraphQLRequestPane'));
+const HttpRequestPane = lazy(() => import('components/RequestPane/HttpRequestPane'));
+const GrpcRequestPane = lazy(() => import('components/RequestPane/GrpcRequestPane'));
+const WSRequestPane = lazy(() => import('components/RequestPane/WSRequestPane'));
+const QueryUrl = lazy(() => import('components/RequestPane/QueryUrl'));
+const GrpcQueryUrl = lazy(() => import('components/RequestPane/GrpcQueryUrl'));
+const WsQueryUrl = lazy(() => import('components/RequestPane/WsQueryUrl'));
 
-import ResponsePane from 'components/ResponsePane';
-import GrpcResponsePane from 'components/ResponsePane/GrpcResponsePane';
-import WSResponsePane from 'components/ResponsePane/WsResponsePane';
+const ResponsePane = lazy(() => import('components/ResponsePane'));
+const GrpcResponsePane = lazy(() => import('components/ResponsePane/GrpcResponsePane'));
+const WSResponsePane = lazy(() => import('components/ResponsePane/WsResponsePane'));
 import NetworkError from 'components/ResponsePane/NetworkError';
 
-import RunnerResults from 'components/RunnerResults';
-import CollectionSettings from 'components/CollectionSettings';
-import CollectionOverview from 'components/CollectionSettings/Overview';
-import FolderSettings from 'components/FolderSettings';
-import EnvironmentSettings from 'components/Environments/EnvironmentSettings';
-import GlobalEnvironmentSettings from 'components/Environments/GlobalEnvironmentSettings';
+const RunnerResults = lazy(() => import('components/RunnerResults'));
+const CollectionSettings = lazy(() => import('components/CollectionSettings'));
+const CollectionOverview = lazy(() => import('components/CollectionSettings/Overview'));
+const FolderSettings = lazy(() => import('components/FolderSettings'));
+const EnvironmentSettings = lazy(() => import('components/Environments/EnvironmentSettings'));
+const GlobalEnvironmentSettings = lazy(() => import('components/Environments/GlobalEnvironmentSettings'));
+
+// Simple form-only views stay eager — they're small and are the primary target
+// of the "open panel fast" optimization.
 import CreateCollectionView from 'components/CreateCollectionView';
 import ImportCollectionView from 'components/ImportCollectionView';
 import NewRequestView from 'components/NewRequestView';
@@ -42,11 +47,13 @@ import { cancelRequest, sendRequest } from 'providers/ReduxStore/slices/collecti
 import { ipcRenderer } from 'utils/ipc';
 import { useTabPaneBoundaries } from 'hooks/useTabPaneBoundaries';
 
-import DocExplorer from '@usebruno/graphql-docs';
+const DocExplorer = lazy(() => import('@usebruno/graphql-docs'));
 
 import StyledWrapper from 'components/RequestTabPanel/StyledWrapper';
 
 import CollectionToolBar from 'components/RequestTabs/CollectionToolBar';
+
+const LazyFallback: React.FC = () => <div className="flex-1" />;
 
 import type { RootState } from 'providers/ReduxStore';
 

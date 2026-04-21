@@ -91,7 +91,14 @@ export const simpleHash = (str: string): string => {
 };
 
 export const generateUidBasedOnHash = (str: string): string => {
-  const hash = simpleHash(str);
+  // Normalize path separators so the same collection/item is uniquely identified
+  // regardless of whether the caller passed a Windows-style (C:\foo\bar) or
+  // posix-style (C:/foo/bar) path. Without this, the sidebar (which stores
+  // posix pathnames) and extension-host code (which operates on raw fs paths)
+  // produce different uids on Windows, breaking collection/item lookups in the
+  // panel webviews and causing empty tabs for new-request / transient requests.
+  const normalized = str ? str.replace(/\\/g, '/') : str;
+  const hash = simpleHash(normalized);
   return `${hash}`.padEnd(21, '0');
 };
 

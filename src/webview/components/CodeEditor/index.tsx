@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { isEqual, escapeRegExp } from 'lodash';
+import 'utils/codemirror/setup';
 import { defineCodeMirrorBrunoVariablesMode } from 'utils/common/codemirror';
 import { setupAutoComplete } from 'utils/codemirror/autocomplete';
 import StyledWrapper from './StyledWrapper';

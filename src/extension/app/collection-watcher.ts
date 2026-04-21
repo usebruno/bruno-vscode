@@ -1296,6 +1296,10 @@ class CollectionWatcher {
     return this.watchers.has(watchPath);
   }
 
+  getWatchedCollectionPaths(): string[] {
+    return Array.from(this.watchers.keys());
+  }
+
   /**
    * Load only a single request file and its dependencies:
    * - The request file itself

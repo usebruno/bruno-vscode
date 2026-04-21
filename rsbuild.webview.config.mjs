@@ -17,7 +17,8 @@ export default defineConfig({
   ],
   source: {
     entry: {
-      index: './src/webview/index.tsx'
+      index: './src/webview/index.tsx',
+      simple: './src/webview/simple/index.tsx'
     }
   },
   resolve: {

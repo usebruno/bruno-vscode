@@ -41,7 +41,7 @@ export async function openCreateCollectionPanel(
 
   currentPanel = panel;
 
-  panel.webview.html = WebviewHelper.getHtmlForWebview(panel.webview, context.extensionUri);
+  panel.webview.html = WebviewHelper.getHtmlForSimplePanel(panel.webview, context.extensionUri);
   stateManager.addWebview(panel.webview);
 
   panel.onDidDispose(() => {

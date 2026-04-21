@@ -20,6 +20,9 @@ import onHasCompletion from './onHasCompletion';
 import { setupLinkAware } from 'utils/codemirror/linkAware';
 import type { Collection } from '@bruno-types';
 
+import 'utils/codemirror/setup';
+import 'graphiql/graphiql.min.css';
+import '../../../shims/bruno-graphql-docs.css';
 const CodeMirror = require('codemirror');
 
 const md = new MD();

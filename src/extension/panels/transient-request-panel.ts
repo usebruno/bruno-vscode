@@ -18,7 +18,7 @@ import {
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
-import { openCollection, setMessageSender as setCollectionsMessageSender } from '../app/collections';
+import { openCollection, loadCollectionMetadata, setMessageSender as setCollectionsMessageSender } from '../app/collections';
 import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
 import { AppItem } from '@bruno-types';
@@ -119,28 +119,44 @@ export async function openTransientRequestPanel(
 
   let collectionLoaded = false;
 
+  // Render the transient request as soon as the webview is ready. We send the
+  // collection metadata + the transient item + the view type in a single
+  // burst so the UI shows the request immediately. The full collection tree
+  // (environments, siblings, watchers) is populated in the background via
+  // openCollection so scripts/vars eventually resolve, but the user does not
+  // wait for a full scan to see the request pane.
   const loadCollection = async () => {
     if (collectionLoaded) return;
     collectionLoaded = true;
 
+    // 1) Seed collection metadata and the transient item in Redux immediately.
+    await loadCollectionMetadata(collectionPath, webviewSender);
+
+    const item = transientItems.get(itemUid);
+    if (item) {
+      stateManager.sendTo(panel.webview, 'main:add-transient-request', {
+        collectionUid,
+        item
+      });
+
+      // 2) Flip the view as soon as the item is in Redux. ViewContainer will
+      // render the request pane; any missing data (e.g. environments) fills
+      // in progressively as the background scan completes.
+      stateManager.sendTo(panel.webview, 'main:set-view', {
+        viewType: 'request',
+        collectionUid,
+        itemUid
+      });
+    }
+
+    // 3) Kick off the full collection load in the background for env/tree.
     setCollectionsMessageSender(webviewSender);
     setWatcherMessageSender(webviewSender);
-
     try {
       await openCollection(collectionWatcher, collectionPath);
-
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
-
-      const item = transientItems.get(itemUid);
-      if (item) {
-        stateManager.sendTo(panel.webview, 'main:add-transient-request', {
-          collectionUid,
-          item
-        });
-      }
     } catch (error) {
       console.error('TransientRequestPanel: Error opening collection:', error);
+    } finally {
       setCollectionsMessageSender(originalBroadcastSender);
       setWatcherMessageSender(originalBroadcastSender);
     }

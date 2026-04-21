@@ -6,7 +6,8 @@ import * as vscode from 'vscode';
 import * as fsExtra from 'fs-extra';
 import AdmZip from 'adm-zip';
 import extractZip from 'extract-zip';
-import { registerHandler, registerEventListener, sendToWebview, broadcastToAllWebviews, emit } from './handlers';
+import { registerHandler, registerEventListener, sendToWebview, broadcastToAllWebviews, emit, getCurrentWebview } from './handlers';
+import { stateManager } from '../webview/state-manager';
 import {
   writeFile,
   hasBruExtension,
@@ -30,7 +31,7 @@ import {
   isCollectionRootBruFile,
   posixifyPath
 } from '../utils/filesystem';
-import { openCollectionDialog, openCollectionsByPathname } from '../app/collections';
+import { openCollectionDialog, openCollectionsByPathname, loadCollectionMetadata } from '../app/collections';
 import { writeFileViaVSCode, isDocumentRegistered } from '../editors/dirty-state-manager';
 import { generateUidBasedOnHash, stringifyJson, safeStringifyJSON, safeParseJSON } from '../utils/common';
 import { moveRequestUid, deleteRequestUid, getRequestUid } from '../cache/requestUids';
@@ -1895,7 +1896,34 @@ get {
     }
   });
 
+  let collectionsInitialized = false;
+
   registerEventListener('main:renderer-ready', async () => {
+    // Fast path: every new panel (Create Collection, New Request,
+    // Transient Request, etc.) fires renderer:ready on mount. Instead of
+    // re-opening all collections (which re-reads config files, re-adds
+    // watchers, re-broadcasts tree events to every webview, and stalls the
+    // new panel for 2–3s), replay collection-opened metadata to the calling
+    // webview only. Panels that need the tree (Runner, Export, Environment
+    // Settings) load it themselves on demand.
+    if (collectionsInitialized) {
+      const currentWebview = getCurrentWebview();
+      if (!currentWebview) return;
+      const panelSender = (channel: string, ...args: unknown[]) => {
+        stateManager.sendTo(currentWebview, channel, ...args);
+      };
+      const watchedPaths = collectionWatcher.getWatchedCollectionPaths();
+      for (const collectionPath of watchedPaths) {
+        try {
+          await loadCollectionMetadata(collectionPath, panelSender);
+        } catch (err) {
+          console.error(`[Collection IPC] Error replaying collection metadata for ${collectionPath}:`, err);
+        }
+      }
+      return;
+    }
+    collectionsInitialized = true;
+
     try {
       const collectionPaths = lastOpenedCollections.getAll();
       const validPaths: string[] = [];

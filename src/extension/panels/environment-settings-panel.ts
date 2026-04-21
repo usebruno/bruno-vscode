@@ -14,6 +14,7 @@ import {
 import {
   getCollectionConfigFile,
   openCollection,
+  loadCollectionMetadata,
   setMessageSender as setCollectionsMessageSender
 } from '../app/collections';
 import collectionWatcher, {
@@ -79,46 +80,34 @@ export async function openEnvironmentSettingsPanel(
 
   let collectionLoaded = false;
 
+  const panelSender = (channel: string, ...args: unknown[]) => {
+    stateManager.sendTo(panel.webview, channel, ...args);
+  };
+  const broadcastSender = (channel: string, ...args: unknown[]) => {
+    stateManager.broadcast(channel, ...args);
+  };
+
   const loadCollection = async () => {
     if (collectionLoaded) return;
     collectionLoaded = true;
 
+    // Surface the environment-settings UI immediately with just metadata.
+    // Environments and any watcher scan then stream in from the background.
+    try {
+      await loadCollectionMetadata(collectionRoot, panelSender);
+      stateManager.sendTo(panel.webview, 'main:set-view', viewData);
+    } catch (error) {
+      console.error('EnvironmentSettingsPanel: Error loading metadata:', error);
+    }
+
     try {
       if (collectionWatcher.hasWatcher(collectionRoot)) {
-        // Collection is already open in another webview (e.g., request tab).
-        // Send collection data ONLY to this panel's webview — do NOT broadcast
-        // and do NOT re-add the watcher (which would destroy existing watchers
-        // and re-scan the entire collection, disrupting the request tab).
-        let brunoConfig = await getCollectionConfigFile(collectionRoot) as any;
-
-        const defaultIgnores = ['node_modules', '.git'];
-        const userIgnores = brunoConfig.ignore || [];
-        brunoConfig.ignore = [...new Set([...defaultIgnores, ...userIgnores])];
-
-        brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionRoot);
-
-        stateManager.sendTo(panel.webview, 'main:collection-opened', posixifyPath(collectionRoot), collectionUid, brunoConfig, false);
-
-        const panelSender = (channel: string, ...args: unknown[]) => {
-          stateManager.sendTo(panel.webview, channel, ...args);
-        };
+        // Watcher already exists (collection open elsewhere). Only stream env
+        // files to this panel — don't re-scan the full tree.
         await collectionWatcher.loadEnvironments(collectionRoot, collectionUid, panelSender);
-
-        // The panel is registered with stateManager so it will receive all future
-        // broadcast events (tree updates, env changes, etc.) from the existing watcher.
       } else {
-        // Collection not yet open — use targeted sender approach so only this
-        // panel's webview receives the initial load events, then restore broadcast.
-        const panelSender = (channel: string, ...args: unknown[]) => {
-          stateManager.sendTo(panel.webview, channel, ...args);
-        };
-        const broadcastSender = (channel: string, ...args: unknown[]) => {
-          stateManager.broadcast(channel, ...args);
-        };
-
         setCollectionsMessageSender(panelSender);
         setWatcherMessageSender(panelSender);
-
         try {
           await openCollection(collectionWatcher, collectionRoot);
         } finally {
@@ -126,10 +115,8 @@ export async function openEnvironmentSettingsPanel(
           setWatcherMessageSender(broadcastSender);
         }
       }
-
-      stateManager.sendTo(panel.webview, 'main:set-view', viewData);
     } catch (error) {
-      console.error('EnvironmentSettingsPanel: Error opening collection:', error);
+      console.error('EnvironmentSettingsPanel: Error populating environments:', error);
     }
   };
 

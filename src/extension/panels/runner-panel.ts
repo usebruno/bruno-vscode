@@ -8,7 +8,7 @@ import {
   clearCurrentWebview,
   handleInvoke
 } from '../ipc/handlers';
-import { openCollection, setMessageSender as setCollectionsMessageSender } from '../app/collections';
+import { openCollection, loadCollectionMetadata, setMessageSender as setCollectionsMessageSender } from '../app/collections';
 import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
 import UiStateSnapshot from '../store/ui-state-snapshot';
@@ -90,26 +90,11 @@ export async function openRunnerPanel(
     if (collectionLoaded) return;
     collectionLoaded = true;
 
-    setCollectionsMessageSender(webviewSender);
-    setWatcherMessageSender(webviewSender);
-
+    // Show the runner UI immediately with just collection metadata. The full
+    // tree scan + environment load happens in the background so the panel does
+    // not feel like it hangs on cold open for large collections.
     try {
-      // Check if watcher already exists (collection already open elsewhere)
-      const watcherExists = collectionWatcher.hasWatcher(collectionRoot);
-
-      // Always call openCollection to send collection metadata
-      await openCollection(collectionWatcher, collectionRoot);
-
-      await collectionWatcher.loadEnvironments(collectionRoot, collectionUid, webviewSender);
-
-      // If watcher already existed, openCollection won't trigger a scan
-      // so we need to manually load all items for this webview
-      if (watcherExists) {
-        await collectionWatcher.loadFullCollection(collectionRoot, collectionUid, webviewSender);
-      }
-
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
+      await loadCollectionMetadata(collectionRoot, webviewSender);
 
       const uiStateSnapshotStore = new UiStateSnapshot();
       const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
@@ -123,7 +108,26 @@ export async function openRunnerPanel(
 
       stateManager.sendTo(panel.webview, 'main:set-view', viewData);
     } catch (error) {
-      console.error('RunnerPanel: Error opening collection:', error);
+      console.error('RunnerPanel: Error loading collection metadata:', error);
+    }
+
+    // Background: full collection load (tree, watchers, envs).
+    setCollectionsMessageSender(webviewSender);
+    setWatcherMessageSender(webviewSender);
+
+    try {
+      const watcherExists = collectionWatcher.hasWatcher(collectionRoot);
+      await openCollection(collectionWatcher, collectionRoot);
+      await collectionWatcher.loadEnvironments(collectionRoot, collectionUid, webviewSender);
+
+      // If a watcher already existed, openCollection won't trigger a scan so
+      // this panel's webview needs the full item list loaded explicitly.
+      if (watcherExists) {
+        await collectionWatcher.loadFullCollection(collectionRoot, collectionUid, webviewSender);
+      }
+    } catch (error) {
+      console.error('RunnerPanel: Error opening collection in background:', error);
+    } finally {
       setCollectionsMessageSender(originalBroadcastSender);
       setWatcherMessageSender(originalBroadcastSender);
     }

@@ -7,7 +7,7 @@ import {
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
-import { openCollection, setMessageSender as setCollectionsMessageSender } from '../app/collections';
+import { openCollection, loadCollectionMetadata, setMessageSender as setCollectionsMessageSender } from '../app/collections';
 import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
 
@@ -76,28 +76,31 @@ export async function openExportCollectionPanel(
     if (collectionLoaded) return;
     collectionLoaded = true;
 
+    // Show the export UI immediately with collection metadata. The full tree
+    // scan (needed to populate the export payload) runs in the background so
+    // the panel does not hang on cold open for large collections.
+    try {
+      await loadCollectionMetadata(collectionPath, webviewSender);
+      stateManager.sendTo(panel.webview, 'main:set-view', viewData);
+    } catch (error) {
+      console.error('ExportCollectionPanel: Error loading collection metadata:', error);
+    }
+
     setCollectionsMessageSender(webviewSender);
     setWatcherMessageSender(webviewSender);
 
     try {
-      // Check if watcher already exists (collection already open elsewhere)
       const watcherExists = collectionWatcher.hasWatcher(collectionPath);
-
-      // Always call openCollection to send collection metadata
       await openCollection(collectionWatcher, collectionPath);
 
       // If watcher already existed, openCollection won't trigger a scan
-      // so we need to manually load all items for this webview
+      // so load the full item list explicitly for this webview.
       if (watcherExists) {
         await collectionWatcher.loadFullCollection(collectionPath, collectionUid, webviewSender);
       }
-
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
-
-      stateManager.sendTo(panel.webview, 'main:set-view', viewData);
     } catch (error) {
       console.error('ExportCollectionPanel: Error opening collection:', error);
+    } finally {
       setCollectionsMessageSender(originalBroadcastSender);
       setWatcherMessageSender(originalBroadcastSender);
     }

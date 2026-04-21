@@ -1,12 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, Suspense } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import find from 'lodash/find';
 import { findItemInCollection, findCollectionByUid, getDefaultRequestPaneTab } from 'utils/collections';
 import { hasPlatformSupport } from 'utils/common/platform';
 import StyledWrapper from './StyledWrapper';
-import 'codemirror/theme/material.css';
-import 'codemirror/theme/monokai.css';
-import 'codemirror/addon/scroll/simplescrollbars.css';
 import useGrpcEventListeners from 'utils/network/grpc-event-listeners';
 import useWsEventListeners from 'utils/network/ws-event-listeners';
 
@@ -18,38 +15,6 @@ import {
   saveFolderRoot,
   saveCollectionSettings
 } from 'providers/ReduxStore/slices/collections/actions';
-
-require('codemirror/mode/javascript/javascript');
-require('codemirror/mode/xml/xml');
-require('codemirror/mode/sparql/sparql');
-require('codemirror/addon/comment/comment');
-require('codemirror/addon/dialog/dialog');
-require('codemirror/addon/edit/closebrackets');
-require('codemirror/addon/edit/matchbrackets');
-require('codemirror/addon/fold/brace-fold');
-require('codemirror/addon/fold/foldgutter');
-require('codemirror/addon/fold/xml-fold');
-require('codemirror/addon/hint/javascript-hint');
-require('codemirror/addon/hint/show-hint');
-require('codemirror/addon/lint/lint');
-require('codemirror/addon/lint/json-lint');
-require('codemirror/addon/mode/overlay');
-require('codemirror/addon/scroll/simplescrollbars');
-require('codemirror/addon/search/jump-to-line');
-require('codemirror/addon/search/search');
-require('codemirror/addon/search/searchcursor');
-require('codemirror/addon/display/placeholder');
-require('codemirror/keymap/sublime');
-
-require('codemirror-graphql/hint');
-require('codemirror-graphql/info');
-require('codemirror-graphql/jump');
-require('codemirror-graphql/lint');
-require('codemirror-graphql/mode');
-
-require('utils/codemirror/brunoVarInfo');
-require('utils/codemirror/javascript-lint');
-require('utils/codemirror/autocomplete');
 
 export default function Main(): React.ReactElement {
   const mainSectionRef = useRef<HTMLDivElement>(null);
@@ -216,7 +181,9 @@ export default function Main(): React.ReactElement {
       >
         <StyledWrapper style={{ height: '100%', width: '100%', zIndex: 1 }}>
           <section className="flex flex-grow flex-col overflow-hidden w-full">
-            <ViewContainer viewData={viewData} />
+            <Suspense fallback={<div className="flex-1" />}>
+              <ViewContainer viewData={viewData} />
+            </Suspense>
           </section>
         </StyledWrapper>
       </div>
