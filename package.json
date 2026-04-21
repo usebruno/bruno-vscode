@@ -464,7 +464,7 @@
     "@usebruno/common": "0.18.0",
     "@usebruno/converters": "0.17.1",
     "@usebruno/filestore": "0.7.1",
-    "@usebruno/js": "0.45.1",
+    "@usebruno/js": "0.46.1",
     "@usebruno/lang": "0.34.0",
     "@usebruno/requests": "0.15.2",
     "@usebruno/schema": "0.23.0",

@@ -76,9 +76,6 @@ export const runPreRequestScript = async (
 
     const onConsoleLog = createConsoleLogHandler(context.collectionUid, context.requestUid);
 
-    // ScriptRuntime.runRequestScript signature (@usebruno/js v0.44.0):
-    // (script, request, envVariables, runtimeVariables, collectionPath, onConsoleLog,
-    //  processEnvVars, scriptingConfig, historyLogger, secretVariables, runRequestByItemPathname, collectionName)
     const result = await scriptRuntime.runRequestScript(
       decomment(script),
       request,
@@ -88,8 +85,8 @@ export const runPreRequestScript = async (
       onConsoleLog,
       context.processEnvVars,
       context.scriptingConfig,
-      undefined, // historyLogger - not used in extension
-      undefined, // secretVariables - not used in extension
+      undefined, // historyLogger
+      undefined, // secretVariables
       context.runRequestByItemPathname,
       context.collectionName
     );
@@ -208,9 +205,6 @@ export const runPostResponseScript = async (
 
     const onConsoleLog = createConsoleLogHandler(context.collectionUid, context.requestUid);
 
-    // ScriptRuntime.runResponseScript signature (@usebruno/js v0.44.0):
-    // (script, request, response, envVariables, runtimeVariables, collectionPath,
-    //  onConsoleLog, processEnvVars, scriptingConfig, historyLogger, secretVariables, runRequestByItemPathname, collectionName)
     const result = await scriptRuntime.runResponseScript(
       decomment(script),
       request,
@@ -221,8 +215,8 @@ export const runPostResponseScript = async (
       onConsoleLog,
       context.processEnvVars,
       context.scriptingConfig,
-      undefined, // historyLogger - not used in extension
-      undefined, // secretVariables - not used in extension
+      undefined, // historyLogger
+      undefined, // secretVariables
       context.runRequestByItemPathname,
       context.collectionName
     );
@@ -286,9 +280,6 @@ export const runTests = async (
 
     const onConsoleLog = createConsoleLogHandler(context.collectionUid, context.requestUid);
 
-    // TestRuntime.runTests signature (@usebruno/js v0.44.0):
-    // (testsFile, request, response, envVariables, runtimeVariables, collectionPath,
-    //  onConsoleLog, processEnvVars, scriptingConfig, historyLogger, secretVariables, runRequestByItemPathname, collectionName)
     const result = await testRuntime.runTests(
       decomment(testsScript),
       request,
@@ -299,8 +290,8 @@ export const runTests = async (
       onConsoleLog,
       context.processEnvVars,
       context.scriptingConfig,
-      undefined, // historyLogger - not used in extension
-      undefined, // secretVariables - not used in extension
+      undefined, // historyLogger
+      undefined, // secretVariables
       context.runRequestByItemPathname,
       context.collectionName
     );

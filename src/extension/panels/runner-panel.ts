@@ -24,8 +24,52 @@ interface IpcMessage {
 const activeRunnerPanels = new Map<string, vscode.WebviewPanel>();
 
 function handleIpcSend(channel: string, args: unknown[]): void {
-  if (channel === 'open-external' && typeof args[0] === 'string') {
-    vscode.env.openExternal(vscode.Uri.parse(args[0]));
+  switch (channel) {
+    case 'open-external':
+      if (typeof args[0] === 'string') {
+        vscode.env.openExternal(vscode.Uri.parse(args[0]));
+      }
+      break;
+
+    case 'sidebar:open-collection-runner':
+      if (args[0] && typeof args[0] === 'object') {
+        const { collectionPath, folderUid } = args[0] as { collectionPath?: string; folderUid?: string };
+        if (collectionPath) {
+          vscode.commands.executeCommand('bruno.runCollection', vscode.Uri.file(collectionPath), folderUid);
+        }
+      }
+      break;
+
+    case 'sidebar:open-collection-settings':
+      if (args[0] && typeof args[0] === 'object') {
+        const { collectionPath } = args[0] as { collectionPath?: string };
+        if (collectionPath) {
+          vscode.commands.executeCommand('bruno.openSettings', vscode.Uri.file(collectionPath));
+        }
+      }
+      break;
+
+    case 'sidebar:open-collection-variables':
+      if (args[0] && typeof args[0] === 'object') {
+        const { collectionPath } = args[0] as { collectionPath?: string };
+        if (collectionPath) {
+          vscode.commands.executeCommand('bruno.openVariables', vscode.Uri.file(collectionPath));
+        }
+      }
+      break;
+
+    case 'sidebar:open-environment-settings':
+      if (args[0] && typeof args[0] === 'object') {
+        const { collectionPath } = args[0] as { collectionPath?: string };
+        if (collectionPath) {
+          vscode.commands.executeCommand('bruno.openEnvironmentSettings', vscode.Uri.file(collectionPath));
+        }
+      }
+      break;
+
+    case 'sidebar:open-global-environments':
+      vscode.commands.executeCommand('bruno.openGlobalEnvironments');
+      break;
   }
 }
 

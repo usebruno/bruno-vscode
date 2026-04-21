@@ -203,6 +203,33 @@ export async function openTransientRequestPanel(
         if (channel === 'open-external' && typeof args?.[0] === 'string') {
           vscode.env.openExternal(vscode.Uri.parse(args[0]));
         }
+        if (channel === 'sidebar:open-collection-runner' && args?.[0] && typeof args[0] === 'object') {
+          const { collectionPath, folderUid: fUid } = args[0] as { collectionPath?: string; folderUid?: string };
+          if (collectionPath) {
+            vscode.commands.executeCommand('bruno.runCollection', vscode.Uri.file(collectionPath), fUid);
+          }
+        }
+        if (channel === 'sidebar:open-collection-settings' && args?.[0] && typeof args[0] === 'object') {
+          const { collectionPath: cp } = args[0] as { collectionPath?: string };
+          if (cp) {
+            vscode.commands.executeCommand('bruno.openSettings', vscode.Uri.file(cp));
+          }
+        }
+        if (channel === 'sidebar:open-collection-variables' && args?.[0] && typeof args[0] === 'object') {
+          const { collectionPath: cp } = args[0] as { collectionPath?: string };
+          if (cp) {
+            vscode.commands.executeCommand('bruno.openVariables', vscode.Uri.file(cp));
+          }
+        }
+        if (channel === 'sidebar:open-environment-settings' && args?.[0] && typeof args[0] === 'object') {
+          const { collectionPath: cp } = args[0] as { collectionPath?: string };
+          if (cp) {
+            vscode.commands.executeCommand('bruno.openEnvironmentSettings', vscode.Uri.file(cp));
+          }
+        }
+        if (channel === 'sidebar:open-global-environments') {
+          vscode.commands.executeCommand('bruno.openGlobalEnvironments');
+        }
         // Handle save transient request — args[0] is the serialized item data
         if (channel === 'transient:save-request' && args?.[0]) {
           await saveTransientRequest(panel, itemUid, collectionPath, args[0] as Record<string, unknown>);
