@@ -104,6 +104,7 @@ const StyledWrapper = styled.div`
 
     .location-input {
       flex: 1;
+      cursor: pointer;
     }
 
     .browse-btn {
@@ -295,7 +296,7 @@ const CloneCollectionView: React.FC<CloneCollectionViewProps> = ({ collection })
                 className={`form-input location-input ${formik.touched.location && formik.errors.location ? 'error' : ''}`}
                 placeholder="Select a folder..."
                 value={formik.values.location}
-                onChange={formik.handleChange}
+                onClick={handleBrowse}
                 onBlur={formik.handleBlur}
                 disabled={isCloning}
                 readOnly
