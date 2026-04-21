@@ -1666,8 +1666,8 @@ const registerNetworkIpc = (): void => {
         const includeTags = tags.include || [];
         const excludeTags = tags.exclude || [];
         folderRequests = filter(folderRequests, (item) => {
-          const requestTags = ((item.draft as Record<string, unknown>)?.tags || item.tags || []) as string[];
-          // Include if: (no include filter OR has at least one include tag) AND (no exclude tags OR doesn't have any exclude tags)
+          const rawTags = (item.draft as Record<string, unknown>)?.tags || item.tags || [];
+          const requestTags = (Array.isArray(rawTags) ? rawTags : []) as string[];
           const includeMatch = includeTags.length === 0 || requestTags.some(t => includeTags.includes(t));
           const excludeMatch = excludeTags.length === 0 || !requestTags.some(t => excludeTags.includes(t));
           return includeMatch && excludeMatch;

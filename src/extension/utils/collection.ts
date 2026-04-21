@@ -456,9 +456,21 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
       const lines = metaContent.replace(/\r\n/g, '\n').split('\n');
       const metaJson: Record<string, unknown> = {};
 
+      let insideArray = false;
       lines.forEach((line) => {
-        const [key, value] = line.split(':').map((str) => str.trim());
+        const trimmed = line.trim();
+        if (insideArray) {
+          if (trimmed === ']') {
+            insideArray = false;
+          }
+          return;
+        }
+        const [key, value] = trimmed.split(':').map((str) => str.trim());
         if (key && value) {
+          if (value === '[' || value.startsWith('[')) {
+            insideArray = !value.includes(']');
+            return;
+          }
           metaJson[key] = isNaN(Number(value)) ? value : Number(value);
         }
       });
@@ -490,7 +502,7 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
         name: metaJson.name,
         seq: !isNaN(sequence) ? Number(sequence) : 1,
         settings: {},
-        tags: metaJson.tags || [],
+        tags: Array.isArray(metaJson.tags) ? metaJson.tags : [],
         request: {
           method,
           url: '',

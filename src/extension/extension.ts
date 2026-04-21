@@ -19,7 +19,7 @@ import { setExtensionContext as setCookiesContext, cookiesStore } from './store/
 import { setExtensionContext as setOAuth2Context } from './store/oauth2';
 
 import registerPreferencesIpc from './ipc/preferences';
-import registerCollectionIpc from './ipc/collection';
+import registerCollectionIpc, { setSidebarWebviewGetter } from './ipc/collection';
 import registerFilesystemIpc from './ipc/filesystem';
 import registerGlobalEnvironmentsIpc from './ipc/global-environments';
 import registerNetworkIpc from './ipc/network/index';
@@ -129,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const sidebarProvider = new SidebarViewProvider(context.extensionUri, stateManager);
+  setSidebarWebviewGetter(() => sidebarProvider.getWebview());
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(

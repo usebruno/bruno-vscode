@@ -189,12 +189,13 @@ const RunConfigurationPanel = ({
 
   const flattenRequests = useCallback((collection: any, rootItems: any[]) => {
     const result: any = [];
+    const runnableTypes = ['http-request', 'graphql-request'];
 
     const processItems = (items: any) => {
       if (!items?.length) return;
 
       items.forEach((item: any) => {
-        if (isItemARequest(item)) {
+        if (isItemARequest(item) && runnableTypes.includes(item.type) && !item.isTransient) {
           const relativePath = path.relative(collection.pathname, path.dirname(item.pathname));
           const folderPath = relativePath !== '.' ? relativePath : '';
 

@@ -78,6 +78,12 @@ const environmentSecretsStore = new EnvironmentSecretsStore();
 const collectionSecurityStore = new CollectionSecurityStore();
 const uiStateSnapshotStore = new UiStateSnapshotStore();
 
+let sidebarWebviewGetter: (() => vscode.Webview | undefined) | null = null;
+
+export function setSidebarWebviewGetter(getter: () => vscode.Webview | undefined): void {
+  sidebarWebviewGetter = getter;
+}
+
 interface Environment {
   name: string;
   variables: Array<{ name: string; value: string; secret?: boolean; uid?: string }>;
@@ -1919,11 +1925,16 @@ get {
         stateManager.sendTo(currentWebview, channel, ...args);
       };
       const watchedPaths = collectionWatcher.getWatchedCollectionPaths();
+      const sidebarWebview = sidebarWebviewGetter?.();
+      const isSidebar = sidebarWebview && currentWebview === sidebarWebview;
       for (const collectionPath of watchedPaths) {
         try {
-          await loadCollectionMetadata(collectionPath, panelSender);
+          const collectionUid = await loadCollectionMetadata(collectionPath, panelSender, isSidebar);
+          if (isSidebar && collectionUid) {
+            await collectionWatcher.loadFullCollection(collectionPath, collectionUid, panelSender);
+          }
         } catch (err) {
-          console.error(`[Collection IPC] Error replaying collection metadata for ${collectionPath}:`, err);
+          console.error(`[Collection IPC] Error replaying collection for ${collectionPath}:`, err);
         }
       }
       return;
@@ -1949,6 +1960,51 @@ get {
       }
     } catch (error) {
       console.error('[Collection IPC] Error loading last opened collections:', error);
+    }
+  });
+
+  registerHandler('renderer:mount-collection', async (args) => {
+    const [{ collectionUid, collectionPathname }] = args as [{ collectionUid: string; collectionPathname: string }];
+
+    const collectionPath = path.resolve(collectionPathname);
+    if (!fs.existsSync(collectionPath) || !isDirectory(collectionPath)) {
+      return;
+    }
+
+    const format = getCollectionFormat(collectionPath);
+    const requestFiles = searchForRequestFiles(collectionPath, collectionPath);
+
+    const PARSE_PARALLELISM = 20;
+
+    for (let i = 0; i < requestFiles.length; i += PARSE_PARALLELISM) {
+      const chunk = requestFiles.slice(i, i + PARSE_PARALLELISM);
+      await Promise.all(
+        chunk.map(async (filePath) => {
+          try {
+            const [fileStats, content] = await Promise.all([
+              fs.promises.stat(filePath),
+              fs.promises.readFile(filePath, 'utf8')
+            ]);
+            if (!content.trim()) return;
+
+            const fullData = await parseRequest(content, { format });
+            hydrateRequestWithUuid(fullData, filePath);
+            broadcastToAllWebviews('main:collection-tree-updated', 'change', {
+              meta: {
+                collectionUid,
+                pathname: posixifyPath(filePath),
+                name: path.basename(filePath)
+              },
+              data: fullData,
+              partial: false,
+              loading: false,
+              size: sizeInMB(fileStats?.size)
+            });
+          } catch (err) {
+            // Skip files that fail to parse
+          }
+        })
+      );
     }
   });
 

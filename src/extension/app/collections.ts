@@ -318,7 +318,8 @@ export const openCollectionForSingleRequest = async (
 
 export const loadCollectionMetadata = async (
   collectionPath: string,
-  targetSender: MessageSender
+  targetSender: MessageSender,
+  shouldPersist = false
 ): Promise<string | null> => {
   try {
     let brunoConfig = await getCollectionConfigFile(collectionPath);
@@ -330,7 +331,7 @@ export const loadCollectionMetadata = async (
 
     brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionPath) as unknown as BrunoConfig;
 
-    targetSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, false);
+    targetSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, shouldPersist);
 
     return uid;
   } catch (err) {

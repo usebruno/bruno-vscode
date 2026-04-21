@@ -3,7 +3,7 @@ import path from 'utils/common/path';
 import { useDispatch } from 'react-redux';
 import { get, cloneDeep } from 'lodash';
 import { runCollectionFolder, cancelRunnerExecution, mountCollection, updateRunnerConfiguration } from 'providers/ReduxStore/slices/collections/actions';
-import { resetCollectionRunner, updateRunnerTagsDetails } from 'providers/ReduxStore/slices/collections';
+import { resetCollectionRunner, updateRunnerTagsDetails, updateCollectionTagsList } from 'providers/ReduxStore/slices/collections';
 import { findItemInCollection, getTotalRequestCountInCollection, areItemsLoading, getRequestItemsForCollectionRun } from 'utils/collections';
 import { IconRefresh, IconCircleCheck, IconCircleX, IconCircleOff, IconCheck, IconX, IconRun, IconExternalLink } from '@tabler/icons';
 import ResponsePane from './ResponsePane';
@@ -102,7 +102,24 @@ export default function RunnerResults({
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedRequestItems, setSelectedRequestItems] = useState<string[]>([]);
   const [configureMode, setConfigureMode] = useState(false);
+  const [isMounting, setIsMounting] = useState(false);
+  const mountedRef = useRef(false);
   const runnerBodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      setIsMounting(true);
+      (dispatch(mountCollection({
+        collectionUid: collection.uid,
+        collectionPathname: collection.pathname
+      })) as any).then(() => {
+        dispatch(updateCollectionTagsList({ collectionUid: collection.uid }));
+      }).catch(() => {}).finally(() => {
+        setIsMounting(false);
+      });
+    }
+  }, [collection.uid]);
 
   const collectionCopy = cloneDeep(collection);
   const runnerInfo = get(collection, 'runnerResult.info', {});
@@ -116,7 +133,7 @@ export default function RunnerResults({
   const folder = folderUid ? findItemInCollection(collection, folderUid) : null;
   const runScopeItems = folder ? (folder as any).items || [] : collection.items;
 
-  const requestItemsForCollectionRun = getRequestItemsForCollectionRun({ recursive: true, tags, items: runScopeItems });
+  const requestItemsForCollectionRun = getRequestItemsForCollectionRun({ recursive: true, tags: tagsEnabled ? tags : undefined, items: runScopeItems });
   const totalRequestItemsCountForCollectionRun = requestItemsForCollectionRun.length;
   const shouldDisableCollectionRun = totalRequestItemsCountForCollectionRun <= 0;
 
@@ -133,7 +150,7 @@ export default function RunnerResults({
         filename: info.filename,
         pathname: info.pathname,
         displayName: getDisplayName(collection.pathname, info.pathname, info.name),
-        tags: [...((info.request as any)?.tags || [])].sort()
+        tags: [...(Array.isArray((info as any)?.tags) ? (info as any).tags : [])].sort()
       };
       if (newItem.status !== 'error' && newItem.status !== 'skipped' && newItem.status !== 'running') {
         newItem.testStatus = getTestStatus(newItem.testResults);
@@ -200,39 +217,29 @@ export default function RunnerResults({
     }
   }, [collection.runnerConfiguration, configureMode, delay]);
 
-  const ensureCollectionIsMounted = () => {
-    if (collection.mountStatus === 'mounted') {
-      return;
-    }
-    dispatch(mountCollection({
-      collectionUid: collection.uid,
-      collectionPathname: collection.pathname,
-      brunoConfig: collection.brunoConfig
-    }));
-  };
-
   const runCollection = () => {
+    const activeTags = tagsEnabled ? tags : null;
     if (configureMode && selectedRequestItems.length > 0) {
       dispatch(updateRunnerConfiguration(collection.uid, selectedRequestItems, selectedRequestItems, delay));
-      dispatch(runCollectionFolder(collection.uid, folderUid || null, true, Number(delay), tagsEnabled && tags, selectedRequestItems));
+      dispatch(runCollectionFolder(collection.uid, folderUid || null, true, Number(delay), activeTags, selectedRequestItems));
     } else {
       dispatch(updateRunnerConfiguration(collection.uid, [], [], delay));
-      dispatch(runCollectionFolder(collection.uid, folderUid || null, true, Number(delay), tagsEnabled && tags, undefined));
+      dispatch(runCollectionFolder(collection.uid, folderUid || null, true, Number(delay), activeTags, undefined));
     }
   };
 
   const runAgain = () => {
-    ensureCollectionIsMounted();
     const savedConfiguration = get(collection, 'runnerConfiguration', null);
     const savedSelectedItems = savedConfiguration?.selectedRequestItems || [];
     const savedDelay = savedConfiguration?.delay !== undefined ? savedConfiguration.delay : delay;
+    const activeTags = tagsEnabled ? tags : null;
     dispatch(
       runCollectionFolder(
         collection.uid,
         runnerInfo.folderUid,
         true,
         Number(savedDelay),
-        tagsEnabled && tags,
+        activeTags,
         savedSelectedItems
       )
     );
@@ -273,7 +280,7 @@ export default function RunnerResults({
     skipped: items.filter((i: any) => i.status === 'skipped').length
   };
 
-  let isCollectionLoading = areItemsLoading(collection);
+  let isCollectionLoading = isMounting || areItemsLoading(collection);
   if (!items || !items.length) {
     return (
       <StyledWrapper className="pl-4 overflow-hidden h-full">
@@ -287,7 +294,7 @@ export default function RunnerResults({
               You have <span className="font-medium">{totalRequestsInCollection}</span> requests in this collection.
               {isCollectionLoading && (
                 <span className="ml-2 text-muted">
-                  (Loading...)
+                  ({isMounting ? 'Loading requests...' : 'Loading...'})
                 </span>
               )}
             </div>

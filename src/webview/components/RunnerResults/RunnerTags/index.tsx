@@ -1,16 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { get, cloneDeep, find } from 'lodash';
+import { get } from 'lodash';
 import { updateCollectionTagsList, updateRunnerTagsDetails } from 'providers/ReduxStore/slices/collections';
 import TagList from 'components/TagList';
-
-interface RunnerTagsProps {
-  collectionUid?: string;
-  className?: string;
-  tag?: unknown;
-  to?: unknown;
-  from?: unknown;
-}
 
 interface TagsFilter {
   include: string[];
@@ -22,19 +14,23 @@ const RunnerTags = ({
   className = ''
 }: any) => {
   const dispatch = useDispatch();
-  const collections = useSelector((state) => state.collections.collections);
-  const collection = cloneDeep(find(collections, (c) => c.uid === collectionUid));
+  const collection = useSelector((state) =>
+    state.collections.collections.find((c: any) => c.uid === collectionUid)
+  );
 
   const tags: TagsFilter = get(collection, 'runnerTags', { include: [], exclude: [] }) as TagsFilter;
 
   const tagsEnabled = get(collection, 'runnerTagsEnabled', false);
 
-  const availableTags = get(collection, 'allTags', []);
-  const tagsHintList = availableTags.filter((t: any) => !tags.exclude.includes(t) && !tags.include.includes(t));
+  const availableTags: string[] = get(collection, 'allTags', []);
+  const tagsHintList = useMemo(
+    () => availableTags.filter((t: any) => !tags.exclude.includes(t) && !tags.include.includes(t)),
+    [availableTags, tags.include, tags.exclude]
+  );
 
   useEffect(() => {
     dispatch(updateCollectionTagsList({ collectionUid }));
-  }, [collection.uid, dispatch]);
+  }, [collectionUid, dispatch]);
 
   const handleValidation = (tag: any) => {
     const trimmedTag = tag.trim();
@@ -94,11 +90,11 @@ const RunnerTags = ({
   };
 
   const setTags = (tags: any) => {
-    dispatch(updateRunnerTagsDetails({ collectionUid: collection.uid, tags }));
+    dispatch(updateRunnerTagsDetails({ collectionUid, tags }));
   };
 
   const setTagsEnabled = (tagsEnabled: any) => {
-    dispatch(updateRunnerTagsDetails({ collectionUid: collection.uid, tagsEnabled }));
+    dispatch(updateRunnerTagsDetails({ collectionUid, tagsEnabled }));
   };
 
   return (

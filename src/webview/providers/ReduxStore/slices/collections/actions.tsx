@@ -2882,14 +2882,12 @@ export const mountCollection
   brunoConfig
 }: any) =>
     (dispatch: any, getState: any) => {
-      dispatch(updateCollectionMountStatus({ collectionUid, mountStatus: 'mounting' }));
       return new Promise(async (resolve, reject) => {
-        callIpc('renderer:mount-collection', { collectionUid, collectionPathname, brunoConfig })
-          .then(() => dispatch(updateCollectionMountStatus({ collectionUid, mountStatus: 'mounted' })))
+        callIpc('renderer:mount-collection', { collectionUid, collectionPathname })
           .then(resolve)
-          .catch(() => {
-            dispatch(updateCollectionMountStatus({ collectionUid, mountStatus: 'unmounted' }));
-            reject();
+          .catch((err: any) => {
+            console.error('Mount collection error:', err);
+            reject(err);
           });
       });
     };

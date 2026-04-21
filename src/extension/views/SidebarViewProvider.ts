@@ -371,8 +371,11 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
         if (args[0] && typeof args[0] === 'object') {
           const { folderPath, collectionPath } = args[0] as { folderPath?: string; collectionPath?: string };
           if (folderPath) {
-            const folderBruPath = path.join(folderPath, 'folder.bru');
-            const folderYmlPath = path.join(folderPath, 'folder.yml');
+            const resolvedFolderPath = path.resolve(folderPath);
+            const resolvedCollectionPath = collectionPath ? path.resolve(collectionPath) : undefined;
+
+            const folderBruPath = path.join(resolvedFolderPath, 'folder.bru');
+            const folderYmlPath = path.join(resolvedFolderPath, 'folder.yml');
 
             const ymlExists = fs.existsSync(folderYmlPath);
             const bruExists = fs.existsSync(folderBruPath);
@@ -387,8 +390,8 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
               // Neither file exists - create it based on collection format
               // Determine format from collection (check if opencollection.yml exists)
               let format = 'bru';
-              if (collectionPath) {
-                const openCollectionPath = path.join(collectionPath, 'opencollection.yml');
+              if (resolvedCollectionPath) {
+                const openCollectionPath = path.join(resolvedCollectionPath, 'opencollection.yml');
                 if (fs.existsSync(openCollectionPath)) {
                   format = 'yml';
                 }
@@ -397,7 +400,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
               folderFilePath = format === 'yml' ? folderYmlPath : folderBruPath;
 
               // Create minimal folder config file
-              const folderName = path.basename(folderPath);
+              const folderName = path.basename(resolvedFolderPath);
               let content: string;
               if (format === 'yml') {
                 // yml format expects 'info' block with name and type
@@ -411,7 +414,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
                 fs.writeFileSync(folderFilePath, content, 'utf8');
               } catch (err) {
                 console.error('Failed to create folder config file:', err);
-                await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(folderPath));
+                await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(resolvedFolderPath));
                 break;
               }
             }
@@ -424,7 +427,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
               );
             } catch {
               // Fallback to revealing folder in OS file explorer
-              await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(folderPath));
+              await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(resolvedFolderPath));
             }
           }
         }
@@ -610,6 +613,11 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
   </style>
   <script>
     window.BRUNO_WEBVIEW_MODE = 'sidebar';
+    window.__brunoMessageBuffer = [];
+    window.addEventListener('message', function(event) {
+      var buf = window.__brunoMessageBuffer;
+      if (buf) buf.push(event.data);
+    });
   </script>
   ${scriptTags}
 </head>

@@ -1512,12 +1512,15 @@ export const calculateDraggedItemNewPathname = ({
 export const getUniqueTagsFromItems = (items: AppItem[] = []): string[] => {
   const allTags = new Set<string>();
   const getTags = (items: AppItem[]) => {
+    if (!Array.isArray(items)) return;
     items.forEach((item) => {
+      if (!item) return;
       if (isItemARequest(item)) {
-        const tags: string[] = item.draft ? get(item, 'draft.tags', []) : get(item, 'tags', []);
+        const rawTags = item.draft ? get(item, 'draft.tags', []) : get(item, 'tags', []);
+        const tags: string[] = Array.isArray(rawTags) ? rawTags : [];
         tags.forEach((tag) => allTags.add(tag));
       }
-      if (item.items) {
+      if (Array.isArray(item.items)) {
         getTags(item.items);
       }
     });
@@ -1553,8 +1556,9 @@ export const getRequestItemsForCollectionRun = ({
       tags: requestTags = [],
       draft
     }: any) => {
-      requestTags = draft?.tags || requestTags || [];
-      return isRequestTagsIncluded(requestTags, includeTags, excludeTags);
+      const rawTags = draft?.tags || requestTags || [];
+      const safeTags = Array.isArray(rawTags) ? rawTags : [];
+      return isRequestTagsIncluded(safeTags, includeTags, excludeTags);
     });
   }
 
