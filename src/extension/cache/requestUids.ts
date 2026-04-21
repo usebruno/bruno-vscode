@@ -22,12 +22,8 @@ export const getRequestUid = (pathname: string): string => {
 };
 
 export const moveRequestUid = (oldPathname: string, newPathname: string): void => {
-  const uid = requestUids.get(oldPathname);
-
-  if (uid) {
-    requestUids.delete(oldPathname);
-    requestUids.set(newPathname, uid);
-  }
+  requestUids.delete(oldPathname);
+  requestUids.delete(newPathname);
 };
 
 export const deleteRequestUid = (pathname: string): void => {
