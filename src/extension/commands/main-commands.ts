@@ -240,9 +240,10 @@ export function registerMainCommands(
     vscode.commands.registerCommand('bruno.openNewRequest', async (
       collectionUid: string,
       collectionPath: string,
-      itemUid?: string | null
+      itemUid?: string | null,
+      itemPath?: string | null
     ) => {
-      await openNewRequestPanel(context, collectionUid, collectionPath, itemUid);
+      await openNewRequestPanel(context, collectionUid, collectionPath, itemUid, itemPath);
     })
   );
 

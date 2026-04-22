@@ -355,7 +355,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     ipcRenderer.send('sidebar:open-new-request', {
       collectionUid,
       collectionPath: collectionPathname,
-      itemUid: item.uid
+      itemUid: item.uid,
+      itemPath: item.pathname
     });
   };
 

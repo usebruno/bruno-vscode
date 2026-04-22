@@ -42,6 +42,7 @@ export interface ViewData {
   itemUid?: string;
   folderUid?: string;
   collectionPath?: string;
+  itemPath?: string;
 }
 
 /**

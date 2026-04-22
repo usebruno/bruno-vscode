@@ -22,7 +22,8 @@ export async function openNewRequestPanel(
   context: vscode.ExtensionContext,
   collectionUid: string,
   collectionPath: string,
-  itemUid?: string | null
+  itemUid?: string | null,
+  itemPath?: string | null
 ): Promise<void> {
   if (currentPanel) {
     try {
@@ -59,7 +60,8 @@ export async function openNewRequestPanel(
     viewType: 'new-request',
     collectionUid,
     collectionPath,
-    itemUid: itemUid || null
+    itemUid: itemUid || null,
+    itemPath: itemPath || null
   };
 
   panel.webview.onDidReceiveMessage(async (message: IpcMessage) => {

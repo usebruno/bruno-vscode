@@ -79,7 +79,7 @@ const EmptyView: React.FC = () => {
  */
 const ViewContainer: React.FC<ViewContainerProps> = ({ viewData }) => {
   const dispatch = useDispatch();
-  const { viewType, collectionUid, itemUid, folderUid } = viewData;
+  const { viewType, collectionUid, itemUid, folderUid, itemPath } = viewData;
 
   const { globalEnvironments, activeGlobalEnvironmentUid } = useSelector(
     (state: RootState) => state.globalEnvironments
@@ -267,7 +267,7 @@ const ViewContainer: React.FC<ViewContainerProps> = ({ viewData }) => {
 
   if (viewType === 'new-request') {
     if (!collection) return null;
-    return <NewRequestView collection={collection} itemUid={itemUid} />;
+    return <NewRequestView collection={collection} itemUid={itemUid} itemPath={itemPath} />;
   }
 
   if (viewType === 'export-collection') {

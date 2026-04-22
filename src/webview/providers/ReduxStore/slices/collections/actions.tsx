@@ -1430,6 +1430,7 @@ interface NewHttpRequestParams {
   requestMethod: string;
   collectionUid: string;
   itemUid?: string | null;
+  itemPath?: string | null;
   headers?: unknown[];
   body?: Record<string, unknown>;
   auth?: Record<string, unknown>;
@@ -1445,6 +1446,7 @@ export const newHttpRequest = (params: NewHttpRequestParams): ThunkAction<Promis
     requestMethod,
     collectionUid,
     itemUid,
+    itemPath,
     headers,
     body,
     auth,
@@ -1548,37 +1550,37 @@ export const newHttpRequest = (params: NewHttpRequestParams): ThunkAction<Promis
       }
     } else {
       const currentItem = findItemInCollection(collection, itemUid);
+      const folderPathname = currentItem?.pathname || itemPath;
+      if (!folderPathname) {
+        return reject(new Error('Unable to locate folder'));
+      }
       if (currentItem) {
         const reqWithSameNameExists = find(
           currentItem.items,
           (i) => i.type !== 'folder' && trim(i.filename) === trim(resolvedFilename)
         );
-        const items = filter(currentItem.items, (i) => isItemAFolder(i) || isItemARequest(i));
-        item.seq = items.length + 1;
-        if (!reqWithSameNameExists) {
-          const fullName = path.join(currentItem.pathname, resolvedFilename);
-          const { ipcRenderer } = window;
-          ipcRenderer
-            .invoke('renderer:new-request', fullName, item)
-            .then(() => {
-              // task middleware will track this and open the new request in a new tab once request is created
-              dispatch(
-                insertTaskIntoQueue({
-                  uid: uuid(),
-                  type: 'OPEN_REQUEST',
-                  collectionUid,
-                  itemPathname: fullName
-                })
-              );
-              resolve();
-            })
-            .catch(reject);
-        } else {
+        if (reqWithSameNameExists) {
           return reject(new Error('Duplicate request names are not allowed under the same folder'));
         }
-      } else {
-        return reject(new Error('Unable to locate folder'));
+        const items = filter(currentItem.items, (i) => isItemAFolder(i) || isItemARequest(i));
+        item.seq = items.length + 1;
       }
+      const fullName = path.join(folderPathname, resolvedFilename);
+      const { ipcRenderer } = window;
+      ipcRenderer
+        .invoke('renderer:new-request', fullName, item)
+        .then(() => {
+          dispatch(
+            insertTaskIntoQueue({
+              uid: uuid(),
+              type: 'OPEN_REQUEST',
+              collectionUid,
+              itemPathname: fullName
+            })
+          );
+          resolve();
+        })
+        .catch(reject);
     }
   });
 };
@@ -1592,10 +1594,11 @@ interface NewGrpcRequestParams {
   auth?: Record<string, unknown>;
   headers?: unknown[];
   itemUid?: string | null;
+  itemPath?: string | null;
 }
 
 export const newGrpcRequest = (params: NewGrpcRequestParams): ThunkAction<Promise<void>> => (dispatch, getState) => {
-  const { requestName, filename, requestUrl, collectionUid, body, auth, headers, itemUid } = params;
+  const { requestName, filename, requestUrl, collectionUid, body, auth, headers, itemUid, itemPath } = params;
 
   return new Promise<void>((resolve, reject) => {
     const state = getState();
@@ -1642,26 +1645,27 @@ export const newGrpcRequest = (params: NewGrpcRequestParams): ThunkAction<Promis
     // itemUid is null when we are creating a new request at the root level
     const parentItem = itemUid ? findItemInCollection(collection, itemUid) : collection;
     const resolvedFilename = resolveRequestFilename(filename, collection.format);
+    const parentPathname = parentItem?.pathname || itemPath;
 
-    if (!parentItem) {
+    if (!parentItem && !parentPathname) {
       return reject(new Error('Parent item not found'));
     }
 
-    const reqWithSameNameExists = find(parentItem.items,
-      (i) => i.type !== 'folder' && trim(i.filename) === trim(resolvedFilename));
-
-    if (reqWithSameNameExists) {
-      return reject(new Error('Duplicate request names are not allowed under the same folder'));
+    if (parentItem) {
+      const reqWithSameNameExists = find(parentItem.items,
+        (i) => i.type !== 'folder' && trim(i.filename) === trim(resolvedFilename));
+      if (reqWithSameNameExists) {
+        return reject(new Error('Duplicate request names are not allowed under the same folder'));
+      }
+      const items = filter(parentItem.items, (i) => isItemAFolder(i) || isItemARequest(i));
+      item.seq = items.length + 1;
     }
 
-    const items = filter(parentItem.items, (i) => isItemAFolder(i) || isItemARequest(i));
-    item.seq = items.length + 1;
-    const fullName = path.join(parentItem.pathname, resolvedFilename);
+    const fullName = path.join(parentPathname!, resolvedFilename);
     const { ipcRenderer } = window;
     ipcRenderer
       .invoke('renderer:new-request', fullName, item)
       .then(() => {
-        // task middleware will track this and open the new request in a new tab once request is created
         dispatch(insertTaskIntoQueue({
           uid: uuid(),
           type: 'OPEN_REQUEST',
@@ -1684,10 +1688,11 @@ interface NewWsRequestParams {
   auth?: Record<string, unknown>;
   headers?: unknown[];
   itemUid?: string | null;
+  itemPath?: string | null;
 }
 
 export const newWsRequest = (params: NewWsRequestParams): ThunkAction<Promise<void>> => (dispatch, getState) => {
-  const { requestName, requestMethod, filename, requestUrl, collectionUid, body, auth, headers, itemUid } = params;
+  const { requestName, requestMethod, filename, requestUrl, collectionUid, body, auth, headers, itemUid, itemPath } = params;
 
   return new Promise<void>((resolve, reject) => {
     const state = getState();
@@ -1735,26 +1740,27 @@ export const newWsRequest = (params: NewWsRequestParams): ThunkAction<Promise<vo
     // itemUid is null when we are creating a new request at the root level
     const parentItem = itemUid ? findItemInCollection(collection, itemUid) : collection;
     const resolvedFilename = resolveRequestFilename(filename, collection.format);
+    const parentPathname = parentItem?.pathname || itemPath;
 
-    if (!parentItem) {
+    if (!parentItem && !parentPathname) {
       return reject(new Error('Parent item not found'));
     }
 
-    const reqWithSameNameExists = find(parentItem.items,
-      (i) => i.type !== 'folder' && trim(i.filename) === trim(resolvedFilename));
-
-    if (reqWithSameNameExists) {
-      return reject(new Error('Duplicate request names are not allowed under the same folder'));
+    if (parentItem) {
+      const reqWithSameNameExists = find(parentItem.items,
+        (i) => i.type !== 'folder' && trim(i.filename) === trim(resolvedFilename));
+      if (reqWithSameNameExists) {
+        return reject(new Error('Duplicate request names are not allowed under the same folder'));
+      }
+      const items = filter(parentItem.items, (i) => isItemAFolder(i) || isItemARequest(i));
+      item.seq = items.length + 1;
     }
 
-    const items = filter(parentItem.items, (i) => isItemAFolder(i) || isItemARequest(i));
-    item.seq = items.length + 1;
-    const fullName = path.join(parentItem.pathname, resolvedFilename);
+    const fullName = path.join(parentPathname!, resolvedFilename);
     const { ipcRenderer } = window;
     ipcRenderer
       .invoke('renderer:new-request', fullName, item)
       .then(() => {
-        // task middleware will track this and open the new request in a new tab once request is created
         dispatch(insertTaskIntoQueue({
           uid: uuid(),
           type: 'OPEN_REQUEST',

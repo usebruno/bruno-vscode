@@ -435,13 +435,14 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 
       case 'sidebar:open-new-request':
         if (args[0] && typeof args[0] === 'object') {
-          const { collectionUid, collectionPath, itemUid } = args[0] as {
+          const { collectionUid, collectionPath, itemUid, itemPath } = args[0] as {
             collectionUid?: string;
             collectionPath?: string;
             itemUid?: string | null;
+            itemPath?: string | null;
           };
           if (collectionUid && collectionPath) {
-            await vscode.commands.executeCommand('bruno.openNewRequest', collectionUid, collectionPath, itemUid);
+            await vscode.commands.executeCommand('bruno.openNewRequest', collectionUid, collectionPath, itemUid, itemPath);
           }
         }
         break;

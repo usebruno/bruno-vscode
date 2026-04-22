@@ -239,9 +239,10 @@ const StyledWrapper = styled.div`
 interface NewRequestViewProps {
   collection: any;
   itemUid?: string | null;
+  itemPath?: string | null;
 }
 
-const NewRequestView: React.FC<NewRequestViewProps> = ({ collection, itemUid }) => {
+const NewRequestView: React.FC<NewRequestViewProps> = ({ collection, itemUid, itemPath }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const dispatch = useDispatch();
   const { storedTheme } = useTheme();
@@ -354,6 +355,7 @@ const NewRequestView: React.FC<NewRequestViewProps> = ({ collection, itemUid }) 
               requestMethod: request.method,
               collectionUid: collection.uid,
               itemUid: itemUid || null,
+              itemPath: itemPath || null,
               headers: request.headers,
               body: request.body,
               auth: request.auth,
@@ -367,7 +369,8 @@ const NewRequestView: React.FC<NewRequestViewProps> = ({ collection, itemUid }) 
               filename: filename,
               requestUrl: values.requestUrl,
               collectionUid: collection.uid,
-              itemUid: itemUid || null
+              itemUid: itemUid || null,
+              itemPath: itemPath || null
             }) as any
           );
         } else if (values.requestType === 'ws-request') {
@@ -378,7 +381,8 @@ const NewRequestView: React.FC<NewRequestViewProps> = ({ collection, itemUid }) 
               requestUrl: values.requestUrl,
               requestMethod: values.requestMethod,
               collectionUid: collection.uid,
-              itemUid: itemUid || null
+              itemUid: itemUid || null,
+              itemPath: itemPath || null
             }) as any
           );
         } else {
@@ -390,7 +394,8 @@ const NewRequestView: React.FC<NewRequestViewProps> = ({ collection, itemUid }) 
               requestUrl: values.requestUrl,
               requestMethod: values.requestMethod,
               collectionUid: collection.uid,
-              itemUid: itemUid || null
+              itemUid: itemUid || null,
+              itemPath: itemPath || null
             }) as any
           );
         }
