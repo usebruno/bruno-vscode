@@ -665,7 +665,7 @@ const transformRequestToSaveToFilesystem = (item: Item): Record<string, unknown>
     uid: _item.uid,
     type: _item.type,
     name: _item.name,
-    seq: (item as Item).seq,
+    seq: (item as Item).seq ?? 1,
     settings: (item as Item).settings,
     tags: Array.isArray(item.tags) && item.tags.filter(Boolean).length > 0 ? item.tags.filter(Boolean) : undefined,
     examples: (item as Item).examples || [],

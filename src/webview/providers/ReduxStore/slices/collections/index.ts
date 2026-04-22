@@ -203,6 +203,12 @@ const ensureCollectionRootDraft = (collection: AppCollection) => {
   return collection.draft;
 };
 
+const getItemSeq = (data: any, fallback?: number): number => {
+  const seq = data?.seq ?? (data as any)?.meta?.seq;
+  const num = typeof seq === 'number' ? seq : Number(seq);
+  return Number.isFinite(num) && num >= 1 ? num : (fallback ?? 1);
+};
+
 const ensureFolderRootDraft = (item: AppItem) => {
   if (!item.draft) {
     item.draft = {
@@ -1635,7 +1641,7 @@ export const collectionsSlice = createSlice({
           const existingResponse = currentItem.response;
           currentItem.name = data?.name;
           currentItem.type = data?.type;
-          currentItem.seq = data?.seq;
+          currentItem.seq = getItemSeq(data, currentItem.seq);
           currentItem.tags = (data as any)?.tags;
           currentItem.request = data?.request;
           currentItem.filename = meta.name;
@@ -1654,7 +1660,7 @@ export const collectionsSlice = createSlice({
             uid: data?.uid as UID,
             name: data?.name,
             type: data?.type,
-            seq: data?.seq,
+            seq: getItemSeq(data),
             tags: (data as any)?.tags,
             request: data?.request,
             settings: data?.settings,
@@ -1763,7 +1769,7 @@ export const collectionsSlice = createSlice({
             const existingResponse = currentItem.response;
             currentItem.name = data?.name;
             currentItem.type = data?.type;
-            currentItem.seq = data?.seq;
+            currentItem.seq = getItemSeq(data, currentItem.seq);
             currentItem.tags = (data as any)?.tags;
             currentItem.request = data?.request;
             currentItem.filename = meta.name;
@@ -1781,7 +1787,7 @@ export const collectionsSlice = createSlice({
               uid: data?.uid as UID,
               name: data?.name,
               type: data?.type,
-              seq: data?.seq,
+              seq: getItemSeq(data),
               tags: (data as any)?.tags,
               request: data?.request,
               settings: data?.settings,
@@ -1849,7 +1855,7 @@ export const collectionsSlice = createSlice({
 
           existingItem.name = data?.name;
           existingItem.type = data?.type;
-          existingItem.seq = data?.seq;
+          existingItem.seq = getItemSeq(data, existingItem.seq);
           existingItem.tags = (data as any)?.tags;
           existingItem.request = data?.request;
           existingItem.settings = data?.settings;

@@ -671,7 +671,7 @@ export const transformRequestToSaveToFilesystem = (item: any) => {
     uid: _item.uid,
     type: _item.type,
     name: _item.name,
-    seq: _item.seq,
+    seq: _item.seq ?? item.seq ?? 1,
     settings: _item.settings,
     tags: _item.tags,
     examples: _item.examples || [],
