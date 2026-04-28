@@ -2,7 +2,7 @@
   "name": "bruno",
   "displayName": "Bruno",
   "description": "API client for exploring and testing APIs in VS Code",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "publisher": "bruno-api-client",
   "license": "MIT",
   "icon": "media/bruno-icon.png",

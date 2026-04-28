@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.0.1]
+
+### Fixed
+- Folder variables were not being saved properly
+- Saved requests were not appearing in the sidebar
+
 ## [5.0.0]
 
 ### Added

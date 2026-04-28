@@ -2,7 +2,7 @@
 
 With Bruno VS Code extension, you can develop and test your APIs in Bruno right from Visual Studio Code. You can use the VS Code extension to open bruno files, send API requests, manage collections and environments, and much more. Streamline your development workflow by testing your APIs in the same application you use to develop them.
 
-![Bruno Editor](https://raw.githubusercontent.com/usebruno/bruno/refs/heads/main/assets/images/vscode-demo.png)
+![Bruno Editor](https://raw.githubusercontent.com/usebruno/bruno-vscode/refs/heads/main/media/vscode-demo.png)
 
 ## Why Bruno?
 
@@ -41,14 +41,10 @@ The extension provides a comprehensive set of features for API development and t
 3. Use **Create Collection** or **Open Collection** to get started
 4. Right-click folders and requests in the sidebar for context menu actions
 
-## Bru Language
-
-Bruno uses a plain text markup language called **Bru** to save API request information. Files use the `.bru` extension and are human-readable, making them perfect for version control.
-
 ## Related Projects
 
 - **[Bruno Desktop](https://github.com/usebruno/bruno)** - The main Bruno desktop application
-- **[Bruno CLI](https://docs.usebruno.com/cli/overview)** - Command-line interface for Bruno collections
+- **[Bruno CLI](https://docs.usebruno.com/bru-cli/overview)** - Command-line interface for Bruno collections
 - **[Bruno Website](https://www.usebruno.com/)** - Official Bruno website and documentation
 
 ## Community & Support
