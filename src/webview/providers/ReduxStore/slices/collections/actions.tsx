@@ -180,7 +180,7 @@ import {
 } from './index';
 
 import { each } from 'lodash';
-import { closeAllCollectionTabs, updateResponsePaneScrollPosition } from 'providers/ReduxStore/slices/tabs';
+import { closeAllCollectionTabs, closeTabs, updateResponsePaneScrollPosition } from 'providers/ReduxStore/slices/tabs';
 import { removeCollectionFromWorkspace, addCollectionToWorkspace } from 'providers/ReduxStore/slices/workspaces';
 import { resolveRequestFilename } from 'utils/common/platform';
 import { interpolateUrl, parsePathParams, splitOnFirst } from 'utils/url/index';
@@ -1268,6 +1268,10 @@ export const handleCollectionItemDrop
       const draggedItemDirectory = findParentItemInCollection(sourceCollection, draggedItemUid) || sourceCollection;
       const draggedItemDirectoryItems = draggedItemDirectory.items?.map(safeCloneItem) || [];
 
+      const sourceFormat = (sourceCollection?.format as 'bru' | 'yml') || 'bru';
+      const targetFormat = (collection?.format as 'bru' | 'yml') || 'bru';
+      const isCrossFormatMove = Boolean(isCrossCollectionMove) && sourceFormat !== targetFormat;
+
       interface MoveToNewLocationParams {
         draggedItem: DraggedItem;
         draggedItemDirectoryItems: AppItem[];
@@ -1289,10 +1293,25 @@ export const handleCollectionItemDrop
         const { pathname: draggedItemPathname, uid: draggedItemUid } = draggedItem;
 
         const newDirname = path.dirname(newPathname);
-        await dispatch(moveItem({
-          targetDirname: newDirname,
-          sourcePathname: draggedItemPathname
-        }));
+
+        if (isCrossFormatMove && isItemARequest(draggedItem as unknown as AppItem)) {
+          /* Cross-format single-request move: the destination collection uses a different serializer
+          (.bru <-> .yml), so we cannot copy the file as-is. The IPC handler re-serializes and returns the
+          new pathname (with the swapped extension) which we use for the subsequent sequence updates.*/
+          const { ipcRenderer } = window;
+          const result = await ipcRenderer.invoke('renderer:move-item-cross-format', {
+            targetDirname: newDirname,
+            sourcePathname: draggedItemPathname,
+            sourceFormat,
+            targetFormat
+          }) as { newPathname: string };
+          newPathname = result.newPathname;
+        } else {
+          await dispatch(moveItem({
+            targetDirname: newDirname,
+            sourcePathname: draggedItemPathname
+          }));
+        }
 
         if (draggedItemDirectoryItems?.length) {
           // reorder items in the source directory
@@ -1362,8 +1381,14 @@ export const handleCollectionItemDrop
             dropType,
             collectionPathname: collection.pathname
           });
-          if (!newPathname) return;
-          if (targetItemPathname?.startsWith(draggedItemPathname)) return;
+          if (!newPathname) return resolve();
+          if (targetItemPathname?.startsWith(draggedItemPathname)) return resolve();
+
+          if (isCrossFormatMove && isItemAFolder(draggedItem as unknown as AppItem)) {
+            toast.error('Moving folders between collections with different formats is not supported');
+            return resolve();
+          }
+
           if (newPathname !== draggedItemPathname) {
             await handleMoveToNewLocation({
               targetItem,
@@ -1376,6 +1401,11 @@ export const handleCollectionItemDrop
           } else {
             await handleReorderInSameLocation({ draggedItem, targetItemDirectoryItems, targetItem });
           }
+
+          if (isCrossCollectionMove) {
+            dispatch(closeTabs({ tabUids: [draggedItemUid] }));
+          }
+
           resolve();
         } catch (error: unknown) {
           console.error(error);

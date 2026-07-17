@@ -801,6 +801,53 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
+  /* Cross-format drag & drop for a single request (e.g. dropping a .bru request into a .yml collection).
+  A same-format move can just copy the file; a cross-format move must re-serialize the content and swap the
+  filename extension, otherwise the destination collection can't parse the file and the sidebar breaks. */
+  registerHandler('renderer:move-item-cross-format', async (args) => {
+    const [{ targetDirname, sourcePathname, sourceFormat, targetFormat }] = args as [{
+      targetDirname: string;
+      sourcePathname: string;
+      sourceFormat: 'bru' | 'yml';
+      targetFormat: 'bru' | 'yml';
+    }];
+
+    try {
+      if (!fs.existsSync(sourcePathname)) {
+        throw new Error(`source: ${sourcePathname} does not exist`);
+      }
+      if (!fs.existsSync(targetDirname)) {
+        throw new Error(`target directory: ${targetDirname} does not exist`);
+      }
+
+      validatePathIsInsideCollection(sourcePathname);
+      validatePathIsInsideCollection(targetDirname);
+
+      const sourceBasename = path.basename(sourcePathname);
+      const filenameWithoutExt = sourceBasename.replace(/\.(bru|yml|yaml)$/, '');
+      const targetExt = targetFormat === 'yml' ? 'yml' : 'bru';
+      const targetFilename = `${filenameWithoutExt}.${targetExt}`;
+      const targetPathname = path.join(targetDirname, targetFilename);
+
+      if (fs.existsSync(targetPathname)) {
+        throw new Error(`A file with the name "${targetFilename}" already exists in the target location`);
+      }
+
+      const sourceContent = await fs.promises.readFile(sourcePathname, 'utf8');
+      const parsedRequest = await parseRequest(sourceContent, { format: sourceFormat });
+      const finalContent = await stringifyRequest(parsedRequest, { format: targetFormat });
+
+      await writeFile(targetPathname, finalContent);
+      await removePath(sourcePathname);
+
+      moveRequestUid(sourcePathname, targetPathname);
+
+      return { newPathname: targetPathname };
+    } catch (error) {
+      throw error;
+    }
+  });
+
   registerHandler('renderer:clone-folder', async (args) => {
     const [itemFolder, collectionPath, collectionPathname] = args as [any, string, string];
 
