@@ -81,24 +81,9 @@ const StatusBar = () => {
               </button>
             </ToolHint>
 
-            <ToolHint text="Notifications" toolhintId="Notifications" place="top" offset={10}>
-              <div className="status-bar-button">
-                <Notifications />
-              </div>
-            </ToolHint>
-
-            <ToolHint text="GitHub Repository" toolhintId="GitHub" place="top" offset={10}>
-              <button
-                className="status-bar-button"
-                onClick={() => {
-                  window?.ipcRenderer?.openExternal('https://github.com/usebruno/bruno');
-                }}
-                tabIndex={0}
-                aria-label="Open GitHub Repository"
-              >
-                <IconBrandGithub size={16} strokeWidth={1.5} aria-hidden="true" />
-              </button>
-            </ToolHint>
+            {/* Notifications — not needed in VS Code (use native notifications) */}
+            {/* Search — VS Code has built-in Cmd+Shift+F */}
+            {/* Dev Tools — VS Code has built-in Developer Tools */}
           </div>
         </div>
 
@@ -106,20 +91,8 @@ const StatusBar = () => {
           <div className="flex items-center gap-3">
             <button
               className="status-bar-button"
-              data-trigger="search"
-              onClick={openGlobalSearch}
-              tabIndex={0}
-              aria-label="Global Search"
-            >
-              <div className="console-button-content">
-                <IconSearch size={16} strokeWidth={1.5} aria-hidden="true" />
-                <span className="console-label">Search</span>
-              </div>
-            </button>
-
-            <button
-              className="status-bar-button"
               data-trigger="cookies"
+              data-testid="statusbar-cookies-btn"
               onClick={() => setCookiesOpen(true)}
               tabIndex={0}
               aria-label="Open Cookies"
@@ -127,22 +100,6 @@ const StatusBar = () => {
               <div className="console-button-content">
                 <IconCookie size={16} strokeWidth={1.5} aria-hidden="true" />
                 <span className="console-label">Cookies</span>
-              </div>
-            </button>
-
-            <button
-              className={`status-bar-button ${errorCount > 0 ? 'has-errors' : ''}`}
-              data-trigger="dev-tools"
-              onClick={handleConsoleClick}
-              tabIndex={0}
-              aria-label={`Open Dev Tools${errorCount > 0 ? ` (${errorCount} errors)` : ''}`}
-            >
-              <div className="console-button-content">
-                <IconTool size={16} strokeWidth={1.5} aria-hidden="true" />
-                <span className="console-label">Dev Tools</span>
-                {errorCount > 0 && (
-                  <span className="error-count-inline">{errorCount}</span>
-                )}
               </div>
             </button>
 

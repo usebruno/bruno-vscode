@@ -20,6 +20,7 @@
 import express from 'express';
 import cors from 'cors';
 import { oauth2Router } from './auth/oauth2';
+import { cookieRouter } from './auth/cookie';
 
 const app = express();
 const port = process.env.PORT || 8081;
@@ -45,6 +46,7 @@ app.post('/api/echo/json', (req, res) => {
 // --- Auth ---
 
 app.use('/api/auth/oauth2', oauth2Router);
+app.use('/api/auth/cookie', cookieRouter);
 
 // --- Start ---
 

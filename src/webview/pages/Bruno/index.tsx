@@ -8,6 +8,7 @@ import useGrpcEventListeners from 'utils/network/grpc-event-listeners';
 import useWsEventListeners from 'utils/network/ws-event-listeners';
 
 import { ViewContainer, ViewData } from 'views';
+import StatusBar from 'components/StatusBar';
 
 import { addTab } from 'providers/ReduxStore/slices/tabs';
 import {
@@ -177,7 +178,6 @@ export default function Main(): React.ReactElement {
         ref={mainSectionRef}
         className="flex-1 min-h-0 flex"
         data-app-state="loading"
-        style={{ height: '100vh' }}
       >
         <StyledWrapper style={{ height: '100%', width: '100%', zIndex: 1 }}>
           <section className="flex flex-grow flex-col overflow-hidden w-full">
@@ -187,6 +187,7 @@ export default function Main(): React.ReactElement {
           </section>
         </StyledWrapper>
       </div>
+      <StatusBar />
     </div>
   );
 }

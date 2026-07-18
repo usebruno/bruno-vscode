@@ -40,7 +40,7 @@ const ClearDomainCookiesModal = ({
         </Button>
       </div>
       <div>
-        <Button color="danger" onClick={onClear}>
+        <Button color="danger" onClick={onClear} data-testid="cookies-confirm-clear-all">
           Clear All
         </Button>
       </div>
@@ -69,7 +69,7 @@ const DeleteCookieModal = ({
         </Button>
       </div>
       <div>
-        <Button color="danger" onClick={onDelete}>
+        <Button color="danger" onClick={onDelete} data-testid="cookies-confirm-delete">
           Delete
         </Button>
       </div>
@@ -145,7 +145,7 @@ const CollectionProperties = ({
 
   return <>
     <Modal
-      size="xl"
+      size="md"
       title="Cookies"
       hideFooter={true}
       handleCancel={onClose}
@@ -158,6 +158,7 @@ const CollectionProperties = ({
             value={searchText || ''}
             onChange={(e) => setSearchText(e.target.value)}
             className="block textbox non-passphrase-input ml-auto font-normal"
+            data-testid="cookies-search-input"
             autoFocus
           />
           <Button
@@ -165,6 +166,7 @@ const CollectionProperties = ({
             size="sm"
             className="mx-4"
             icon={<IconCirclePlus strokeWidth={1.5} size={16} />}
+            data-testid="cookies-add-btn"
             onClick={(e: any) => {
               e.stopPropagation();
               handleAddCookie();
@@ -177,7 +179,7 @@ const CollectionProperties = ({
     >
       <StyledWrapper>
         {!cookies || !cookies.length ? (
-          <div className="flex items-center justify-center flex-col">
+          <div className="flex items-center justify-center flex-col" data-testid="cookies-empty-state">
             <IconCookieOff size={48} strokeWidth={1.5} className="empty-icon" />
             <h2 className="text-lg font-medium mt-4">No cookies found</h2>
             <p className="empty-text mt-2">Add cookies to get started</p>
@@ -186,6 +188,7 @@ const CollectionProperties = ({
               size="sm"
               className="mt-8"
               icon={<IconCirclePlus strokeWidth={1.5} size={16} />}
+              data-testid="cookies-empty-add-btn"
               onClick={(e: any) => {
                 e.stopPropagation();
                 handleAddCookie();
@@ -206,7 +209,7 @@ const CollectionProperties = ({
               {filteredCookies.map((domainWithCookies: any, i: any) => (
                 <Accordion.Item key={i} index={i}>
                   <Accordion.Header index={i} className="flex items-center">
-                    <div className="flex items-center">
+                    <div className="flex items-center" data-testid={`cookies-domain-${domainWithCookies.domain}`}>
                       <span>{domainWithCookies.domain}</span>
                       <span className="domain-count ml-2 text-xs">
                         ({domainWithCookies.cookies.length}{' '}
@@ -229,6 +232,7 @@ const CollectionProperties = ({
                             handleClearDomainCookies(domainWithCookies.domain);
                           }}
                           className="action-button-danger mr-2"
+                          data-testid={`cookies-clear-domain-${domainWithCookies.domain}`}
                         >
                           <IconTrash strokeWidth={1.5} size={16} />
                         </button>
@@ -250,7 +254,7 @@ const CollectionProperties = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {domainWithCookies.cookies.map((cookie: any) => <tr key={cookie.key}>
+                          {domainWithCookies.cookies.map((cookie: any) => <tr key={cookie.key} data-testid={`cookies-row-${cookie.key}`}>
                             <td className="py-2 px-4 truncate">
                               <span id={`cookie-key-${cookie.key}`}>{cookie.key}</span>
                               <Tooltip
@@ -292,6 +296,7 @@ const CollectionProperties = ({
                                     handleEditCookie(domainWithCookies.domain, cookie);
                                   }}
                                   className="edit-button"
+                                  data-testid={`cookies-edit-${cookie.key}`}
                                 >
                                   <IconEdit strokeWidth={1.5} size={16} />
                                 </button>
@@ -301,6 +306,7 @@ const CollectionProperties = ({
                                     handleDeleteCookie(domainWithCookies.domain, cookie.path, cookie.key);
                                   }}
                                   className="delete-button"
+                                  data-testid={`cookies-delete-${cookie.key}`}
                                 >
                                   <IconTrash strokeWidth={1.5} size={16} />
                                 </button>
