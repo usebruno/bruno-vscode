@@ -284,6 +284,11 @@ const GlobalStyle = createGlobalStyle`
 
   // Autocomplete hints dropdown container
   .CodeMirror-hints {
+    position: absolute;
+    overflow-y: auto;
+    max-height: 20em;
+    margin: 0;
+    list-style: none;
     z-index: 50 !important;
     background: ${(props) => props.theme.dropdown.bg};
     ${(props) =>
@@ -306,6 +311,9 @@ const GlobalStyle = createGlobalStyle`
     line-height: 1.5rem;
     font-size: ${(props) => props.theme.font.size.sm};
     cursor: pointer;
+    margin: 0;
+    padding: 0 0.5rem;
+    white-space: nowrap;
   }
 
   .CodeMirror-brunoVarInfo :first-child {
