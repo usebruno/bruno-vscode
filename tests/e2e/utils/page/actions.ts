@@ -278,6 +278,50 @@ export async function openNewRequestPanel(
 }
 
 /**
+ * Create a transient request from the collection row's "+" menu
+ * and return its panel Frame.
+ */
+export async function openTransientRequest(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string,
+  type: 'HTTP' | 'GraphQL' | 'gRPC' | 'WebSocket' = 'HTTP'
+): Promise<Frame> {
+  const menuItemId = { HTTP: 'new-http', GraphQL: 'new-graphql', gRPC: 'new-grpc', WebSocket: 'new-ws' }[type];
+  const marker = type === 'WebSocket'
+    ? '[data-testid="ws-connect-button"]'
+    : type === 'gRPC'
+      ? '[data-testid="grpc-query-url-container"]'
+      : '#request-url';
+
+  // The "+" only renders on hover; MenuDropdown puts its own testid on the trigger.
+  const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
+  await collectionRow.hover();
+  await sidebar.getByTestId('collection-new-request').click();
+  await sidebar.getByTestId(`collection-new-request-${menuItemId}`).click();
+
+  return waitForFrameWithMarker(page, sidebar, marker);
+}
+
+/**
+ * Pick an environment from the collection toolbar's environment selector.
+ */
+export async function selectEnvironment(frame: Frame, name: string | null): Promise<void> {
+  const env = buildCommonLocators(frame).environments;
+  await env.selectorTrigger().click();
+
+  const option = name ? env.dropdownItem(name) : env.noEnvironmentOption();
+  await expect(option).toBeVisible();
+  await option.click();
+
+  if (name) {
+    await expect(env.activeName()).toHaveText(name);
+  } else {
+    await expect(env.inactiveLabel()).toBeVisible();
+  }
+}
+
+/**
  * Fill the new request form and submit it.
  *
  * @param page - Playwright Page
@@ -700,8 +744,17 @@ async function openRequestByMarker(
   // Click the request to open it in the editor
   await requestRow.click();
 
-  // Wait for the request editor frame — identified by the marker selector.
-  const editor = await getWebviewFrame(page, (frame) => frame.locator(markerSelector), sidebar);
+  return waitForFrameWithMarker(page, sidebar, markerSelector);
+}
+
+// Wait for the request editor frame — identified by the marker selector.
+async function waitForFrameWithMarker(
+  page: Page,
+  excludeFrame: Frame,
+  markerSelector: string,
+  timeout = 20_000
+): Promise<Frame> {
+  const editor = await getWebviewFrame(page, (frame) => frame.locator(markerSelector), excludeFrame, timeout);
   await expect(editor.locator(markerSelector)).toBeVisible({ timeout: 10_000 });
 
   return editor;
@@ -722,13 +775,6 @@ export async function openCollectionSettings(
   await expect(buildCommonLocators(settings).collectionSettings.container()).toBeVisible({ timeout: 10_000 });
 
   return settings;
-}
-
-export async function selectEnvironment(frame: Frame, environmentName: string): Promise<void> {
-  const environments = buildCommonLocators(frame).environments;
-  await environments.selectorTrigger().click();
-  await environments.dropdownItem(environmentName).click();
-  await expect(environments.selectorTrigger()).toHaveText(new RegExp(environmentName));
 }
 
 export async function openEnvironmentsTab(page: Page, from: Frame): Promise<Frame> {

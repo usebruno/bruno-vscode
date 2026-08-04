@@ -1571,6 +1571,9 @@ class CollectionWatcher {
         await this.handleFileAddWithSender(filePath, collectionUid, collectionPath, sender);
       }
 
+      // Load the environments
+      await this.loadEnvironments(collectionPath, collectionUid, sender);
+
       // If no .env file, still send process.env variables
       if (!hasDotEnv && sender) {
         sender('main:process-env-update', {
