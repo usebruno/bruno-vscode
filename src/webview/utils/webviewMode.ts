@@ -14,6 +14,12 @@ export const openRequestInVSCodeEditor = (requestPath: string): void => {
   }
 };
 
+export const openAppInVSCodeEditor = (appPath: string): void => {
+  if (isSidebarMode() && window.ipcRenderer) {
+    window.ipcRenderer.send('sidebar:open-app', appPath);
+  }
+};
+
 export const openFolderInVSCodeRunner = (folderPath: string): void => {
   if (isSidebarMode() && window.ipcRenderer) {
     window.ipcRenderer.send('sidebar:open-folder', folderPath);

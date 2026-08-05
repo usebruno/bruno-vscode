@@ -858,6 +858,11 @@ export const isItemAFolder = (item: AppItem): boolean => {
   return !('request' in item) && item.type === 'folder';
 };
 
+export const isItemAnApp = (item: AppItem): boolean => {
+  if (!item) return false;
+  return item.type === 'app';
+};
+
 export const humanizeRequestBodyMode = (mode: string | null | undefined): string => {
   let label = 'No Body';
   switch (mode) {

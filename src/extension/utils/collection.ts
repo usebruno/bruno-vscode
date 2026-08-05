@@ -476,6 +476,7 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
       });
 
       let requestType = metaJson.type as string;
+      const isApp = requestType === 'app';
       if (requestType === 'http') {
         requestType = 'http-request';
       } else if (requestType === 'graphql') {
@@ -484,8 +485,23 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
         requestType = 'grpc-request';
       } else if (requestType === 'ws' || requestType === 'websocket') {
         requestType = 'ws-request';
+      } else if (isApp) {
+        requestType = 'app';
       } else {
         requestType = 'http-request';
+      }
+
+      const sequence = metaJson.seq as number;
+      if (isApp) {
+        return {
+          type: 'app',
+          name: metaJson.name,
+          seq: !isNaN(sequence) ? Number(sequence) : 1,
+          settings: {},
+          tags: Array.isArray(metaJson.tags) ? metaJson.tags : [],
+          request: null,
+          app: { code: '' }
+        };
       }
 
       // Extract HTTP method via regex so the sidebar can render the method
@@ -496,7 +512,6 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
         method = methodMatch[1].toLowerCase();
       }
 
-      const sequence = metaJson.seq as number;
       return {
         type: requestType,
         name: metaJson.name,
@@ -544,11 +559,26 @@ const parseYmlFileMeta = (data: string): Record<string, unknown> | null => {
     });
 
     let requestType = infoJson.type;
+    const isApp = requestType === 'app';
     if (requestType === 'http') requestType = 'http-request';
     else if (requestType === 'graphql') requestType = 'graphql-request';
     else if (requestType === 'grpc') requestType = 'grpc-request';
     else if (requestType === 'ws' || requestType === 'websocket') requestType = 'ws-request';
+    else if (isApp) requestType = 'app';
     else requestType = 'http-request';
+
+    const seq = Number(infoJson.seq);
+    if (isApp) {
+      return {
+        type: 'app',
+        name: infoJson.name,
+        seq: !isNaN(seq) ? seq : 1,
+        settings: {},
+        tags: [],
+        request: null,
+        app: { code: '' }
+      };
+    }
 
     // Find the first top-level method block (http:, graphql:, ...) and
     // pull its `method:` field if present.
@@ -564,7 +594,6 @@ const parseYmlFileMeta = (data: string): Record<string, unknown> | null => {
       }
     }
 
-    const seq = Number(infoJson.seq);
     return {
       type: requestType,
       name: infoJson.name,

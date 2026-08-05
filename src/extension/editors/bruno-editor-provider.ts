@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { WebviewHelper } from '../webview/helper';
 import { stateManager } from '../webview/state-manager';
 import { findCollectionRoot } from '../utils/path';
@@ -21,6 +22,8 @@ import {
   isFolderRootFile
 } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
+import { parseFileMeta } from '../utils/collection';
+import { getCollectionFormat } from '../utils/filesystem';
 import { defaultWorkspaceManager } from '../store/default-workspace';
 import { registerDocument, unregisterDocument } from './dirty-state-manager';
 import { notifyActiveItemToSidebar, clearActiveItemFromSidebar } from '../ipc/collection';
@@ -174,6 +177,20 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
         const isCollectionFile = fileName === 'collection.bru' || fileName === 'opencollection.yml';
         const isFolderFile = fileName === 'folder.bru' || fileName === 'folder.yml';
 
+        let isAppFile = false;
+        if (!isCollectionFile && !isFolderFile && !isVariablesMode) {
+          try {
+            const format = getCollectionFormat(collectionRoot);
+            const fileContent = await fs.promises.readFile(filePath, 'utf8');
+            const meta = parseFileMeta(fileContent, format);
+            if (meta && meta.type === 'app') {
+              isAppFile = true;
+            }
+          } catch (err) {
+            // If we can't read/parse, fall through to the default request view.
+          }
+        }
+
         let viewData: {
           viewType: string;
           collectionUid: string;
@@ -201,6 +218,13 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
             collectionUid,
             collectionPath: collectionRoot,
             folderUid: generateUidBasedOnHash(folderPath)
+          };
+        } else if (isAppFile) {
+          viewData = {
+            viewType: 'app-unsupported',
+            collectionUid,
+            collectionPath: collectionRoot,
+            itemUid: generateUidBasedOnHash(filePath)
           };
         } else {
           viewData = {

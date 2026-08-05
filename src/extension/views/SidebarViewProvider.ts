@@ -266,6 +266,16 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
         }
         break;
 
+      case 'sidebar:open-app':
+        if (typeof args[0] === 'string') {
+          await vscode.commands.executeCommand(
+            'vscode.openWith',
+            vscode.Uri.file(args[0]),
+            'bruno.requestEditor'
+          );
+        }
+        break;
+
       case 'sidebar:open-folder':
         if (typeof args[0] === 'string') {
           await vscode.commands.executeCommand(

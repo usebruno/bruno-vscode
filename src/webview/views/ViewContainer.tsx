@@ -40,6 +40,7 @@ import RequestNotFound from 'components/RequestTabPanel/RequestNotFound';
 import RequestNotLoaded from 'components/RequestTabPanel/RequestNotLoaded';
 import RequestIsLoading from 'components/RequestTabPanel/RequestIsLoading';
 import FolderNotFound from 'components/RequestTabPanel/FolderNotFound';
+import AppUnsupported from 'components/RequestTabPanel/AppUnsupported';
 
 import { findItemInCollection, findCollectionByUid } from 'utils/collections';
 import { getGlobalEnvironmentVariables, getGlobalEnvironmentVariablesMasked } from 'utils/collections/index';
@@ -251,6 +252,10 @@ const ViewContainer: React.FC<ViewContainerProps> = ({ viewData }) => {
 
   if (viewType === 'empty') {
     return <EmptyView />;
+  }
+
+  if (viewType === 'app-unsupported') {
+    return <AppUnsupported />;
   }
 
   if (viewType === 'global-environments') {

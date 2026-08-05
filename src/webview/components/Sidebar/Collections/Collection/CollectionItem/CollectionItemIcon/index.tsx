@@ -1,6 +1,6 @@
 import React from 'react';
 import RequestMethod from '../RequestMethod';
-import { IconLoader2, IconAlertTriangle, IconAlertCircle } from '@tabler/icons';
+import { IconLoader2, IconAlertTriangle, IconAlertCircle, IconAppWindow } from '@tabler/icons';
 import StyledWrapper from './StyledWrapper';
 
 interface CollectionItemIconProps {
@@ -17,6 +17,10 @@ const CollectionItemIcon = ({
 
   if (item?.loading) {
     return <IconLoader2 className="animate-spin w-fit mr-2" size={18} strokeWidth={1.5} />;
+  }
+
+  if (item?.type === 'app') {
+    return <IconAppWindow className="w-fit mr-2" size={16} strokeWidth={1.5} />;
   }
 
   // When we have a request type (from the lightweight meta parse), render

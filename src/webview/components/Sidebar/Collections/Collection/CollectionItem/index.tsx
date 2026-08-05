@@ -31,7 +31,7 @@ import {
 } from 'providers/ReduxStore/slices/collections/actions';
 import { toggleCollectionItem } from 'providers/ReduxStore/slices/collections';
 import { copyRequest } from 'providers/ReduxStore/slices/app';
-import { isItemARequest, isItemAFolder } from 'utils/tabs';
+import { isItemARequest, isItemAFolder, isItemAnApp } from 'utils/tabs';
 import { doesRequestMatchSearchText, doesFolderHaveItemsMatchSearchText } from 'utils/collections/search';
 import { getDefaultRequestPaneTab } from 'utils/collections';
 import toast from 'react-hot-toast';
@@ -48,7 +48,7 @@ import ActionIcon from 'ui/ActionIcon';
 import MenuDropdown from 'ui/MenuDropdown';
 import { useSidebarAccordion } from 'components/Sidebar/SidebarAccordionContext';
 import useSearchCollapse from 'hooks/useSearchCollapse';
-import { isSidebarMode, openRequestInVSCodeEditor } from 'utils/webviewMode';
+import { isSidebarMode, openRequestInVSCodeEditor, openAppInVSCodeEditor } from 'utils/webviewMode';
 import { ipcRenderer } from 'utils/ipc';
 
 interface CollectionItemProps {
@@ -208,13 +208,19 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     if (event && event.detail !== 1) return;
     setTimeout(scrollToTheActiveTab, 50);
     const isRequest = isItemARequest(item);
+    const isApp = isItemAnApp(item);
 
     if (isSidebarMode() && isRequest) {
       openRequestInVSCodeEditor(item.pathname);
       return;
     }
 
-    if (isRequest) {
+    if (isSidebarMode() && isApp) {
+      openAppInVSCodeEditor(item.pathname);
+      return;
+    }
+
+    if (isRequest || isApp) {
       if (isTabForItemPresent) {
         dispatch(focusTab({ uid: item.uid }));
         return;
@@ -223,8 +229,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         addTab({
           uid: item.uid,
           collectionUid: collectionUid,
-          requestPaneTab: getDefaultRequestPaneTab(item),
-          type: 'request'
+          ...(isRequest ? { requestPaneTab: getDefaultRequestPaneTab(item) } : {}),
+          type: isApp ? 'app' : 'request'
         })
       );
     } else {
@@ -543,17 +549,18 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     'is-sidebar-dragging': isSidebarDragging
   });
 
-  const { folderItems, requestItems } = useMemo(() => {
+  const { folderItems, appItems, requestItems } = useMemo(() => {
     const children = item.items || [];
     const folders = sortByNameThenSequence(filter(children, (i: any) => isItemAFolder(i)));
+    const apps = filter(children, (i: any) => isItemAnApp(i)).sort((a: any, b: any) => a.seq - b.seq);
     const requests = filter(children, (i: any) => isItemARequest(i)).sort((a: any, b: any) => a.seq - b.seq);
-    return { folderItems: folders, requestItems: requests };
+    return { folderItems: folders, appItems: apps, requestItems: requests };
   }, [item.items]);
   const indents = useMemo(() => range(item.depth), [item.depth]);
-  const showEmptyFolderMessage = isFolder && !hasSearchText && !folderItems?.length && !requestItems?.length;
+  const showEmptyFolderMessage = isFolder && !hasSearchText && !folderItems?.length && !appItems?.length && !requestItems?.length;
 
   if (searchText && searchText.length) {
-    if (isItemARequest(item)) {
+    if (isItemARequest(item) || isItemAnApp(item)) {
       if (!doesRequestMatchSearchText(item, searchText)) {
         return null;
       }
@@ -640,6 +647,11 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         <div>
           {folderItems && folderItems.length
             ? folderItems.map((i: any) => {
+                return <CollectionItem key={i.uid} item={i} collectionUid={collectionUid} collectionPathname={collectionPathname} searchText={searchText} />;
+              })
+            : null}
+          {appItems && appItems.length
+            ? appItems.map((i: any) => {
                 return <CollectionItem key={i.uid} item={i} collectionUid={collectionUid} collectionPathname={collectionPathname} searchText={searchText} />;
               })
             : null}
