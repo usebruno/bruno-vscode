@@ -83,7 +83,6 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   // scoped to a row, i.e. buildCommonLocators(row).editableTable.columnValueEditor().
   editableTable: {
     rows: () => frame.getByTestId('editable-table').locator('tbody tr'),
-    firstTableRows: () => frame.getByTestId('editable-table').first().locator('tbody tr'),
     columnNameEditor: () => frame.getByTestId('column-name').locator('.CodeMirror'),
     columnNameInput: () => frame.getByTestId('column-name').locator('input'),
     columnValueEditor: () => frame.getByTestId('column-value').locator('.CodeMirror'),

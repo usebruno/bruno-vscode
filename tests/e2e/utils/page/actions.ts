@@ -4,9 +4,12 @@ import { Page, Frame, Locator, expect } from '@playwright/test';
 import { buildCommonLocators } from './locators';
 
 /**
- * Locate the collection directory (the folder containing bruno.json) created under a test's tmpDir.
+ * Locate the collection directory created under a test's tmpDir.
  */
-export function findCollectionDir(root: string): string {
+export function findCollectionDir(
+  root: string,
+  configFile: 'bruno.json' | 'opencollection.yml' = 'bruno.json'
+): string {
   const stack = [root];
   while (stack.length) {
     const dir = stack.pop() as string;
@@ -16,12 +19,12 @@ export function findCollectionDir(root: string): string {
     } catch {
       continue;
     }
-    if (entries.some((e) => e.isFile() && e.name === 'bruno.json')) return dir;
+    if (entries.some((e) => e.isFile() && e.name === configFile)) return dir;
     for (const e of entries) {
       if (e.isDirectory()) stack.push(path.join(dir, e.name));
     }
   }
-  throw new Error(`No collection (bruno.json) found under ${root}`);
+  throw new Error(`No collection (${configFile}) found under ${root}`);
 }
 
 /**
@@ -478,7 +481,7 @@ export async function fillJsonBody(page: Page, editor: Frame, jsonBody: string):
 }
 
 /**
- * Add a request-level variable on the Vars tab (the first of its two EditableTables).
+ * Add a request-level variable on the Vars tab's Pre Request table.
  * Name cell is a plain <input>, value cell a CodeMirror editor — used to check a
  * `{{?prompt}}` inside a variable's value is still discovered.
  */
@@ -700,6 +703,63 @@ async function openRequestByMarker(
   await expect(editor.locator(markerSelector)).toBeVisible({ timeout: 10_000 });
 
   return editor;
+}
+
+/**
+ * Open a collection's settings dashboard by clicking its name in the sidebar.
+ * Returns the collection-settings webview Frame.
+ */
+export async function openCollectionSettings(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string
+): Promise<Frame> {
+  const row = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
+
+  const timeout = 20_000;
+  const deadline = Date.now() + timeout;
+  let settings: Frame | undefined;
+
+  while (Date.now() < deadline) {
+    for (const frame of page.frames()) {
+      if (frame === sidebar || frame === page.mainFrame()) continue;
+      try {
+        const has = await buildCommonLocators(frame).collectionSettings.container().count();
+        if (has > 0) { settings = frame; break; }
+      } catch (err) {
+        console.debug('Frame detached during collection-settings lookup:', err);
+       }
+    }
+    if (settings) break;
+    await page.waitForTimeout(500);
+  }
+
+  if (!settings) throw new Error(`Collection settings frame not found within ${timeout}ms`);
+  await expect(buildCommonLocators(settings).collectionSettings.container()).toBeVisible({ timeout: 10_000 });
+
+  return settings;
+}
+
+/**
+ * Add a header row on the collection settings Headers tab
+ */
+export async function addCollectionHeader(
+  page: Page,
+  settings: Frame,
+  name: string,
+  value: string
+): Promise<void> {
+  await openRequestPaneTab(settings, 'Headers');
+
+  const rows = buildCommonLocators(settings).editableTable.rows();
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+  const emptyRowIdx = (await rows.count()) - 1;
+  const row = buildCommonLocators(rows.nth(emptyRowIdx)).editableTable;
+
+  await setCodeMirrorValue(page, row.columnNameEditor(), name);
+  await setCodeMirrorValue(page, row.columnValueEditor(), value);
 }
 
 /**

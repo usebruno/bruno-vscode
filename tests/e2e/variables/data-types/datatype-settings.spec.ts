@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Page, Frame } from '@playwright/test';
-import { test, expect } from '../utils/fixtures';
-import { openBrunoSidebar, createCollection, openRequest, createFolder, findCollectionDir } from '../utils/page/actions';
-import { buildCommonLocators } from '../utils/page/locators';
+import { test, expect } from '../../utils/fixtures';
+import { openBrunoSidebar, createCollection, openRequest, createFolder, findCollectionDir } from '../../utils/page/actions';
+import { buildCommonLocators } from '../../utils/page/locators';
 
 // Scan the webview frames for the one exposing `marker`, re-acquiring after a panel opens.
 async function frameWith(page: Page, marker: string, timeout = 15_000): Promise<Frame> {

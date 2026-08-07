@@ -228,6 +228,9 @@ interface generateUniqueNameProps {
   brunoConfig?: unknown;
 }
 
+const isYmlCollection = (collection: any): boolean =>
+  collection?.format === 'yml' || Boolean(collection?.brunoConfig?.opencollection);
+
 // generate a unique names
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const generateUniqueName = (originalName: string, existingItems: any[], isFolder: boolean): { newName: string; newFilename: string } => {
@@ -492,11 +495,22 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
 
         let savePromises = [];
 
-        savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
+        if (isYmlCollection(collectionCopy)) {
+          // opencollection.yml holds both the root and the config — write it once
+          savePromises.push(
+            ipcRenderer.invoke(
+              'renderer:save-collection-root',
+              collectionCopy.pathname,
+              collectionRootToSave,
+              collectionCopy.draft?.brunoConfig || collectionCopy.brunoConfig
+            )
+          );
+        } else {
+          savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
 
-        if (collectionCopy.draft?.brunoConfig) {
-          // Pass collectionRootToSave to preserve headers/auth/scripts for YML format
-          savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', collectionCopy.draft.brunoConfig, collectionCopy.pathname, collectionRootToSave));
+          if (collectionCopy.draft?.brunoConfig) {
+            savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', collectionCopy.draft.brunoConfig, collectionCopy.pathname, collectionRootToSave));
+          }
         }
 
         Promise.all(savePromises)
@@ -2529,14 +2543,25 @@ export const saveCollectionSettings = (collectionUid: any, brunoConfig: Record<s
 
     const savePromises = [];
 
-    savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
-
     const brunoConfigToSave = brunoConfig || (collectionCopy.draft && collectionCopy.draft.brunoConfig);
-    if (brunoConfigToSave) {
-      // Pass transformed collectionRootToSave instead of collectionCopy.root
-      // For YML format, update-bruno-config also writes to opencollection.yml,
-      // so it needs the transformed root data to avoid overwriting headers/auth/scripts
-      savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave));
+
+    if (isYmlCollection(collectionCopy)) {
+      // opencollection.yml holds both the root and the config.
+      savePromises.push(
+        ipcRenderer.invoke(
+          'renderer:save-collection-root',
+          collectionCopy.pathname,
+          collectionRootToSave,
+          brunoConfigToSave || collectionCopy.brunoConfig
+        )
+      );
+    } else {
+      // bru: collection.bru holds the root, bruno.json holds the config
+      savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
+
+      if (brunoConfigToSave) {
+        savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave));
+      }
     }
 
     Promise.all(savePromises)
