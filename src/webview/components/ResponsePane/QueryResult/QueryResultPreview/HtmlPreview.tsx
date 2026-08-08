@@ -1,25 +1,20 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { isValidHtml } from 'utils/common/index';
-import { escapeHtml, isValidHtmlSnippet } from 'utils/response/index';
+import { escapeHtml } from 'utils/response/index';
 
-interface HtmlPreviewProps {
-  data: string;
-  baseUrl: string;
-}
-
-const HtmlPreview: React.FC<HtmlPreviewProps> = React.memo(({ data, baseUrl }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+const HtmlPreview = React.memo(({ data, baseUrl }: { data: string; baseUrl: string }) => {
+  const webviewContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!webviewContainerRef.current) return;
 
     const checkDragging = () => {
-      const hasDraggingParent = containerRef.current?.closest('.dragging');
+      const hasDraggingParent = webviewContainerRef.current?.closest('.dragging');
       setIsDragging(!!hasDraggingParent);
     };
 
-    const watchTarget = containerRef.current.closest('.main-section')
+    // Watch from a common ancestor where .dragging gets added
+    const watchTarget = webviewContainerRef.current.closest('.main-section')
       || document.body;
 
     const mutationObserver = new MutationObserver(checkDragging);
@@ -29,12 +24,13 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = React.memo(({ data, baseUrl }) =
       subtree: true
     });
 
+    // Check initial state
     checkDragging();
 
     return () => mutationObserver.disconnect();
   }, []);
 
-  if (isValidHtml(data) || isValidHtmlSnippet(data)) {
+  const renderHtmlPreview = (data: string, baseUrl: string, isDragging: boolean, webviewContainerRef: React.RefObject<HTMLDivElement>) => {
     const htmlContent = data.includes('<head>')
       ? data.replace('<head>', `<head><base href="${escapeHtml(baseUrl)}">`)
       : `<head><base href="${escapeHtml(baseUrl)}"></head>${data}`;
@@ -43,19 +39,22 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = React.memo(({ data, baseUrl }) =
 
     return (
       <div
-        ref={containerRef}
-        className="h-full bg-white"
+        ref={webviewContainerRef}
+        className="h-full bg-white webview-container"
         style={dragStyles}
       >
+        {/* VS Code webviews can't use Electron's <webview> tag - an iframe
+            with srcDoc is the platform-native equivalent here, achieving
+            the same "just render whatever we're given" behavior as desktop. */}
         <iframe
           srcDoc={htmlContent}
           sandbox="allow-scripts"
-          className="h-full w-full bg-white border-none"
+          className="h-full bg-white border-none"
           style={dragStyles}
         />
       </div>
     );
-  }
+  };
 
   // For all other data types, render safely as formatted text
   let displayContent = '';
@@ -63,18 +62,12 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = React.memo(({ data, baseUrl }) =
     displayContent = String(data);
   } else if (typeof data === 'object') {
     displayContent = JSON.stringify(data, null);
-  } else if (typeof data === 'string') {
-    displayContent = data;
   } else {
     displayContent = String(data);
   }
 
   return (
-    <pre
-      className="bg-white font-mono text-[13px] whitespace-pre-wrap break-words overflow-auto overflow-x-hidden p-4 text-[#24292f] w-full max-w-full h-full box-border relative"
-    >
-      {displayContent}
-    </pre>
+    <>{renderHtmlPreview(displayContent, baseUrl, isDragging, webviewContainerRef)}</>
   );
 });
 
