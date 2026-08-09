@@ -78,7 +78,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   body: {
     modeSelector: () => frame.locator('.body-mode-selector'),
     modeOption: (name: string) => frame.getByText(name, { exact: true }),
-    editor: () => frame.locator('.CodeMirror-wrap')
+    editor: () => frame.locator('.CodeMirror-wrap'),
+    prettifyButton: () => frame.getByRole('button', { name: 'Prettify', exact: true }),
+    lines: () => frame.locator('.CodeMirror-wrap .CodeMirror-code > div')
   },
   oauth2: {
     authModeSelector: () => frame.getByTestId('oauth2-auth-mode-selector'),
@@ -115,6 +117,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   response: {
     statusCode: () => frame.getByTestId('response-status-code'),
     previewContainer: () => frame.getByTestId('response-preview-container')
+  },
+  notifications: {
+    message: (text: string) => frame.getByText(text, { exact: true })
   },
   // A dropdown menu item, by its visible text.
   dropdownItem: (text: string) => frame.locator('.dropdown-item').filter({ hasText: text }),

@@ -164,10 +164,8 @@ export async function writeFileViaVSCode(
       // Remove any dirty markers from the new content (shouldn't have any, but just in case)
       const cleanContent = content.replace(new RegExp(DIRTY_MARKER, 'g'), '');
 
-      // Only update if content is different (ignoring dirty markers)
-      const currentClean = currentContent.replace(new RegExp(DIRTY_MARKER, 'g'), '');
-
-      if (currentClean !== cleanContent) {
+      // Always remove dirty markers before saving, even when the actual content is unchanged.
+      if (currentContent !== cleanContent) {
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(
           document.positionAt(0),
