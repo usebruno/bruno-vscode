@@ -2063,6 +2063,17 @@ export const collectionsSlice = createSlice({
       }
     },
 
+    runtimeVariablesUpdateEvent: (
+      state,
+      action: PayloadAction<{ collectionUid: string; runtimeVariables: Record<string, unknown> }>
+    ) => {
+      const { collectionUid, runtimeVariables } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection) {
+        collection.runtimeVariables = runtimeVariables || {};
+      }
+    },
+
     clearTimeline: (state, action: PayloadAction<ClearTimelinePayload>) => {
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
       if (collection) {
@@ -3187,6 +3198,7 @@ export const {
   responseReceived,
   responseCleared,
   scriptEnvironmentUpdateEvent,
+  runtimeVariablesUpdateEvent,
   processEnvUpdateEvent,
   clearTimeline,
   clearRequestTimeline,

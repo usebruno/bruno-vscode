@@ -18,6 +18,7 @@ import {
   requestCancelled,
   runFolderEvent,
   runRequestEvent,
+  runtimeVariablesUpdateEvent,
   scriptEnvironmentUpdateEvent,
   streamDataReceived,
   addTransientRequest,
@@ -303,6 +304,11 @@ const useIpcEvents = () => {
 
     const removeScriptEnvUpdateListener = ipcRenderer.on('main:script-environment-update', (val: unknown) => {
       dispatch(scriptEnvironmentUpdateEvent(val as ScriptEnvironmentUpdateEventPayload));
+    });
+
+    const removeRuntimeVariablesUpdateListener = ipcRenderer.on('main:runtime-variables-update', (val: unknown) => {
+      const payload = val as { collectionUid: string; runtimeVariables: Record<string, unknown> };
+      dispatch(runtimeVariablesUpdateEvent(payload));
     });
 
     const removePersistentEnvVariablesUpdateListener = ipcRenderer.on('main:persistent-env-variables-update', (val: unknown) => {
@@ -656,6 +662,7 @@ const useIpcEvents = () => {
       removeDisplayErrorListener();
       removeToastSuccessListener();
       removeScriptEnvUpdateListener();
+      removeRuntimeVariablesUpdateListener();
       removeGlobalEnvironmentVariablesUpdateListener();
       removeCollectionRenamedListener();
       removeCollectionFolderRenamedListener();
