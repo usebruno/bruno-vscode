@@ -6,6 +6,7 @@ import { registerHandler, sendToWebview } from '../handlers';
 import { interpolateVars } from './interpolate-vars';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeHeaders, mergeScripts, mergeVars, mergeAuth } from '../../utils/collection';
 import { getCertsAndProxyConfig } from './cert-utils';
+import { getRuntimeVariables } from '../../store/runtime-variables';
 import { setAuthHeaders } from './prepare-request';
 
 interface WsMessage {
@@ -201,7 +202,8 @@ const registerWsEventHandlers = (): void => {
       options?: WsOptions;
     }];
 
-    const { request, collection, environment, runtimeVariables, settings, options = {} } = params;
+    const { request, collection, environment, settings, options = {} } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
 
     try {
       const requestCopy = cloneDeep(request);
@@ -290,7 +292,8 @@ const registerWsEventHandlers = (): void => {
       messageContent?: string;
     }];
 
-    const { item, collection, environment, runtimeVariables, messageContent } = params;
+    const { item, collection, environment, messageContent } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
 
     try {
       const itemCopy = cloneDeep(item);

@@ -8,6 +8,7 @@ import { interpolateVars } from './interpolate-vars';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeHeaders, mergeScripts, mergeVars, mergeAuth } from '../../utils/collection';
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getPreferences } from '../../store/preferences';
+import { getRuntimeVariables } from '../../store/runtime-variables';
 import { setAuthHeaders } from './prepare-request';
 import { interpolateString } from './interpolate-string';
 
@@ -234,7 +235,8 @@ const registerGrpcEventHandlers = (): void => {
       runtimeVariables: Record<string, string>;
     }];
 
-    const { request, collection, environment, runtimeVariables } = params;
+    const { request, collection, environment } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
 
     try {
       const requestCopy = cloneDeep(request);
@@ -378,7 +380,8 @@ const registerGrpcEventHandlers = (): void => {
       runtimeVariables: Record<string, string>;
     }];
 
-    const { request, collection, environment, runtimeVariables } = params;
+    const { request, collection, environment } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
 
     try {
       const requestCopy = cloneDeep(request);
@@ -507,7 +510,8 @@ const registerGrpcEventHandlers = (): void => {
       runtimeVariables: Record<string, string>;
     }];
 
-    const { request, collection, environment, runtimeVariables } = params;
+    const { request, collection, environment } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
 
     try {
       const requestCopy = cloneDeep(request);
