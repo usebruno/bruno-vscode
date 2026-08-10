@@ -771,15 +771,6 @@ const registerNetworkIpc = (): void => {
         tags: request.tags || []
       };
 
-      const scriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
-      const isFormUrlEncodedBefore = scriptContentType === 'application/x-www-form-urlencoded' ||
-        (request.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-      if (isFormUrlEncodedBefore && Array.isArray(scriptRequest.data)) {
-        scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
-      } else if (isFormUrlEncodedBefore && scriptRequest.data && typeof scriptRequest.data === 'object' && !Array.isArray(scriptRequest.data)) {
-        scriptRequest.data = qs.stringify(scriptRequest.data, { arrayFormat: 'repeat' });
-      }
-
       const context: RequestContext = {
         uid: uuidv4(),
         cancelTokenUid,
@@ -824,14 +815,6 @@ const registerNetworkIpc = (): void => {
           name: innerRequest.name || '',
           tags: innerRequest.tags || []
         };
-        const innerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
-        const innerIsFormUrlEncoded = innerScriptContentType === 'application/x-www-form-urlencoded' ||
-          (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-        if (innerIsFormUrlEncoded && Array.isArray(innerScriptRequest.data)) {
-          innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
-        } else if (innerIsFormUrlEncoded && innerScriptRequest.data && typeof innerScriptRequest.data === 'object' && !Array.isArray(innerScriptRequest.data)) {
-          innerScriptRequest.data = qs.stringify(innerScriptRequest.data, { arrayFormat: 'repeat' });
-        }
         const innerContext: RequestContext = {
           uid: uuidv4(),
           cancelTokenUid,
@@ -880,17 +863,6 @@ const registerNetworkIpc = (): void => {
           }
         } catch (preReqError) {
           console.error('Inner request pre-request script error:', preReqError);
-        }
-
-        const innerPostScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
-        const innerIsFormUrlEncodedAfter = innerPostScriptContentType === 'application/x-www-form-urlencoded' ||
-          (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-        if (innerIsFormUrlEncodedAfter && Array.isArray(innerScriptRequest.data)) {
-          innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
-        } else if (innerIsFormUrlEncodedAfter && innerScriptRequest.data && typeof innerScriptRequest.data === 'object' && !Array.isArray(innerScriptRequest.data)) {
-          innerScriptRequest.data = Object.entries(innerScriptRequest.data as Record<string, unknown>)
-            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`)
-            .join('&');
         }
 
         const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
@@ -1013,18 +985,6 @@ const registerNetworkIpc = (): void => {
           error: 'Request skipped by pre-request script'
         };
       }
-
-      // This handles cases where req.setBody() was called with an array in the script
-      const postScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
-      const isFormUrlEncoded = postScriptContentType === 'application/x-www-form-urlencoded' ||
-        (scriptRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-      if (isFormUrlEncoded && Array.isArray(scriptRequest.data)) {
-        scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
-      } else if (isFormUrlEncoded && scriptRequest.data && typeof scriptRequest.data === 'object' && !Array.isArray(scriptRequest.data)) {
-        // This properly handles nested objects, arrays, and special characters
-        scriptRequest.data = qs.stringify(scriptRequest.data, { arrayFormat: 'repeat' });
-      }
-      // if `data` is of string type - return as-is (assumes already encoded)
 
       sendToWebview('main:run-request-event', {
         type: 'request-sent',
@@ -1750,13 +1710,6 @@ const registerNetworkIpc = (): void => {
             tags: request.tags || []
           };
 
-          const runnerScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
-          const runnerIsFormUrlEncodedBefore = runnerScriptContentType === 'application/x-www-form-urlencoded' ||
-            (request.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-          if (runnerIsFormUrlEncodedBefore && Array.isArray(scriptRequest.data)) {
-            scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
-          }
-
           const runnerProcessEnvVars = getProcessEnvVars(collectionUid) as Record<string, string>;
 
           const runnerRunRequestByItemPathname = async (relativeItemPathname: string): Promise<unknown> => {
@@ -1787,12 +1740,6 @@ const registerNetworkIpc = (): void => {
               name: innerRequest.name || '',
               tags: innerRequest.tags || []
             };
-            const runnerInnerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
-            const runnerInnerIsFormUrlEncoded = runnerInnerScriptContentType === 'application/x-www-form-urlencoded' ||
-              (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-            if (runnerInnerIsFormUrlEncoded && Array.isArray(innerScriptRequest.data)) {
-              innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
-            }
             const innerContext: RequestContext = {
               uid: uuidv4(),
               cancelTokenUid,
@@ -1841,17 +1788,6 @@ const registerNetworkIpc = (): void => {
               }
             } catch (preReqError) {
               console.error('Inner request pre-request script error:', preReqError);
-            }
-
-            const runnerInnerPostScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
-            const runnerInnerIsFormUrlEncodedAfter = runnerInnerPostScriptContentType === 'application/x-www-form-urlencoded' ||
-              (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-            if (runnerInnerIsFormUrlEncodedAfter && Array.isArray(innerScriptRequest.data)) {
-              innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
-            } else if (runnerInnerIsFormUrlEncodedAfter && innerScriptRequest.data && typeof innerScriptRequest.data === 'object' && !Array.isArray(innerScriptRequest.data)) {
-              innerScriptRequest.data = Object.entries(innerScriptRequest.data as Record<string, unknown>)
-                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`)
-                .join('&');
             }
 
             const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
@@ -1971,18 +1907,6 @@ const registerNetworkIpc = (): void => {
             });
             currentRequestIndex++;
             continue;
-          }
-
-          // This handles cases where req.setBody() was called with an array in the script
-          const runnerPostScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
-          const runnerIsFormUrlEncodedAfter = runnerPostScriptContentType === 'application/x-www-form-urlencoded' ||
-            (request.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-          if (runnerIsFormUrlEncodedAfter && Array.isArray(scriptRequest.data)) {
-            scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
-          } else if (runnerIsFormUrlEncodedAfter && scriptRequest.data && typeof scriptRequest.data === 'object' && !Array.isArray(scriptRequest.data)) {
-            scriptRequest.data = Object.entries(scriptRequest.data as Record<string, unknown>)
-              .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`)
-              .join('&');
           }
 
           const requestSent = {
