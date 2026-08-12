@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { WebviewHelper } from '../webview/helper';
 import { showSaveRequestPicker } from '../utils/folder-picker';
+import { posixifyPath } from '../utils/filesystem';
 import { stateManager } from '../webview/state-manager';
 import {
   setCurrentWebview,
@@ -166,8 +167,10 @@ export async function openTransientRequestPanel(
     // 3) Stream the whole collection into THIS webview's store.
     try {
       // Register watcher if not already present.
-      if (!collectionWatcher.hasWatcher(collectionPath)) {
-        collectionWatcher.setupWatchersOnly(collectionPath, uid);
+      const nativePath = path.normalize(collectionPath);
+      const posixPath = posixifyPath(collectionPath);
+      if (!collectionWatcher.hasWatcher(nativePath) && !collectionWatcher.hasWatcher(posixPath)) {
+        collectionWatcher.setupWatchersOnly(nativePath, uid);
       }
       await collectionWatcher.loadFullCollection(collectionPath, uid, webviewSender);
     } catch (error) {

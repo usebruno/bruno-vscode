@@ -46,7 +46,6 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     activeName: () => frame.getByTestId('active-collection-environment'),
     activeGlobalName: () => frame.getByTestId('active-global-environment'),
     inactiveLabel: () => frame.getByTestId('no-active-environment'),
-    // Rows of the open dropdown's collection tab — one per environment.
     dropdownItem: (name: string) =>
       frame.getByTestId('environment-dropdown-item').filter({ hasText: name }),
     dropdownItems: () => frame.getByTestId('environment-dropdown-item'),
