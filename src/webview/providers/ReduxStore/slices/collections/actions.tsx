@@ -484,7 +484,7 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
   const { collections } = state.collections;
 
   return new Promise((resolve, reject) => {
-    const savePromises: any = [];
+    const savePromises: Promise<unknown>[] = [];
 
     each(collectionDrafts, (collectionDraft) => {
       const collection = findCollectionByUid(collections, collectionDraft.collectionUid);
@@ -493,11 +493,11 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
         const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
         const { ipcRenderer } = window;
 
-        let savePromises = [];
+        const collectionWrites: Promise<unknown>[] = [];
 
         if (isYmlCollection(collectionCopy)) {
           // opencollection.yml holds both the root and the config — write it once
-          savePromises.push(
+          collectionWrites.push(
             ipcRenderer.invoke(
               'renderer:save-collection-root',
               collectionCopy.pathname,
@@ -506,26 +506,23 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
             )
           );
         } else {
-          savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
+          collectionWrites.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
 
           if (collectionCopy.draft?.brunoConfig) {
-            savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', collectionCopy.draft.brunoConfig, collectionCopy.pathname, collectionRootToSave));
+            collectionWrites.push(ipcRenderer.invoke('renderer:update-bruno-config', collectionCopy.draft.brunoConfig, collectionCopy.pathname, collectionRootToSave));
           }
         }
 
-        Promise.all(savePromises)
-          .then(() => {
+        savePromises.push(
+          Promise.all(collectionWrites).then(() => {
             dispatch(saveCollectionDraft({ collectionUid: collectionDraft.collectionUid }));
           })
-          .catch((err) => {
-            toast.error('Failed to save collection settings!');
-            reject(err);
-          });
+        );
       }
     });
 
     Promise.all(savePromises)
-      .then(resolve)
+      .then(() => resolve(undefined))
       .catch((err) => {
         toast.error('Failed to save collection settings!');
         reject(err);
