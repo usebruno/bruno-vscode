@@ -8,6 +8,41 @@ import https from 'https';
 import { URL } from 'url';
 import { getCookieStringForUrl, saveCookies } from '../../utils/cookies';
 import { createFormData } from '../../utils/form-data';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import { HttpProxyAgent } from 'http-proxy-agent';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import type { Agent } from 'http';
+import {
+  ProxyConfig,
+  buildProxyUrl,
+  shouldBypassProxy,
+} from './proxy-utils';
+
+/**
+ * Create a proxy agent based on the proxy protocol.
+ * Supports http, https, socks4, socks5 proxy protocols.
+ * Passes through TLS options (cert, key, pfx, etc.) for the destination connection.
+ */
+function createProxyAgent(
+  proxyConfig: ProxyConfig,
+  agentOpts: https.AgentOptions
+): { httpsAgent: Agent; httpAgent: Agent } {
+  const proxyUrl = buildProxyUrl(proxyConfig);
+  const protocol = (proxyConfig.protocol || 'http').toLowerCase();
+
+  // Merge agentOpts so cert/key/pfx are preserved for the destination TLS handshake
+  const tlsOpts = { ...agentOpts };
+
+  if (protocol === 'socks4' || protocol === 'socks5') {
+    const agent = new SocksProxyAgent(proxyUrl, tlsOpts);
+    return { httpsAgent: agent, httpAgent: agent };
+  }
+
+  // http and https proxy protocols both use HttpsProxyAgent for HTTPS targets
+  const httpsAgent = new HttpsProxyAgent(proxyUrl, tlsOpts);
+  const httpAgent = new HttpProxyAgent(proxyUrl);
+  return { httpsAgent, httpAgent };
+}
 
 // Import digest auth helper using require due to type declaration issues in @usebruno/requests
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -23,24 +58,19 @@ interface AxiosInstanceOptions {
   maxContentLength?: number;
   httpsAgentOptions?: https.AgentOptions;
   proxyMode?: 'off' | 'on' | 'system';
-  proxyConfig?: {
-    protocol?: string;
-    hostname?: string;
-    port?: number;
-    auth?: {
-      username?: string;
-      password?: string;
-    };
-  };
+  proxyConfig?: ProxyConfig;
   requestMaxRedirects?: number;
   digestConfig?: {
     username?: string;
     password?: string;
   };
   collectionPath?: string;
+  /** Target request URL — used for no_proxy / bypassProxy matching */
+  _targetUrl?: string;
 }
 
 const createAxiosInstance = (options: AxiosInstanceOptions = {}): AxiosInstance => {
+
   const {
     timeout = 0,
     maxBodyLength = Infinity,
@@ -83,17 +113,23 @@ const createAxiosInstance = (options: AxiosInstanceOptions = {}): AxiosInstance 
   };
 
   if (proxyMode === 'on' && proxyConfig) {
-    config.proxy = {
-      protocol: proxyConfig.protocol || 'http',
-      host: proxyConfig.hostname || 'localhost',
-      port: proxyConfig.port || 8080,
-      auth: proxyConfig.auth ? {
-        username: proxyConfig.auth.username || '',
-        password: proxyConfig.auth.password || ''
-      } : undefined
-    };
+    const targetUrl = options._targetUrl || '';
+    const bypassEntries = Array.isArray(proxyConfig.bypassProxy) ? proxyConfig.bypassProxy : [];
+    if (targetUrl && shouldBypassProxy(targetUrl, bypassEntries)) {
+      // Target host matches no_proxy / bypassProxy — skip proxy, use direct https.Agent
+      config.proxy = false;
+    } else if (proxyConfig.hostname) {
+      // Use proxy agents (HttpsProxyAgent / SocksProxyAgent) instead of axios built-in proxy.
+      // When httpsAgent is explicitly set, axios ignores the `proxy` option, so we must
+      // use a proxy-aware agent rather than relying on config.proxy.
+      const { httpsAgent: proxyHttpsAgent, httpAgent: proxyHttpAgent } = createProxyAgent(proxyConfig, agentOpts);
+      config.httpsAgent = proxyHttpsAgent;
+      config.httpAgent = proxyHttpAgent;
+      config.proxy = false;
+    }
   } else if (proxyMode === 'system') {
-    delete config.proxy;
+    // System proxy mode is resolved to 'on' or 'off' in cert-utils.ts
+    config.proxy = false;
   }
 
   const instance = axios.create(config);
