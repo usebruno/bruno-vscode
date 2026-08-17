@@ -139,7 +139,19 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   },
   response: {
     statusCode: () => frame.getByTestId('response-status-code'),
-    previewContainer: () => frame.getByTestId('response-preview-container')
+    previewContainer: () => frame.getByTestId('response-preview-container'),
+    error: () => frame.getByTestId('response-error')
+  },
+  clientCerts: {
+    emptyMessage: () => frame.getByText('No client certificates added'),
+    rows: () => frame.getByTestId('client-cert-row'),
+    domainInput: () => frame.getByTestId('client-cert-domain'),
+    pfxRadio: () => frame.getByTestId('client-cert-type-pfx'),
+    filePicker: (field: string) => frame.getByTestId(`client-cert-file-${field}`),
+    pickedFile: (field: string) => frame.getByTestId(`client-cert-file-name-${field}`),
+    passphraseEditor: () => frame.getByTestId('client-cert-passphrase').locator('.CodeMirror'),
+    addButton: () => frame.getByTestId('add-client-cert'),
+    saveButton: () => frame.getByTestId('save-client-certs')
   },
   // A dropdown menu item, by its visible text.
   dropdownItem: (text: string) => frame.locator('.dropdown-item').filter({ hasText: text }),

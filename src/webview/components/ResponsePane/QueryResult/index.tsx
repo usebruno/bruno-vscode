@@ -185,7 +185,7 @@ const QueryResult = ({
         <div>
           {/* The runner reports a script failure through item.error too, where the card already shows it. */}
           {item?.errorSource === 'script' ? null : (
-            <div className="error" style={{ whiteSpace: 'pre-line' }}>{formatErrorMessage(error)}</div>
+            <div className="error" data-testid="response-error" style={{ whiteSpace: 'pre-line' }}>{formatErrorMessage(error)}</div>
           )}
 
           {error && typeof error === 'string' && error.toLowerCase().includes('self signed certificate') ? (
