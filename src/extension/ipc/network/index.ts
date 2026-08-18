@@ -1,6 +1,6 @@
 
 import { AxiosResponse, AxiosError } from 'axios';
-import { registerHandler, sendToWebview } from '../handlers';
+import { registerHandler, sendToWebview, broadcastToAllWebviews } from '../handlers';
 import { prepareRequest, BrunoRequest as PrepareRequestType } from './prepare-request';
 import { interpolateVars } from './interpolate-vars';
 import { createAxiosInstance, AxiosInstanceOptions } from './axios-instance';
@@ -11,6 +11,7 @@ import { createFormData, formatMultipartData } from '../../utils/form-data';
 import { readFileBody, getSelectedFileBodyEntry, DEFAULT_FILE_BODY_CONTENT_TYPE } from '../../utils/file-body';
 import { getPreferences } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
+import { getRuntimeVariables, setRuntimeVariables } from '../../store/runtime-variables';
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, hydrateRequestWithUuid, Item } from '../../utils/collection';
 import { getCollectionFormat } from '../../utils/filesystem';
@@ -32,6 +33,23 @@ import qs from 'qs';
 const brunoUtils = brunoUtilsRaw as {
   buildFormUrlEncodedPayload: (fields: Array<{ name: string; value: string; enabled?: boolean }>) => string;
   encodeUrl: (url: string) => string;
+};
+
+/**
+ * Broadcast the current runtime-variable snapshot to every open webview so all
+ * request tabs on the same collection keep the same Redux state. Uses
+ * broadcast (not the invoking-webview-scoped sendToWebview) precisely because
+ * the goal is to push the update out to the other tabs, not just the one that
+ * ran the request.
+ */
+const broadcastRuntimeVariables = (
+  collectionUid: string,
+  runtimeVariables: Record<string, unknown>
+): void => {
+  broadcastToAllWebviews('main:runtime-variables-update', {
+    collectionUid,
+    runtimeVariables
+  });
 };
 
 const getJsSandboxRuntime = (collection: Record<string, unknown>): string => {
@@ -814,7 +832,7 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
 const registerNetworkIpc = (): void => {
   // Main HTTP request handler - called by webview
   registerHandler('send-http-request', async (args) => {
-    const [item, collection, environment, runtimeVariables] = args as [unknown, unknown, unknown, Record<string, string>];
+    const [item, collection, environment] = args as [unknown, unknown, unknown, Record<string, string>];
 
     const _collection = collection as Record<string, unknown>;
     const _item = item as Record<string, unknown>;
@@ -825,8 +843,7 @@ const registerNetworkIpc = (): void => {
     const requestUid = (_item.requestUid as string) || itemUid;
     const cancelTokenUid = uuidv4();
 
-    // Mutable copy of runtime variables for script execution
-    const mutableRuntimeVariables: Record<string, unknown> = { ...(runtimeVariables || {}) };
+    const mutableRuntimeVariables: Record<string, unknown> = { ...getRuntimeVariables(collectionUid) };
 
     try {
       const envVars = getEnvVars(environment as never);
@@ -1227,6 +1244,9 @@ const registerNetworkIpc = (): void => {
       } catch (testError) {
         console.error('Tests error:', testError);
       }
+
+      setRuntimeVariables(collectionUid, mutableRuntimeVariables);
+      broadcastRuntimeVariables(collectionUid, mutableRuntimeVariables);
 
       return {
         status: result.status,
@@ -1684,7 +1704,7 @@ const registerNetworkIpc = (): void => {
   // Run collection folder - executes all requests in a folder sequentially
   // Based on bruno-electron's implementation
   registerHandler('renderer:run-collection-folder', async (args) => {
-    const [folder, collection, environment, runtimeVariables, recursive, delay, tags, selectedRequestUids] = args as [
+    const [folder, collection, environment, , recursive, delay, tags, selectedRequestUids] = args as [
       Record<string, unknown> | null,
       Record<string, unknown>,
       Record<string, unknown> | null,
@@ -1702,8 +1722,7 @@ const registerNetworkIpc = (): void => {
 
     const envVars = getEnvVars(environment as never);
 
-    // Make a mutable copy of runtime variables for script execution
-    const runnerRuntimeVariables: Record<string, unknown> = { ...(runtimeVariables || {}) };
+    const runnerRuntimeVariables: Record<string, unknown> = { ...getRuntimeVariables(collectionUid) };
 
     const abortController = new AbortController();
     saveCancelToken(cancelTokenUid, abortController);
@@ -2295,6 +2314,8 @@ const registerNetworkIpc = (): void => {
       }
 
       deleteCancelToken(cancelTokenUid);
+      setRuntimeVariables(collectionUid, runnerRuntimeVariables);
+      broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
       sendToWebview('main:run-folder-event', {
         type: 'testrun-ended',
         collectionUid,
@@ -2304,6 +2325,8 @@ const registerNetworkIpc = (): void => {
 
       } catch (error) {
         deleteCancelToken(cancelTokenUid);
+        setRuntimeVariables(collectionUid, runnerRuntimeVariables);
+        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
         sendToWebview('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,

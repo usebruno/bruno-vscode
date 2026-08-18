@@ -25,6 +25,7 @@ import collectionWatcher from '../app/collection-watcher';
 import { parseFileMeta } from '../utils/collection';
 import { getCollectionFormat } from '../utils/filesystem';
 import { defaultWorkspaceManager } from '../store/default-workspace';
+import { getRuntimeVariables } from '../store/runtime-variables';
 import { registerDocument, unregisterDocument } from './dirty-state-manager';
 import { notifyActiveItemToSidebar, clearActiveItemFromSidebar } from '../ipc/collection';
 
@@ -294,6 +295,14 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
 
         viewDataByWebview.set(webviewPanel.webview, viewData);
         stateManager.sendTo(webviewPanel.webview, 'main:set-view', viewData);
+
+        const runtimeVariables = getRuntimeVariables(collectionUid);
+        if (Object.keys(runtimeVariables).length > 0) {
+          stateManager.sendTo(webviewPanel.webview, 'main:runtime-variables-update', {
+            collectionUid,
+            runtimeVariables
+          });
+        }
 
         // Collection/folder settings dashboards need the full request tree (e.g.
         // the Overview shows request counts). The single-request open above only
