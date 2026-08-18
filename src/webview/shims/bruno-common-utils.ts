@@ -75,6 +75,61 @@ export const validateDataTypeValue = (value: any, dataType?: BrunoVariableDataTy
   return null;
 };
 
+export interface DotenvVariable {
+  name: string;
+  value?: string;
+}
+
+/**
+ * Serializes variables to .env file content. Copied from @usebruno/common because the
+ * rsbuild alias points @usebruno/common/utils at this shim, so its version is unreachable
+ * here. The two must stay byte-identical or the extension and the webview disagree on
+ * what a saved file should look like.
+ *
+ * A value is quoted based on how the dotenv parser reads each quote style back:
+ * - unquoted keeps \, " and ', but ends the value at a # and drops surrounding spaces
+ * - single and backtick quotes are taken literally
+ * - double quotes are literal except for \n and \r, which expand
+ */
+export const jsonToDotenv = (variables: DotenvVariable[]): string => {
+  if (!Array.isArray(variables)) {
+    return '';
+  }
+
+  return variables
+    .filter((variable) => variable.name && variable.name.trim() !== '')
+    .map((variable) => {
+      const value = variable.value || '';
+
+      if (value.includes('\n') || value.includes('\r')) {
+        return `${variable.name}="${value.replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`;
+      }
+
+      if (value.includes('#')) {
+        if (!value.includes('\'')) {
+          return `${variable.name}='${value}'`;
+        }
+        if (!value.includes('`')) {
+          return `${variable.name}=\`${value}\``;
+        }
+        return `${variable.name}="${value.replace(/"/g, '\\"')}"`;
+      }
+
+      if (value !== value.trim()) {
+        if (!value.includes('\'')) {
+          return `${variable.name}='${value}'`;
+        }
+        if (!value.includes('`')) {
+          return `${variable.name}=\`${value}\``;
+        }
+        return `${variable.name}="${value}"`;
+      }
+
+      return `${variable.name}=${value}`;
+    })
+    .join('\n');
+};
+
 interface QueryParam {
   name: string;
   value?: string;

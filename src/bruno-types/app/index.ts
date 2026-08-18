@@ -36,6 +36,8 @@ export type {
   ActiveConnection,
   RequestSent,
   TimelineEntry,
+  DotEnvFile,
+  DotEnvVariable,
   RunnerConfiguration,
   RunnerResultItem,
   RunnerResult,

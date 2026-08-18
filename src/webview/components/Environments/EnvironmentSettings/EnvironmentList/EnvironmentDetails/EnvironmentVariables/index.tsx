@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useMemo, useEffect } from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 import { get } from 'lodash';
-import { IconTrash, IconAlertCircle } from '@tabler/icons';
+import { IconTrash } from '@tabler/icons';
 import { useTheme } from 'providers/Theme';
 import { useDispatch, useSelector } from 'react-redux';
 import { valueToString, BRUNO_VARIABLE_DATATYPES } from '@usebruno/common/utils';
@@ -16,9 +16,9 @@ import toast from 'react-hot-toast';
 import { saveEnvironment } from 'providers/ReduxStore/slices/collections/actions';
 import { setEnvironmentsDraft, clearEnvironmentsDraft } from 'providers/ReduxStore/slices/collections';
 import { saveGlobalEnvironment, setGlobalEnvironmentDraft, clearGlobalEnvironmentDraft } from 'providers/ReduxStore/slices/global-environments';
-import { Tooltip } from 'react-tooltip';
 import { getGlobalEnvironmentVariables, flattenItems, isItemARequest } from 'utils/collections';
 import SensitiveFieldWarning from 'components/SensitiveFieldWarning';
+import VariableNameError from 'components/Environments/Common/VariableNameError';
 import { sensitiveFields } from './constants';
 
 interface EnvironmentVariablesProps {
@@ -237,32 +237,6 @@ const EnvironmentVariables = ({
     return () => clearTimeout(timeoutId);
   }, [formik.values, savedValuesJson, environment.uid, isGlobal ? null : collection?.uid, dispatch, hasDraftForThisEnv, environmentsDraft?.variables, isGlobal]);
 
-  const ErrorMessage = ({
-    name,
-    index
-  }: any) => {
-    const meta = formik.getFieldMeta(name);
-    const id = `error-${name}-${index}`;
-
-    const isLastRow = index === formik.values.length - 1;
-    const variable = formik.values[index];
-    const isEmptyRow = !variable?.name || variable.name.trim() === '';
-
-    if (isLastRow && isEmptyRow) {
-      return null;
-    }
-
-    if (!meta.error || !meta.touched) {
-      return null;
-    }
-    return (
-      <span>
-        <IconAlertCircle id={id} className="text-red-600 cursor-pointer" size={20} />
-        <Tooltip className="tooltip-mod" anchorId={id} html={meta.error || ''} />
-      </span>
-    );
-  };
-
   const handleRemoveVar = useCallback((id: any) => {
     const currentValues = formik.values;
 
@@ -464,7 +438,7 @@ const EnvironmentVariables = ({
                         onBlur={() => handleNameBlur(index)}
                         onKeyDown={(e) => handleNameKeyDown(index, e)}
                       />
-                      <ErrorMessage name={`${index}.name`} index={index} />
+                      <VariableNameError formik={formik} name={`${index}.name`} index={index} />
                     </div>
                   </td>
                   <td className="flex flex-row flex-nowrap items-center gap-2">

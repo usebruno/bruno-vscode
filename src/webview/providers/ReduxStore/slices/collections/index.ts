@@ -44,6 +44,7 @@ import type {
   CloneItemPayload,
   ScriptEnvironmentUpdateEventPayload,
   ProcessEnvUpdateEventPayload,
+  SetDotEnvVariablesPayload,
   RequestCancelledPayload,
   ResponseReceivedPayload,
   ResponseClearedPayload,
@@ -2123,6 +2124,33 @@ export const collectionsSlice = createSlice({
       }
     },
 
+    setDotEnvVariables: (state, action: PayloadAction<SetDotEnvVariablesPayload>) => {
+      const { collectionUid, filename, variables, content, exists } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (!collection) return;
+
+      const dotEnvFiles = collection.dotEnvFiles || [];
+      const existingIndex = dotEnvFiles.findIndex((file) => file.filename === filename);
+
+      if (existingIndex >= 0) {
+        if (exists) {
+          dotEnvFiles[existingIndex] = { filename, variables, content };
+        } else {
+          dotEnvFiles.splice(existingIndex, 1);
+        }
+      } else if (exists) {
+        dotEnvFiles.push({ filename, variables, content });
+      }
+
+      dotEnvFiles.sort((a, b) => {
+        if (a.filename === '.env') return -1;
+        if (b.filename === '.env') return 1;
+        return a.filename.localeCompare(b.filename);
+      });
+
+      collection.dotEnvFiles = dotEnvFiles;
+    },
+
     clearTimeline: (state, action: PayloadAction<ClearTimelinePayload>) => {
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
       if (collection) {
@@ -3270,6 +3298,7 @@ export const {
   responseCleared,
   scriptEnvironmentUpdateEvent,
   processEnvUpdateEvent,
+  setDotEnvVariables,
   clearTimeline,
   clearRequestTimeline,
   collectionUnlinkEnvFileEvent,

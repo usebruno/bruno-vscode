@@ -166,6 +166,7 @@ declare module '@usebruno/common/utils' {
   export function parseValueByDataType(value: any, dataType?: BrunoVariableDataType): any;
   export function valueToString(value: unknown, indent?: number): string;
   export function validateDataTypeValue(value: any, dataType?: BrunoVariableDataType): string | null;
+  export function jsonToDotenv(variables: Array<{ name: string; value?: string }>): string;
 }
 
 declare module '@usebruno/schema' {

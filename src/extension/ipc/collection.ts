@@ -7,6 +7,7 @@ import * as fsExtra from 'fs-extra';
 import AdmZip from 'adm-zip';
 import extractZip from 'extract-zip';
 import type { BrunoVariableDataType } from '@usebruno/common/utils';
+import { jsonToDotenv } from '@usebruno/common/utils';
 import { registerHandler, registerEventListener, sendToWebview, broadcastToAllWebviews, emit, getCurrentWebview } from './handlers';
 import { stateManager } from '../webview/state-manager';
 import {
@@ -27,6 +28,7 @@ import {
   getPaths,
   generateUniqueName,
   isDotEnvFile,
+  isValidDotEnvFilename,
   isBrunoConfigFile,
   isBruEnvironmentConfig,
   isCollectionRootBruFile,
@@ -606,6 +608,64 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     } catch (error) {
       throw error;
     }
+  });
+
+  registerHandler('renderer:save-dotenv-variables', async (args) => {
+    const [collectionPathname, variables, filename = '.env'] = args as [string, Array<{ name: string; value: string }>, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    await writeFile(path.join(collectionPathname, filename), jsonToDotenv(variables));
+
+    return { success: true };
+  });
+
+  registerHandler('renderer:save-dotenv-raw', async (args) => {
+    const [collectionPathname, content, filename = '.env'] = args as [string, string, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    await writeFile(path.join(collectionPathname, filename), content);
+
+    return { success: true };
+  });
+
+  registerHandler('renderer:create-dotenv-file', async (args) => {
+    const [collectionPathname, filename = '.env'] = args as [string, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    const dotEnvPath = path.join(collectionPathname, filename);
+    if (fs.existsSync(dotEnvPath)) {
+      throw new Error(`${filename} file already exists`);
+    }
+
+    await writeFile(dotEnvPath, '');
+
+    return { success: true, filename };
+  });
+
+  registerHandler('renderer:delete-dotenv-file', async (args) => {
+    const [collectionPathname, filename = '.env'] = args as [string, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    const dotEnvPath = path.join(collectionPathname, filename);
+    if (!fs.existsSync(dotEnvPath)) {
+      throw new Error(`${filename} file does not exist`);
+    }
+
+    fs.unlinkSync(dotEnvPath);
+
+    return { success: true };
   });
 
   // Rename item (file/folder)

@@ -40,6 +40,20 @@ export interface TimelineEntry {
   };
 }
 
+export interface DotEnvVariable {
+  uid?: UID;
+  name: string;
+  value: string;
+  enabled?: boolean;
+  secret?: boolean;
+}
+
+export interface DotEnvFile {
+  filename: string;
+  variables: DotEnvVariable[];
+  content: string;
+}
+
 export interface RunnerConfiguration {
   recursive?: boolean;
   delay?: number;
@@ -128,6 +142,7 @@ export interface AppCollection extends Omit<Collection, 'items'> {
   isLoading?: boolean;
   securityConfig?: SecurityConfig;
   processEnvVariables?: Record<string, unknown>;
+  dotEnvFiles?: DotEnvFile[];
   timeline?: TimelineEntry[];
   draft?: CollectionDraft | null;
   environmentsDraft?: EnvironmentsDraft | null;

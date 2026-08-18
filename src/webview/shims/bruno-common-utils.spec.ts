@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { jsonToDotenv as packageJsonToDotenv } from '@usebruno/common/utils';
 import {
+  jsonToDotenv,
   getDataTypeFromValue,
   parseValueByDataType,
   valueToString,
@@ -60,6 +62,25 @@ describe('bruno-common-utils datatype shim', () => {
       expect(validateDataTypeValue(parseValueByDataType('abc', 'number'), 'number')).toMatch(/not a valid number/);
       expect(validateDataTypeValue(parseValueByDataType('30', 'number'), 'number')).toBeNull();
       expect(validateDataTypeValue(parseValueByDataType('{"a":1}', 'object'), 'object')).toBeNull();
+    });
+  });
+
+  describe('jsonToDotenv', () => {
+    const cases = [
+      [{ name: 'HOST', value: 'localhost' }],
+      [{ name: 'MULTILINE', value: 'a\nb' }],
+      [{ name: 'HASH', value: 'a#b' }],
+      [{ name: 'HASH_AND_QUOTE', value: 'a#b\'c' }],
+      [{ name: 'HASH_ALL_QUOTES', value: 'a#b\'c`d"e' }],
+      [{ name: 'PADDED', value: '  spaced  ' }],
+      [{ name: 'EMPTY' }],
+      [{ name: '', value: 'dropped' }, { name: 'KEPT', value: '1' }]
+    ];
+
+    it('serializes exactly like @usebruno/common, so the extension and webview never disagree', () => {
+      cases.forEach((variables) => {
+        expect(jsonToDotenv(variables)).toBe(packageJsonToDotenv(variables));
+      });
     });
   });
 });

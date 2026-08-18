@@ -148,7 +148,8 @@ export default function Main(): React.ReactElement {
       if (!activeTab) return;
 
       if (activeTab.type === 'environment-settings' || activeTab.type === 'global-environment-settings') {
-        window.dispatchEvent(new CustomEvent('environment-save'));
+        const draftUid = findCollectionByUid(collections, activeTab.collectionUid)?.environmentsDraft?.environmentUid;
+        window.dispatchEvent(new CustomEvent(draftUid?.startsWith('dotenv:') ? 'dotenv-save' : 'environment-save'));
         return;
       }
 

@@ -9,7 +9,7 @@ import get from 'lodash/get';
 import set from 'lodash/set';
 import trim from 'lodash/trim';
 import type { RootState, AppDispatch } from 'providers/ReduxStore/index';
-import type { AppCollection, AppItem, RequestSent } from '@bruno-types';
+import type { AppCollection, AppItem, DotEnvVariable, RequestSent } from '@bruno-types';
 import { variableNameRegex } from 'utils/common/regex';
 
 /** Redux thunk action creator type */
@@ -2009,6 +2009,32 @@ export const renameEnvironment = (newName: string, environmentUid: string, colle
       .catch(reject);
   });
 };
+
+const invokeForCollection = (
+  collectionUid: string,
+  channel: string,
+  ...args: unknown[]
+): ThunkAction<Promise<unknown>> => (dispatch, getState) => {
+  const collection = findCollectionByUid(getState().collections.collections, collectionUid);
+  if (!collection) {
+    return Promise.reject(new Error('Collection not found'));
+  }
+
+  const { ipcRenderer } = window;
+  return ipcRenderer.invoke(channel, collection.pathname, ...args);
+};
+
+export const saveDotEnvVariables = (collectionUid: string, variables: DotEnvVariable[], filename = '.env') =>
+  invokeForCollection(collectionUid, 'renderer:save-dotenv-variables', variables, filename);
+
+export const saveDotEnvRaw = (collectionUid: string, content: string, filename = '.env') =>
+  invokeForCollection(collectionUid, 'renderer:save-dotenv-raw', content, filename);
+
+export const createDotEnvFile = (collectionUid: string, filename = '.env') =>
+  invokeForCollection(collectionUid, 'renderer:create-dotenv-file', filename);
+
+export const deleteDotEnvFile = (collectionUid: string, filename = '.env') =>
+  invokeForCollection(collectionUid, 'renderer:delete-dotenv-file', filename);
 
 export const deleteEnvironment = (environmentUid: string, collectionUid: string): ThunkAction<Promise<unknown>> => (dispatch, getState) => {
   return new Promise((resolve, reject) => {

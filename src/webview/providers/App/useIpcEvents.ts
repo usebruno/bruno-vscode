@@ -15,6 +15,7 @@ import {
   collectionUnlinkEnvFileEvent,
   collectionUnlinkFileEvent,
   processEnvUpdateEvent,
+  setDotEnvVariables,
   requestCancelled,
   runFolderEvent,
   runRequestEvent,
@@ -61,6 +62,7 @@ import type {
   CollectionRenamedEventPayload,
   ScriptEnvironmentUpdateEventPayload,
   ProcessEnvUpdateEventPayload,
+  SetDotEnvVariablesPayload,
   BrunoConfigUpdateEventPayload,
   RunFolderEventPayload,
   RunRequestEventPayload,
@@ -356,6 +358,10 @@ const useIpcEvents = () => {
 
     const removeProcessEnvUpdatesListener = ipcRenderer.on('main:process-env-update', (val: unknown) => {
       dispatch(processEnvUpdateEvent(val as ProcessEnvUpdateEventPayload));
+    });
+
+    const removeDotEnvFileUpdateListener = ipcRenderer.on('main:dotenv-file-update', (val: unknown) => {
+      dispatch(setDotEnvVariables(val as SetDotEnvVariablesPayload));
     });
 
     const removeConsoleLogListener = ipcRenderer.on('main:console-log', (val: unknown) => {
@@ -667,6 +673,7 @@ const useIpcEvents = () => {
       removePreRequestTestResultsListener();
       removePostResponseTestResultsListener();
       removeProcessEnvUpdatesListener();
+      removeDotEnvFileUpdateListener();
       removeConsoleLogListener();
       removeConfigUpdatesListener();
       removePreferencesUpdatesListener();

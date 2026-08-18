@@ -29,3 +29,7 @@ export const getProcessEnvVars = (collectionUid: string): EnvVars => {
 export const setDotEnvVars = (collectionUid: string, envVars: EnvVars): void => {
   dotEnvVars[collectionUid] = envVars;
 };
+
+export const clearDotEnvVars = (collectionUid: string): void => {
+  delete dotEnvVars[collectionUid];
+};

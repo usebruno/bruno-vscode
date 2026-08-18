@@ -376,10 +376,19 @@ export const isLargeFile = (filePath: string, threshold = 10 * 1024 * 1024): boo
   return size > threshold;
 };
 
+export const isDotEnvFilename = (filename: string): boolean => {
+  return filename === '.env' || filename.startsWith('.env.');
+};
+
+export const isValidDotEnvFilename = (filename: string): boolean => {
+  if (!filename || typeof filename !== 'string') return false;
+  if (path.basename(filename) !== filename) return false;
+  return filename === '.env' || /^\.env\.[a-zA-Z0-9._-]+$/.test(filename);
+};
+
 export const isDotEnvFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
-  const basename = path.basename(pathname);
-  return path.normalize(dirname) === path.normalize(collectionPath) && basename === '.env';
+  return path.normalize(dirname) === path.normalize(collectionPath) && isDotEnvFilename(path.basename(pathname));
 };
 
 export const isBrunoConfigFile = (pathname: string, collectionPath: string): boolean => {

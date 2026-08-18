@@ -2,7 +2,7 @@
  * Payload types for collection slice reducers
  */
 import type { UID, KeyValue, AuthMode, BrunoVariableDataType } from '@bruno-types';
-import type { AppCollection, AppItem, RequestSent, SecurityConfig } from '@bruno-types';
+import type { AppCollection, AppItem, DotEnvVariable, RequestSent, SecurityConfig } from '@bruno-types';
 
 export interface CollectionUidPayload {
   collectionUid: UID;
@@ -102,6 +102,13 @@ export interface ScriptEnvironmentUpdateEventPayload extends CollectionUidPayloa
 
 export interface ProcessEnvUpdateEventPayload extends CollectionUidPayload {
   processEnvVariables: Record<string, unknown>;
+}
+
+export interface SetDotEnvVariablesPayload extends CollectionUidPayload {
+  filename: string;
+  variables: DotEnvVariable[];
+  content: string;
+  exists: boolean;
 }
 
 export interface RequestCancelledPayload extends ItemUidPayload {}

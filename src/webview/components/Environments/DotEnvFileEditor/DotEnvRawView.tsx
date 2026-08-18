@@ -1,0 +1,41 @@
+import React from 'react';
+import CodeEditor from 'components/CodeEditor';
+
+interface DotEnvRawViewProps {
+  collection?: any;
+  theme: 'dark' | 'light';
+  value: string;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onReset: () => void;
+  isSaving: boolean;
+}
+
+const DotEnvRawView = ({ collection, theme, value, onChange, onSave, onReset, isSaving }: DotEnvRawViewProps) => (
+  <>
+    <div className="raw-editor-container" data-testid="dotenv-raw-editor">
+      <CodeEditor
+        collection={collection}
+        theme={theme}
+        value={value}
+        onEdit={onChange}
+        onSave={onSave}
+        mode="text/plain"
+        enableVariableHighlighting={false}
+        enableBrunoVarInfo={false}
+      />
+    </div>
+    <div className="button-container">
+      <div className="flex items-center">
+        <button type="button" className="submit" onClick={onSave} disabled={isSaving} data-testid="save-dotenv-raw">
+          {isSaving ? 'Saving...' : 'Save'}
+        </button>
+        <button type="button" className="submit reset ml-2" onClick={onReset} disabled={isSaving} data-testid="reset-dotenv-raw">
+          Reset
+        </button>
+      </div>
+    </div>
+  </>
+);
+
+export default DotEnvRawView;
