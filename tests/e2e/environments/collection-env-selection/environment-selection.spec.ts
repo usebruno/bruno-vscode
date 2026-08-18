@@ -1,10 +1,10 @@
 import * as path from 'path';
 import type { Page, Frame } from '@playwright/test';
-import { test, expect } from '../utils/fixtures';
-import { openBrunoSidebar, importCollection, expandCollection, openRequest } from '../utils/page/actions';
-import { buildCommonLocators } from '../utils/page/locators';
+import { test, expect } from '../../utils/fixtures';
+import { openBrunoSidebar, importCollection, expandCollection, openRequest } from '../../utils/page/actions';
+import { buildCommonLocators } from '../../utils/page/locators';
 
-const FIXTURE = path.resolve(__dirname, '../fixtures/environments-collection.json');
+const FIXTURE = path.resolve(__dirname, './fixtures/environments-collection.json');
 const COLLECTION_NAME = 'Environments Collection';
 const REQUEST_NAME = 'Alpha Request';
 
