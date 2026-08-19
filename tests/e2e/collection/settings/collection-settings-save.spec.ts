@@ -15,9 +15,6 @@ const HEADER_NAME = 'x-e2e';
 const HEADER_VALUE = 'e2e-value';
 const PRESET_URL = 'http://127.0.0.1:8081/preset';
 
-/**
- * Record every `ipcRenderer.invoke` channel the settings webview issues.
- */
 async function recordIpcCalls(frame: Frame): Promise<void> {
   await frame.evaluate(() => {
     const w = window as any;
@@ -33,7 +30,6 @@ async function recordIpcCalls(frame: Frame): Promise<void> {
   });
 }
 
-/** Number of times `channel` was invoked since the last `recordIpcCalls` call. */
 async function countIpcCalls(frame: Frame, channel: string): Promise<number> {
   return frame.evaluate(
     (ch) => ((window as any).__ipcCalls || []).filter((c: string) => c === ch).length,
@@ -41,7 +37,6 @@ async function countIpcCalls(frame: Frame, channel: string): Promise<number> {
   );
 }
 
-/** Fill the Presets tab's Base URL field . */
 async function setPresetBaseUrl(settings: Frame, url: string): Promise<void> {
   await openRequestPaneTab(settings, 'Presets');
   const input = settings.locator('#request-url');
@@ -53,9 +48,6 @@ async function clickSave(settings: Frame): Promise<void> {
   await settings.getByRole('button', { name: 'Save', exact: true }).click();
 }
 
-/**
- * Create a collection, open its settings, and stage both halves of a draft.
- */
 async function stageSettingsEdits(
   page: Page,
   tmpDir: string,
@@ -102,7 +94,6 @@ test.describe('Collection settings save', () => {
     });
 
     await test.step('both edits read back into the settings UI', async () => {
-      // The on-disk write and the state the watcher pushes back have to agree.
       await openRequestPaneTab(settings, 'Presets');
       await expect(settings.locator('#request-url')).toHaveValue(PRESET_URL);
 
@@ -127,7 +118,6 @@ test.describe('Collection settings save', () => {
     await expect.poll(() => fs.readFileSync(collectionBru, 'utf8'))
       .toContain(`${HEADER_NAME}: ${HEADER_VALUE}`);
 
-    // Two files, so the two-call split stays in place for `.bru`.
     expect(await countIpcCalls(settings, 'renderer:save-collection-root')).toBe(1);
     expect(await countIpcCalls(settings, 'renderer:update-bruno-config')).toBe(1);
   });
