@@ -410,12 +410,15 @@ const executeRequest = async (
         auth: certProxyConfig.auth ? {
           username: certProxyConfig.auth.username,
           password: certProxyConfig.auth.password
-        } : undefined
+        } : undefined,
+        bypassProxy: certProxyConfig.bypassProxy
       } : undefined,
       requestMaxRedirects,
       digestConfig: request.digestConfig,
-      collectionPath: context.collectionPath
+      collectionPath: context.collectionPath,
+      _targetUrl: preparedRequest.url
     };
+
 
     // Note: We add cookies to BOTH preparedRequest (for axios) AND the original request
     // so that tests can see the cookies via req.getHeader('Cookie')

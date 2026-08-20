@@ -7,6 +7,13 @@ import { get } from 'lodash';
 import { preferencesUtil } from '../../store/preferences';
 import { getBrunoConfig } from '../../store/bruno-config';
 import { interpolateString, InterpolationOptions } from './interpolate-string';
+import {
+  ProxyConfig,
+  ProxySettings,
+  getSystemProxyConfigForRequest,
+  normalizeBypassProxy,
+} from './proxy-utils';
+
 
 interface Collection {
   promptVariables?: Record<string, string>;
@@ -35,17 +42,6 @@ interface HttpsAgentFields {
   key?: Buffer;
   pfx?: Buffer;
   passphrase?: string;
-}
-
-interface ProxyConfig {
-  protocol?: string;
-  hostname?: string;
-  port?: number;
-  auth?: {
-    username?: string;
-    password?: string;
-  };
-  bypassProxy?: string[];
 }
 
 interface CertsAndProxyConfigParams {
@@ -194,6 +190,7 @@ const getCACertificates = ({ caCertFilePath, shouldKeepDefaultCerts = true }: CA
 };
 
 const getCertsAndProxyConfig = async ({
+
   collectionUid,
   collection,
   request,
@@ -274,11 +271,7 @@ const getCertsAndProxyConfig = async ({
   let proxyMode: 'off' | 'on' | 'system' = 'off';
   let proxyConfig: ProxyConfig = {};
 
-  const collectionProxyConfig = get(brunoConfig, 'proxy', {}) as {
-    disabled?: boolean;
-    inherit?: boolean;
-    config?: ProxyConfig;
-  };
+  const collectionProxyConfig = get(brunoConfig, 'proxy', {}) as ProxySettings;
 
   const collectionProxyDisabled = get(collectionProxyConfig, 'disabled', false);
   const collectionProxyInherit = get(collectionProxyConfig, 'inherit', true);
@@ -300,9 +293,24 @@ const getCertsAndProxyConfig = async ({
       proxyConfig = globalProxyConfigData as ProxyConfig;
       proxyMode = 'on';
     } else if (!globalDisabled && globalInherit) {
-      // Use system proxy
-      proxyMode = 'system';
+      // Use system proxy — parse environment variables into a concrete proxyConfig
+      const systemProxyVars = preferencesUtil.getSystemProxyEnvVariables();
+      const requestUrl = interpolateString(request.url || '', interpolationOptions);
+      const systemConfig = getSystemProxyConfigForRequest(requestUrl, systemProxyVars || {});
+
+      if (systemConfig) {
+        proxyConfig = systemConfig;
+        proxyMode = 'on';
+      } else {
+        // No system proxy environment variables set; fall back to off
+        proxyMode = 'off';
+      }
     }
+  }
+
+  // Normalize bypassProxy from string to array for custom proxy configs
+  if (proxyMode === 'on' && proxyConfig.bypassProxy) {
+    proxyConfig.bypassProxy = normalizeBypassProxy(proxyConfig.bypassProxy);
   }
 
   return { proxyMode, proxyConfig, httpsAgentRequestFields, interpolationOptions };
