@@ -228,6 +228,20 @@ const interpolateVars = (request: any, options: InterpolationOptions): any => {
           ...d,
           value: _interpolate(d?.value)
         }));
+      } else if (typeof request.data === 'string' && request.data.length && (request.data.includes('{{') || request.data.includes('%7B%7B'))) {
+        // The body may have been serialized to a form-urlencoded string before
+        // script execution (see send-http-request handler). Parse it, interpolate
+        // each name/value pair, then re-serialize so {{variables}} are resolved.
+        try {
+          const parsedParams = new URLSearchParams(request.data);
+          const interpolatedParams = new URLSearchParams();
+          for (const [name, value] of parsedParams) {
+            interpolatedParams.append(_interpolate(name) as string, _interpolate(value) as string);
+          }
+          request.data = interpolatedParams.toString();
+        } catch {
+          // Leave the body as-is if it cannot be parsed
+        }
       }
     } else if (contentType === 'multipart/form-data') {
       if (Array.isArray(request?.data) && !(request.data instanceof FormData)) {
