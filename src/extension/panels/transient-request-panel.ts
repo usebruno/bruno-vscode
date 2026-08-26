@@ -322,16 +322,20 @@ async function saveTransientRequest(
   }
 
   try {
-    // Write the file using the stringify worker (same as renderer:new-request)
     const { stringifyRequestViaWorker } = require('@usebruno/filestore');
     const content = await stringifyRequestViaWorker({ ...itemData, name, filename }, { format });
     fs.writeFileSync(fullPath, content, 'utf-8');
 
     savedPanels.add(itemUid);
-    panel.dispose();
 
-    // Open the saved file in the regular editor
-    await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(fullPath), 'bruno.requestEditor');
+    const targetViewColumn = panel.viewColumn ?? vscode.ViewColumn.Active;
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      vscode.Uri.file(fullPath),
+      'bruno.requestEditor',
+      { viewColumn: targetViewColumn, preview: false }
+    );
+    panel.dispose();
 
     vscode.window.showInformationMessage(`Request saved as "${name}"`);
   } catch (err: any) {
