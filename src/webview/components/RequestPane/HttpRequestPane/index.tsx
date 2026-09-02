@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback } from 'react';
+import React, { useRef, useMemo, useCallback, useEffect } from 'react';
 import classnames from 'classnames';
 import { useSelector, useDispatch } from 'react-redux';
 import { find, get } from 'lodash';
@@ -14,6 +14,7 @@ import Script from 'components/RequestPane/Script';
 import Tests from 'components/RequestPane/Tests';
 import Settings from 'components/RequestPane/Settings';
 import Documentation from 'components/Documentation/index';
+import AppUnsupported from 'components/RequestTabPanel/AppUnsupported';
 import StatusDot from 'components/StatusDot';
 import ResponsiveTabs from 'ui/ResponsiveTabs';
 import HeightBoundContainer from 'ui/HeightBoundContainer';
@@ -35,6 +36,7 @@ const TAB_CONFIG = [
   { key: 'assert', label: 'Assert' },
   { key: 'tests', label: 'Tests' },
   { key: 'docs', label: 'Docs' },
+  { key: 'app', label: 'App' },
   { key: 'settings', label: 'Settings' }
 ];
 
@@ -48,6 +50,7 @@ const TAB_PANELS: Record<string, React.ComponentType<any>> = {
   script: Script,
   tests: Tests,
   docs: Documentation,
+  app: AppUnsupported,
   settings: Settings
 };
 
@@ -77,6 +80,7 @@ const HttpRequestPane = ({
   const responseVars = get(draftOrOriginal, 'request.vars.res', []);
   const auth = get(draftOrOriginal, 'request.auth', {});
   const tags = get(draftOrOriginal, 'tags', []);
+  const appEnabled = get(draftOrOriginal, 'app.enabled', false) === true;
 
   const activeCounts = useMemo(() => ({
     params: params.filter((p: any) => p.enabled).length,
@@ -110,25 +114,38 @@ const HttpRequestPane = ({
     };
   }, [activeCounts, body.mode, auth.mode, script, item.preRequestScriptErrorMessage, item.postResponseScriptErrorMessage, item.testScriptErrorMessage, tests, docs, tags]);
 
+  // App-enabled requests collapse the pane to just the App tab so the desktop-only
+  // feature stays visible and editable elsewhere while VS Code shows the unsupported
+  // notice in place of the usual editors.
   const allTabs = useMemo(
-    () => TAB_CONFIG.map(({ key, label }) => ({ key, label, indicator: indicators[key] })),
-    [indicators]
+    () => (appEnabled
+      ? [{ key: 'app', label: 'App', indicator: indicators.app }]
+      : TAB_CONFIG.filter(({ key }) => key !== 'app').map(({ key, label }) => ({ key, label, indicator: indicators[key] }))),
+    [indicators, appEnabled]
   );
 
+  const effectiveTab = appEnabled ? 'app' : requestPaneTab;
+
+  useEffect(() => {
+    if (appEnabled && requestPaneTab !== 'app') {
+      dispatch(updateRequestPaneTab({ uid: item.uid, requestPaneTab: 'app' }));
+    }
+  }, [appEnabled, requestPaneTab, dispatch, item.uid]);
+
   const tabPanel = useMemo(() => {
-    const Component = TAB_PANELS[requestPaneTab];
+    const Component = TAB_PANELS[effectiveTab];
     return Component ? <Component item={item} collection={collection} /> : <div className="mt-4">404 | Not found</div>;
-  }, [requestPaneTab, item, collection]);
+  }, [effectiveTab, item, collection]);
 
   if (!activeTabUid || !focusedTab?.uid || !requestPaneTab) {
     return <div className="pb-4 px-4">An error occurred!</div>;
   }
 
-  const rightContent = requestPaneTab === 'body' ? (
+  const rightContent = !appEnabled && effectiveTab === 'body' ? (
     <div ref={rightContentRef}>
       <RequestBodyMode item={item} collection={collection} />
     </div>
-  ) : requestPaneTab === 'auth' ? (
+  ) : !appEnabled && effectiveTab === 'auth' ? (
     <div ref={rightContentRef} className="flex flex-grow justify-start items-center">
       <AuthMode item={item} collection={collection} />
     </div>
@@ -138,7 +155,7 @@ const HttpRequestPane = ({
     <div className="flex flex-col h-full relative">
       <ResponsiveTabs
         tabs={allTabs}
-        activeTab={requestPaneTab}
+        activeTab={effectiveTab}
         onTabSelect={selectTab}
         rightContent={rightContent}
         rightContentRef={rightContent ? rightContentRef : null}
