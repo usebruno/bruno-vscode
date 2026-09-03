@@ -277,7 +277,8 @@ export const renderVarInfo = (token: any, options: any) => {
   const hasSecretReferences = containsSecretVariableReferences(rawValue, collection, item);
   const shouldMaskValue = isSecret || hasSecretReferences;
 
-  const isMasked = options.variables?.maskedEnvVariables?.includes(variableName);
+  const allVariables = collection ? getAllVariables(collection, item) : {};
+  const isMasked = allVariables?.maskedEnvVariables?.includes(variableName);
 
   const into = document.createElement('div');
   into.className = 'bruno-var-info-container';
@@ -356,8 +357,6 @@ export const renderVarInfo = (token: any, options: any) => {
     // Detect current theme from DOM
     const isDarkTheme = document.documentElement.classList.contains('dark');
     const cmTheme = isDarkTheme ? 'monokai' : 'default';
-
-    const allVariables = collection ? getAllVariables(collection, item) : {};
 
     const editorInitialValue = valueToString(rawValue, VALUE_INDENT);
 

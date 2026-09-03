@@ -39,6 +39,18 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     editorFocused: () => frame.locator('.CodeMirror-brunoVarInfo .var-value-editor .CodeMirror-focused'),
     editorLine: () => frame.locator('.CodeMirror-brunoVarInfo .var-value-editor .CodeMirror-line').first()
   },
+  environments: {
+    selectorTrigger: () => frame.getByTestId('environment-selector-trigger'),
+    scopeTab: (scope: 'collection' | 'global') => frame.getByTestId(`env-tab-${scope}`),
+    createEnvironment: () => frame.getByTestId('create-environment'),
+    nameInput: () => frame.getByTestId('environment-name'),
+    confirmCreate: () => frame.getByTestId('modal-confirm-button'),
+    varNameInput: (index: number) => frame.getByTestId('env-var-name').nth(index),
+    varValueEditor: (name: string) => frame.getByTestId(`env-var-row-${name}`).locator('.CodeMirror'),
+    varSecretCheckbox: (name: string) =>
+      frame.getByTestId(`env-var-row-${name}`).getByTestId('env-var-secret'),
+    save: () => frame.getByTestId('save-env')
+  },
   paramsTable: {
     // Value cell of the path-params table.
     pathValueCell: () =>
