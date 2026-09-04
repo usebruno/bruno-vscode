@@ -117,6 +117,7 @@ export interface AppCollection extends Omit<Collection, 'items'> {
   activeRequestUid?: UID | null;
   tags?: string[];
   selectedEnvironment?: string | null;
+  pendingEnvironmentSelectionName?: string | null;
   runtimeVariables?: Record<string, unknown>;
   isDirty?: boolean;
   importedAt?: number;
