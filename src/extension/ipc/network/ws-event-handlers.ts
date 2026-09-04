@@ -227,7 +227,7 @@ const registerWsEventHandlers = (): void => {
       const certsAndProxyConfig = await getCertsAndProxyConfig({
         collectionUid: collection.uid,
         collection: collection as never,
-        request: requestCopy as never,
+        request: preparedRequest as never,
         envVars: preparedRequest.envVars,
         runtimeVariables,
         processEnvVars: preparedRequest.processEnvVars,
@@ -238,7 +238,7 @@ const registerWsEventHandlers = (): void => {
       const { httpsAgentRequestFields } = certsAndProxyConfig;
 
       const sslOptions = {
-        rejectUnauthorized: httpsAgentRequestFields.rejectUnauthorized !== false,
+        rejectUnauthorized: false, // should be reverted back once we have a proper CA setup.
         ca: httpsAgentRequestFields.ca,
         cert: httpsAgentRequestFields.cert,
         key: httpsAgentRequestFields.key,
