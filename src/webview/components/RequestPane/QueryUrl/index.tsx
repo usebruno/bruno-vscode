@@ -22,6 +22,7 @@ import { isMacOS } from 'utils/common/platform';
 import { hasRequestChanges } from 'utils/collections';
 import StyledWrapper from './StyledWrapper';
 import toast from 'react-hot-toast';
+import GenerateCodeItem from '../GenerateCode';
 
 interface QueryUrlProps {
   item?: React.ReactNode;
@@ -377,7 +378,11 @@ const QueryUrl = ({
           item={item}
           showNewlineArrow={true}
         />
+
         <div className="flex items-center h-full mr-2 cursor-pointer" id="send-request" onClick={handleRun}>
+          {['http-request', 'graphql-request'].includes(item.type) ? (
+            <GenerateCodeItem item={item} collection={collection} />
+          ) : null}        
           <div
             title="Save Request"
             className="infotip mr-3"
