@@ -26,8 +26,12 @@ const EnvironmentListContent = ({
     <div>
       {environments && environments.length > 0 ? (
         <>
-          <div className="environment-list">
-            <div className="dropdown-item no-environment" onClick={() => onEnvironmentSelect(null)}>
+          <div className="environment-list" data-testid="environment-list">
+            <div
+              className="dropdown-item no-environment"
+              onClick={() => onEnvironmentSelect(null)}
+              data-testid="environment-list-no-environment"
+            >
               <span>No Environment</span>
             </div>
             <ToolHint
@@ -47,13 +51,14 @@ const EnvironmentListContent = ({
                   onClick={() => onEnvironmentSelect(env)}
                   data-tooltip-content={env.name}
                   data-tooltip-hidden={env.name?.length < 90}
+                  data-testid="environment-list-item"
                 >
                   <span className="max-w-100% truncate no-wrap">{env.name}</span>
                 </div>)}
               </div>
             </ToolHint>
             <div className="dropdown-item configure-button">
-              <button onClick={onSettingsClick} id="configure-env">
+              <button onClick={onSettingsClick} id="configure-env" data-testid="environment-list-configure">
                 <IconSettings size={16} strokeWidth={1.5} />
                 <span>Configure</span>
               </button>
@@ -61,7 +66,7 @@ const EnvironmentListContent = ({
           </div>
         </>
       ) : (
-        <div className="empty-state">
+        <div className="empty-state" data-testid="environment-list-empty-state">
           <h3>Ready to get started?</h3>
           <p>{description}</p>
           <div className="space-y-2">

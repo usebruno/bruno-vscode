@@ -239,3 +239,50 @@ describe('createWebSocketRequest', () => {
     expect(item.settings).toEqual({ timeout: 0, keepAliveInterval: 0 });
   });
 });
+
+// ─── Collection-level inheritance ───────────────────────────────────────────
+
+describe('collection presets', () => {
+  const withPresets: CollectionInfo = {
+    uid: 'col-5',
+    pathname: '/Users/test/preset-collection',
+    format: 'bru',
+    brunoConfig: { presets: { requestType: 'http', requestUrl: 'https://api.example.com' } }
+  };
+
+  const withDraftPresets: CollectionInfo = {
+    ...withPresets,
+    uid: 'col-6',
+    draft: { brunoConfig: { presets: { requestUrl: 'https://draft.example.com' } } }
+  };
+
+  beforeEach(() => {
+    transientManager.resetCounter(withPresets.uid);
+    transientManager.resetCounter(withDraftPresets.uid);
+  });
+
+  test('base URL preset seeds the url of every request type', () => {
+    expect(transientManager.createHttpRequest(withPresets).request.url).toBe('https://api.example.com');
+    expect(transientManager.createGraphQLRequest(withPresets).request.url).toBe('https://api.example.com');
+    expect(transientManager.createGrpcRequest(withPresets).request.url).toBe('https://api.example.com');
+    expect(transientManager.createWebSocketRequest(withPresets).request.url).toBe('https://api.example.com');
+  });
+
+  test('unsaved preset edits on the draft win over the saved config', () => {
+    const item = transientManager.createHttpRequest(withDraftPresets);
+    expect(item.request.url).toBe('https://draft.example.com');
+  });
+
+  test('collections without presets still produce an empty url', () => {
+    expect(transientManager.createHttpRequest(bruCollection).request.url).toBe('');
+  });
+
+  test('the requestType preset does not override the type picked from the menu', () => {
+    const graphqlPreset: CollectionInfo = {
+      uid: 'col-7',
+      pathname: '/Users/test/graphql-preset',
+      brunoConfig: { presets: { requestType: 'graphql' } }
+    };
+    expect(transientManager.createHttpRequest(graphqlPreset).type).toBe('http-request');
+  });
+});
