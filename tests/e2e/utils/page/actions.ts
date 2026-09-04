@@ -550,14 +550,16 @@ export async function selectGrpcMethod(editor: Frame, methodText: string): Promi
   await expect(grpc.selectedMethodName()).toContainText(methodText, { timeout: 5_000 });
 }
 
-/** Set the first gRPC request message (JSON) on the Message tab. */
-export async function setGrpcMessage(page: Page, editor: Frame, json: string): Promise<void> {
+export async function openGrpcMessageTab(editor: Frame): Promise<void> {
   const locators = buildCommonLocators(editor);
   const messageTab = locators.tabs.byText('Message');
-  await expect(messageTab).toBeVisible({ timeout: 10_000 });
+  await expect(messageTab).toBeVisible();
   await messageTab.click();
+}
 
-  await setCodeMirrorValue(page, locators.grpc.messageEditor(), json);
+export async function setGrpcMessage(page: Page, editor: Frame, json: string): Promise<void> {
+  await openGrpcMessageTab(editor);
+  await setCodeMirrorValue(page, buildCommonLocators(editor).grpc.messageEditor(), json);
 }
 
 /**

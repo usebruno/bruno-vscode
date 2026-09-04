@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package streaming;
+
+// gRPC method types
+service StreamService {
+  rpc SayHello (Msg) returns (Msg);
+  rpc Collect (stream Msg) returns (Msg);
+  rpc Subscribe (Msg) returns (stream Msg);
+  rpc Chat (stream Msg) returns (stream Msg);
+}
+
+message Msg {
+  string message = 1;
+}

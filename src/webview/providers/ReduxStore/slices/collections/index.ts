@@ -649,7 +649,7 @@ export const collectionsSlice = createSlice({
     },
 
     updateRequestMethod: (state, action: PayloadAction<UpdateRequestMethodPayload>) => {
-      const { collectionUid, itemUid, method } = action.payload;
+      const { collectionUid, itemUid, method, methodType } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (collection) {
         const item = findItemInCollection(collection, itemUid);
@@ -657,6 +657,7 @@ export const collectionsSlice = createSlice({
           const draft = ensureDraft(item);
           if (draft.request) {
             (draft.request as { method?: string }).method = method;
+            (draft.request as { methodType?: string }).methodType = methodType;
           }
         }
       }
