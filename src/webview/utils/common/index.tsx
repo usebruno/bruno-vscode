@@ -165,7 +165,7 @@ export const relativeDate = (dateString: string | Date): string => {
     return `${hoursDifference} hour${hoursDifference > 1 ? 's' : ''} ago`;
   } else if (daysDifference < 7) {
     return `${daysDifference} day${daysDifference > 1 ? 's' : ''} ago`;
-  } else if (weeksDifference < 4) {
+  } else if (daysDifference < 30) {
     return `${weeksDifference} week${weeksDifference > 1 ? 's' : ''} ago`;
   } else {
     return `${monthsDifference} month${monthsDifference > 1 ? 's' : ''} ago`;
