@@ -4,9 +4,12 @@ import { Page, Frame, Locator, expect } from '@playwright/test';
 import { buildCommonLocators } from './locators';
 
 /**
- * Locate the collection directory (the folder containing bruno.json) created under a test's tmpDir.
+ * Locate the collection directory created under a test's tmpDir.
  */
-export function findCollectionDir(root: string): string {
+export function findCollectionDir(
+  root: string,
+  configFile: 'bruno.json' | 'opencollection.yml' = 'bruno.json'
+): string {
   const stack = [root];
   while (stack.length) {
     const dir = stack.pop() as string;
@@ -16,33 +19,28 @@ export function findCollectionDir(root: string): string {
     } catch {
       continue;
     }
-    if (entries.some((e) => e.isFile() && e.name === 'bruno.json')) return dir;
+    if (entries.some((e) => e.isFile() && e.name === configFile)) return dir;
     for (const e of entries) {
       if (e.isDirectory()) stack.push(path.join(dir, e.name));
     }
   }
-  throw new Error(`No collection (bruno.json) found under ${root}`);
+  throw new Error(`No collection (${configFile}) found under ${root}`);
 }
 
-/**
- * Find the webview Frame that contains actual Bruno app content.
- *
- * VS Code renders webview content inside nested iframes. The real content
- * may live in a frame named "pending-frame" or "active-frame" depending on
- * the VS Code version and timing.  We look for the frame whose document
- * contains `<div id="root">` (the React mount point).
- */
-export async function getWebviewFrame(page: Page, timeout = 20_000): Promise<Frame> {
+// Find the webview Frame that contains the given marker selector.
+export async function getWebviewFrame(
+  page: Page,
+  markerSelector: (frame: Frame) => Locator,
+  existingFrame?: Frame,
+  timeout = 20_000
+): Promise<Frame> {
   const deadline = Date.now() + timeout;
 
   while (Date.now() < deadline) {
     for (const frame of page.frames()) {
-      if (frame === page.mainFrame()) continue;
+      if (frame === page.mainFrame() || frame === existingFrame) continue;
       try {
-        const hasRoot = await frame.locator('#root').count();
-        if (hasRoot > 0) {
-          return frame;
-        }
+        if (await markerSelector(frame).count() > 0) return frame;
       } catch {
         // frame may have been detached, skip
       }
@@ -50,7 +48,7 @@ export async function getWebviewFrame(page: Page, timeout = 20_000): Promise<Fra
     await page.waitForTimeout(500);
   }
 
-  throw new Error(`Could not find a webview frame with #root within ${timeout}ms`);
+  throw new Error(`Could not find a webview frame within ${timeout}ms`);
 }
 
 /**
@@ -63,24 +61,7 @@ export async function waitForNewWebviewFrame(
   existingFrame: Frame,
   timeout = 20_000
 ): Promise<Frame> {
-  const deadline = Date.now() + timeout;
-
-  while (Date.now() < deadline) {
-    for (const frame of page.frames()) {
-      if (frame === existingFrame || frame === page.mainFrame()) continue;
-      try {
-        const hasRoot = await frame.locator('#root').count();
-        if (hasRoot > 0) {
-          return frame;
-        }
-      } catch {
-        // skip detached frames
-      }
-    }
-    await page.waitForTimeout(500);
-  }
-
-  throw new Error(`Could not find a new webview frame within ${timeout}ms`);
+  return getWebviewFrame(page, (frame) => frame.locator('#root'), existingFrame);
 }
 
 /**
@@ -96,7 +77,7 @@ export async function openBrunoSidebar(page: Page): Promise<Frame> {
   await expect(sidebarTitle).toHaveText(/Bruno/i, { timeout: 15_000 });
 
   // Wait for the sidebar webview frame with Bruno content to be ready
-  const frame = await getWebviewFrame(page);
+  const frame = await getWebviewFrame(page, (frame) => frame.locator('#root'));
   await expect(frame.locator('.sidebar-header')).toBeVisible({ timeout: 15_000 });
 
   return frame;
@@ -478,7 +459,7 @@ export async function fillJsonBody(page: Page, editor: Frame, jsonBody: string):
 }
 
 /**
- * Add a request-level variable on the Vars tab (the first of its two EditableTables).
+ * Add a request-level variable on the Vars tab's Pre Request table.
  * Name cell is a plain <input>, value cell a CodeMirror editor — used to check a
  * `{{?prompt}}` inside a variable's value is still discovered.
  */
@@ -490,7 +471,7 @@ export async function addRequestVar(
 ): Promise<void> {
   await openRequestTab(editor, 'vars', 'Vars');
 
-  const rows = buildCommonLocators(editor).editableTable.firstTableRows();
+  const rows = buildCommonLocators(editor).varsTable.rows('request', 'req');
   await expect(rows.first()).toBeVisible({ timeout: 10_000 });
   const emptyRowIdx = (await rows.count()) - 1;
   const row = buildCommonLocators(rows.nth(emptyRowIdx)).editableTable;
@@ -680,26 +661,44 @@ async function openRequestByMarker(
   await requestRow.click();
 
   // Wait for the request editor frame — identified by the marker selector.
-  const timeout = 20_000;
-  const deadline = Date.now() + timeout;
-  let editor: Frame | undefined;
-
-  while (Date.now() < deadline) {
-    for (const frame of page.frames()) {
-      if (frame === sidebar || frame === page.mainFrame()) continue;
-      try {
-        const has = await frame.locator(markerSelector).count();
-        if (has > 0) { editor = frame; break; }
-      } catch { /* detached */ }
-    }
-    if (editor) break;
-    await page.waitForTimeout(500);
-  }
-
-  if (!editor) throw new Error(`Request editor frame with '${markerSelector}' not found within ${timeout}ms`);
+  const editor = await getWebviewFrame(page, (frame) => frame.locator(markerSelector), sidebar);
   await expect(editor.locator(markerSelector)).toBeVisible({ timeout: 10_000 });
 
   return editor;
+}
+
+export async function openCollectionSettings(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string
+): Promise<Frame> {
+  const row = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
+
+  const settings = await getWebviewFrame(
+    page,
+    (frame) => buildCommonLocators(frame).collectionSettings.container(), sidebar);
+  await expect(buildCommonLocators(settings).collectionSettings.container()).toBeVisible({ timeout: 10_000 });
+
+  return settings;
+}
+
+export async function addCollectionHeader(
+  page: Page,
+  settings: Frame,
+  name: string,
+  value: string
+): Promise<void> {
+  await openRequestPaneTab(settings, 'Headers');
+
+  const rows = buildCommonLocators(settings).editableTable.rows();
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+  const emptyRowIdx = (await rows.count()) - 1;
+  const row = buildCommonLocators(rows.nth(emptyRowIdx)).editableTable;
+
+  await setCodeMirrorValue(page, row.columnNameEditor(), name);
+  await setCodeMirrorValue(page, row.columnValueEditor(), value);
 }
 
 /**

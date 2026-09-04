@@ -994,6 +994,14 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
+  const writeCollectionFile = async (filePath: string, content: string) => {
+    if (isDocumentRegistered(filePath)) {
+      await writeFileViaVSCode(filePath, content);
+    } else {
+      await writeFile(filePath, content);
+    }
+  };
+
   registerHandler('renderer:save-bruno-config', async (args) => {
     const [collectionPath, brunoConfig] = args as [string, BrunoConfig];
 
@@ -1010,7 +1018,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         const content = fs.readFileSync(configFilePath, 'utf8');
         const parsed = await parseCollection(content, { format });
         const newContent = await stringifyCollection(parsed.collectionRoot, transformedConfig, { format });
-        await writeFile(configFilePath, newContent);
+        await writeCollectionFile(configFilePath, newContent);
       } else {
         const content = await stringifyJson(transformedConfig);
         await writeFile(configFilePath, content);
@@ -1034,7 +1042,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       if (format === 'yml') {
         const configFilePath = path.join(collectionPath, 'opencollection.yml');
         const content = await stringifyCollection(collectionRoot, transformedConfig, { format });
-        await writeFile(configFilePath, content);
+        await writeCollectionFile(configFilePath, content);
       } else {
         const configFilePath = path.join(collectionPath, 'bruno.json');
         const content = await stringifyJson(transformedConfig);
@@ -1129,15 +1137,11 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     try {
       const format = getCollectionFormat(collectionPathname);
       const filename = format === 'yml' ? 'opencollection.yml' : 'collection.bru';
-      const content = await stringifyCollection(collectionRoot, brunoConfig, { format });
+      const configToSave = format === 'yml' && brunoConfig ? transformBrunoConfigBeforeSave(brunoConfig) : brunoConfig;
+      const content = await stringifyCollection(collectionRoot, configToSave, { format });
       const filePath = path.join(collectionPathname, filename);
 
-      // Use VS Code-aware write if the file is open in a custom editor
-      if (isDocumentRegistered(filePath)) {
-        await writeFileViaVSCode(filePath, content);
-      } else {
-        await writeFile(filePath, content);
-      }
+      await writeCollectionFile(filePath, content);
 
       return { success: true };
     } catch (error) {

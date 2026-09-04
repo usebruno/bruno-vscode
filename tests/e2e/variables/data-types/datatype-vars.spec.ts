@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Page, Frame } from '@playwright/test';
-import { test, expect } from '../utils/fixtures';
-import { openBrunoSidebar, createCollection, expandCollection, openRequest, openRequestPaneTab, findCollectionDir } from '../utils/page/actions';
-import { getActiveEditorFrame } from '../utils/page/oauth2-actions';
+import { test, expect } from '../../utils/fixtures';
+import { openBrunoSidebar, createCollection, expandCollection, openRequest, openRequestPaneTab, findCollectionDir } from '../../utils/page/actions';
+import { getActiveEditorFrame } from '../../utils/page/oauth2-actions';
 import { buildCommonLocators } from '../utils/page/locators';
 
 // A request with a typed (object) pre-request var, a plain string pre-request var,

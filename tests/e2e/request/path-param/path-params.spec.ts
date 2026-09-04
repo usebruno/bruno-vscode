@@ -1,5 +1,5 @@
 import type { Page, Frame } from '@playwright/test';
-import { test, expect } from '../utils/fixtures';
+import { test, expect } from '../../utils/fixtures';
 import {
   openBrunoSidebar,
   createCollection,
@@ -8,8 +8,8 @@ import {
   openRequest,
   openRequestPaneTab,
   runCommand
-} from '../utils/page/actions';
-import { buildCommonLocators } from '../utils/page/locators';
+} from '../../utils/page/actions';
+import { buildCommonLocators } from '../../utils/page/locators';
 
 // Edit a path param's value via the hover popover over its `:param` token.
 async function editPathParamViaPopover(
