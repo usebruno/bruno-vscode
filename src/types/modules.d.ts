@@ -23,6 +23,12 @@ declare module '*.jpg' {
   export default content;
 }
 
+// Inlined as a data URI by rsbuild — the webview CSP forbids fetching wasm at runtime.
+declare module '*.wasm' {
+  const content: string;
+  export default content;
+}
+
 declare module 'platform' {
   interface OS {
     family: string;
