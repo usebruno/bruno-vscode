@@ -13,11 +13,7 @@ import StyledWrapper from './StyledWrapper';
 import Vars from './Vars/index';
 import StatusDot from 'components/StatusDot';
 import Overview from './Overview/index';
-
-interface CollectionSettingsProps {
-  collection?: React.ReactNode;
-}
-
+import ClientCertSettings from './ClientCertSettings/index'
 
 const CollectionSettings = ({
   collection
@@ -59,6 +55,10 @@ const CollectionSettings = ({
     : get(collection, 'brunoConfig.protobuf', {});
   const presets = collection.draft?.brunoConfig ? get(collection, 'draft.brunoConfig.presets', {}) : get(collection, 'brunoConfig.presets', {});
   const hasPresets = presets && presets.requestUrl !== '';
+  const clientCerts = collection.draft?.brunoConfig
+    ? get(collection, 'draft.brunoConfig.clientCertificates.certs', [])
+    : get(collection, 'brunoConfig.clientCertificates.certs', []);
+  const hasClientCerts = clientCerts.length > 0;
 
   const getTabPanel = (tab: any) => {
     switch (tab) {
@@ -82,6 +82,9 @@ const CollectionSettings = ({
       }
       case 'presets': {
         return <Presets collection={collection} />;
+      }
+      case 'client-certs': {
+        return <ClientCertSettings collection={collection} />;
       }
       case 'protobuf': {
         return <Protobuf collection={collection} />;
@@ -124,6 +127,10 @@ const CollectionSettings = ({
         <div className={getTabClassname('presets')} role="tab" onClick={() => setTab('presets')}>
           Presets
           {hasPresets && <StatusDot />}
+        </div>
+        <div className={getTabClassname('client-certs')} role="tab" onClick={() => setTab('client-certs')}>
+          Client Certificates
+          {hasClientCerts && <StatusDot />}
         </div>
         <div className={getTabClassname('protobuf')} role="tab" onClick={() => setTab('protobuf')}>
           Protobuf

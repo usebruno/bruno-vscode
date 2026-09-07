@@ -128,7 +128,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     messageEditor: () => frame.getByTestId('grpc-messages-container').locator('.CodeMirror-wrap').first(),
     sendRequestButton: () => frame.getByTestId('grpc-send-request-button'),
     responseStatusCode: () => frame.getByTestId('grpc-response-status-code'),
-    responseContent: () => frame.getByTestId('grpc-response-content')
+    responseContent: () => frame.getByTestId('grpc-response-content'),
+    errorMessage: () => frame.getByTestId('grpc-response-content').locator('.error-message')
   },
   // Modal that asks the user for {{?prompt}} values before a request is sent.
   promptVariables: {
@@ -140,7 +141,19 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   },
   response: {
     statusCode: () => frame.getByTestId('response-status-code'),
-    previewContainer: () => frame.getByTestId('response-preview-container')
+    previewContainer: () => frame.getByTestId('response-preview-container'),
+    error: () => frame.getByTestId('response-error')
+  },
+  clientCerts: {
+    emptyMessage: () => frame.getByText('No client certificates added'),
+    rows: () => frame.getByTestId('client-cert-row'),
+    domainInput: () => frame.getByTestId('client-cert-domain'),
+    pfxRadio: () => frame.getByTestId('client-cert-type-pfx'),
+    filePicker: (field: string) => frame.getByTestId(`client-cert-file-${field}`),
+    pickedFile: (field: string) => frame.getByTestId(`client-cert-file-name-${field}`),
+    passphraseEditor: () => frame.getByTestId('client-cert-passphrase').locator('.CodeMirror'),
+    addButton: () => frame.getByTestId('add-client-cert'),
+    saveButton: () => frame.getByTestId('save-client-certs')
   },
   // A dropdown menu item, by its visible text.
   dropdownItem: (text: string) => frame.locator('.dropdown-item').filter({ hasText: text }),
@@ -152,6 +165,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     // Strip shown once the socket is connected.
     connectionStatusStrip: () => frame.locator('.connection-status-strip'),
     // Text of an incoming message in the WS response pane.
-    incomingMessage: () => frame.locator('.ws-message.ws-incoming .message-content')
+    incomingMessage: () => frame.locator('.ws-message.ws-incoming .message-content'),
+    errorMessage: () => frame.locator('.ws-message.ws-error .message-content')
   }
 });

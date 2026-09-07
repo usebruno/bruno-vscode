@@ -2527,19 +2527,19 @@ export const saveCollectionSettings = (collectionUid: any, brunoConfig: Record<s
     const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
     const { ipcRenderer } = window;
 
-    const savePromises = [];
-
-    savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
-
     const brunoConfigToSave = brunoConfig || (collectionCopy.draft && collectionCopy.draft.brunoConfig);
-    if (brunoConfigToSave) {
-      // Pass transformed collectionRootToSave instead of collectionCopy.root
-      // For YML format, update-bruno-config also writes to opencollection.yml,
-      // so it needs the transformed root data to avoid overwriting headers/auth/scripts
-      savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave));
-    }
 
-    Promise.all(savePromises)
+    const collectionRootConfig = brunoConfigToSave || collectionCopy.brunoConfig;
+
+    const save = async () => {
+      await ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionRootConfig);
+
+      if (brunoConfigToSave) {
+        await ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave);
+      }
+    };
+
+    save()
       .then(() => {
         if (!silent) {
           toast.success('Collection Settings saved successfully');

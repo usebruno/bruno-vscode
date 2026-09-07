@@ -11,9 +11,14 @@ import { useDetectSensitiveField } from 'hooks/useDetectSensitiveField/index';
 import { useTheme } from 'styled-components';
 import { useDispatch } from 'react-redux';
 import { updateCollectionClientCertificates } from 'providers/ReduxStore/slices/collections';
-import { saveCollectionSettings } from 'providers/ReduxStore/slices/collections/actions';
+import { browseFiles, saveCollectionSettings } from 'providers/ReduxStore/slices/collections/actions';
 import get from 'lodash/get';
 import Button from 'ui/Button';
+
+const CERT_FILE_FILTERS = [
+  { name: 'Certificates', extensions: ['pem', 'crt', 'cer', 'key', 'pfx', 'p12'] },
+  { name: 'All Files', extensions: ['*'] }
+];
 
 interface ClientCertSettingsProps {
   collection?: React.ReactNode;
@@ -100,12 +105,16 @@ const ClientCertSettings = ({
   const { isSensitive } = useDetectSensitiveField(collection);
   const { showWarning, warningMessage } = isSensitive(formik.values.passphrase);
 
-  const getFile = (e: any) => {
-    const filePath = window?.ipcRenderer?.getFilePath(e?.files?.[0]);
-    if (filePath) {
-      let relativePath = path.relative(collection.pathname, filePath);
-      formik.setFieldValue(e.name, relativePath);
-    }
+  const getFile = async (e: any) => {
+    e.preventDefault();
+
+    const fieldName = e.currentTarget.name;
+
+    const filePaths = (await (dispatch as any)(browseFiles(CERT_FILE_FILTERS, ['']))) as string[];
+    const filePath = filePaths?.[0];
+    if (!filePath) return;
+
+    formik.setFieldValue(fieldName, path.relative(collection.pathname, filePath));
   };
 
   const resetFileInputFields = () => {
@@ -157,7 +166,7 @@ const ClientCertSettings = ({
         {!clientCertConfig.length
           ? 'No client certificates added'
           : clientCertConfig.map((clientCert: any, index: any) => (
-              <li key={`client-cert-${index}`} className="flex items-center available-certificates p-2 rounded-lg mb-2">
+              <li key={`client-cert-${index}`} data-testid="client-cert-row" className="flex items-center available-certificates p-2 rounded-lg mb-2">
                 <div className="flex items-center w-full justify-between">
                   <div className="flex w-full items-center">
                     <IconWorld className="mr-2" size={18} strokeWidth={1.5} />
@@ -191,6 +200,7 @@ const ClientCertSettings = ({
             </div>
             <input
               id="domain"
+              data-testid="client-cert-domain"
               type="text"
               name="domain"
               placeholder="example.org"
@@ -223,6 +233,7 @@ const ClientCertSettings = ({
             <label className="flex items-center ml-4 cursor-pointer" htmlFor="pfx">
               <input
                 id="pfx"
+                data-testid="client-cert-type-pfx"
                 type="radio"
                 name="type"
                 value="pfx"
@@ -244,15 +255,17 @@ const ClientCertSettings = ({
                 <input
                   key="certFilePath"
                   id="certFilePath"
+                  data-testid="client-cert-file-cert"
                   type="file"
                   name="certFilePath"
                   className={`non-passphrase-input ${formik.values.certFilePath?.length ? 'hidden' : 'block'}`}
-                  onChange={(e) => getFile(e.target)}
+                  onClick={getFile}
                   ref={certFilePathInputRef}
                 />
                 {formik.values.certFilePath ? (
                   <div className="flex flex-row gap-2 items-center">
                     <div
+                      data-testid="client-cert-file-name-cert"
                       className="my-[3px] overflow-hidden text-ellipsis whitespace-nowrap max-w-[300px]"
                       title={path.basename(formik.values.certFilePath)}
                     >
@@ -284,15 +297,17 @@ const ClientCertSettings = ({
                 <input
                   key="keyFilePath"
                   id="keyFilePath"
+                  data-testid="client-cert-file-key"
                   type="file"
                   name="keyFilePath"
                   className={`non-passphrase-input ${formik.values.keyFilePath?.length ? 'hidden' : 'block'}`}
-                  onChange={(e) => getFile(e.target)}
+                  onClick={getFile}
                   ref={keyFilePathInputRef}
                 />
                 {formik.values.keyFilePath ? (
                   <div className="flex flex-row gap-2 items-center">
                     <div
+                      data-testid="client-cert-file-name-key"
                       className="my-[3px] overflow-hidden text-ellipsis whitespace-nowrap max-w-[300px]"
                       title={path.basename(formik.values.keyFilePath)}
                     >
@@ -327,15 +342,17 @@ const ClientCertSettings = ({
                 <input
                   key="pfxFilePath"
                   id="pfxFilePath"
+                  data-testid="client-cert-file-pfx"
                   type="file"
                   name="pfxFilePath"
                   className={`non-passphrase-input ${formik.values.pfxFilePath?.length ? 'hidden' : 'block'}`}
-                  onChange={(e) => getFile(e.target)}
+                  onClick={getFile}
                   ref={pfxFilePathInputRef}
                 />
                 {formik.values.pfxFilePath ? (
                   <div className="flex flex-row gap-2 items-center">
                     <div
+                      data-testid="client-cert-file-name-pfx"
                       className="my-[3px] overflow-hidden text-ellipsis whitespace-nowrap max-w-[300px]"
                       title={path.basename(formik.values.pfxFilePath)}
                     >
@@ -365,7 +382,10 @@ const ClientCertSettings = ({
           <label className="settings-label" htmlFor="passphrase">
             Passphrase
           </label>
-          <div className="textbox flex flex-row items-center w-[300px] h-[1.70rem] relative">
+          <div
+            data-testid="client-cert-passphrase"
+            className="textbox flex flex-row items-center w-[300px] h-[1.70rem] relative"
+          >
             <SingleLineEditor
               value={formik.values.passphrase || ''}
               theme={storedTheme}
@@ -384,7 +404,7 @@ const ClientCertSettings = ({
             Add
           </Button>
           <div className="h-4 border-l border-gray-600"></div>
-          <Button type="button" size="sm" onClick={handleSave}>
+          <Button type="button" size="sm" onClick={handleSave} data-testid="save-client-certs">
             Save
           </Button>
         </div>

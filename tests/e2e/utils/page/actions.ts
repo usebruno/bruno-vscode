@@ -4,9 +4,9 @@ import { Page, Frame, Locator, expect } from '@playwright/test';
 import { buildCommonLocators } from './locators';
 
 /**
- * Locate the collection directory (the folder containing bruno.json) created under a test's tmpDir.
+ * Locate the collection directory created under a test's tmpDir.
  */
-export function findCollectionDir(root: string): string {
+export function findCollectionDir(root: string, configFile = 'bruno.json'): string {
   const stack = [root];
   while (stack.length) {
     const dir = stack.pop() as string;
@@ -16,12 +16,12 @@ export function findCollectionDir(root: string): string {
     } catch {
       continue;
     }
-    if (entries.some((e) => e.isFile() && e.name === 'bruno.json')) return dir;
+    if (entries.some((e) => e.isFile() && e.name === configFile)) return dir;
     for (const e of entries) {
       if (e.isDirectory()) stack.push(path.join(dir, e.name));
     }
   }
-  throw new Error(`No collection (bruno.json) found under ${root}`);
+  throw new Error(`No collection (${configFile}) found under ${root}`);
 }
 
 /**
@@ -978,6 +978,40 @@ export async function openRequestPaneTab(editor: Frame, tabName: string): Promis
   await editor.locator('.more-tabs').click();
   await editor.locator(`[data-testid="menu-dropdown-${tabName.toLowerCase()}"]`).click();
   await expect(directTab).toBeVisible({ timeout: 15_000 });
+}
+
+
+export async function openCollectionSettings(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string,
+  timeout = 5_000
+): Promise<Frame> {
+  const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
+  await expect(collectionRow).toBeVisible({ timeout });
+  await collectionRow.click();
+
+  const deadline = Date.now() + timeout;
+  let editor: Frame | undefined;
+
+  while (Date.now() < deadline) {
+    for (const frame of page.frames()) {
+      if (frame === sidebar || frame === page.mainFrame()) continue;
+      try {
+        const has = await buildCommonLocators(frame).collectionSettings.container().count();
+        if (has > 0) { editor = frame; break; }
+      } catch (err) {
+        console.debug('Frame detached during collection-settings lookup:', err);
+      }
+    }
+    if (editor) break;
+    await page.waitForTimeout(500);
+  }
+
+  if (!editor) throw new Error(`Collection settings frame not found within ${timeout}ms`);
+  await expect(buildCommonLocators(editor).collectionSettings.container()).toBeVisible({ timeout });
+
+  return editor;
 }
 
 /**
