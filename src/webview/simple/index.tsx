@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client';
 import { Toaster } from 'react-hot-toast';
 import SimpleApp from './SimpleApp';
 import ThemeProvider from '../providers/Theme';
+import '../styles/globals.css';
 
 const rootElement = document.getElementById('root');
 
@@ -15,8 +16,8 @@ if (rootElement) {
       <React.StrictMode>
         <ThemeProvider>
           <SimpleApp />
-        </ThemeProvider>        
-        <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+        </ThemeProvider>
       </React.StrictMode>
     );
   } catch (error) {
