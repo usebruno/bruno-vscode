@@ -2534,28 +2534,27 @@ export const saveCollectionSettings = (collectionUid: any, brunoConfig: Record<s
     const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
     const { ipcRenderer } = window;
 
-    const savePromises = [];
-
     const brunoConfigToSave = brunoConfig || (collectionCopy.draft && collectionCopy.draft.brunoConfig);
 
-    if (isYmlCollection(collectionCopy)) {
-      savePromises.push(
-        ipcRenderer.invoke(
+    const save = async () => {
+      if (isYmlCollection(collectionCopy)) {
+        await ipcRenderer.invoke(
           'renderer:save-collection-root',
           collectionCopy.pathname,
           collectionRootToSave,
           brunoConfigToSave || collectionCopy.brunoConfig
-        )
-      );
-    } else {
-      savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
+        );
+        return;
+      }
+
+      await ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig);
 
       if (brunoConfigToSave) {
-        savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave));
+        await ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave);
       }
-    }
+    };
 
-    Promise.all(savePromises)
+    save()
       .then(() => {
         if (!silent) {
           toast.success('Collection Settings saved successfully');

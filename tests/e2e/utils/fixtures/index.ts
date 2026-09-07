@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { runCommand } from '../page/actions';
+import { CA_CERT } from '../../ssl/client-certificate/server/mtls-certs';
 
 // This file lives at tests/e2e/utils/fixtures/, so climb four levels to the repo root.
 const EXTENSION_ROOT = path.resolve(__dirname, '../../../..');
@@ -137,7 +138,10 @@ function launchVSCode(
     workspacePath,
   ];
 
-  const proc = spawn(executablePath, args, { detached: false });
+  const proc = spawn(executablePath, args, {
+    detached: false,
+    env: { ...process.env, NODE_EXTRA_CA_CERTS: CA_CERT }
+  });
   // Only log errors to avoid noise
   proc.stderr?.on('data', d => {
     const line = String(d);

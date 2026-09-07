@@ -1,9 +1,6 @@
 /**
  * Unified test server for e2e tests.
  *
- * Mirrors the pattern from the main Bruno repo (packages/bruno-tests/src/index.js).
- * Playwright auto-starts this via the webServer config.
- *
  * Endpoints:
  *   GET  /ping                                    - Health check
  *   GET  /headers                                 - Echo request headers
@@ -35,10 +32,12 @@ import * as http from 'http';
 import { WebSocketServer } from 'ws';
 import { oauth2Router } from './auth/oauth2';
 import { startGrpcServer } from './grpc';
+import { startMtlsServer, startMtlsGrpcServer } from '../ssl/client-certificate/server';
+import { MTLS_PORT, MTLS_GRPC_PORT } from '../ssl/client-certificate/server/mtls-certs';
 
 const app = express();
 const port = Number(process.env.PORT) || 8081;
-// gRPC needs its own port; default to the HTTP port + 1.
+// gRPC port; default to the HTTP port + 1.
 const grpcPort = Number(process.env.GRPC_PORT) || port + 1;
 
 app.use(cors());
@@ -96,19 +95,17 @@ app.post('/api/echo/json', (req, res) => {
   res.json(req.body);
 });
 
-// Echo query params back as a flat, top-level object (e.g. `?token=abc` -> `{"token":"abc"}`).
+// Echo query params back as a flat, top-level object.
 app.all('/api/echo/query', (req, res) => {
   res.json(req.query);
 });
 
 // Echo a single probe header so header interpolation is easy to assert at the top level.
-// `app.all` so both HTTP (GET) and GraphQL (POST) requests reach it.
 app.all('/api/echo/header', (req, res) => {
   res.json({ value: req.headers['x-prompt-header'] ?? '' });
 });
 
 // Echo the Authorization header so bearer-auth interpolation is easy to assert.
-// `app.all` so both HTTP (GET) and GraphQL (POST) requests reach it.
 app.all('/api/echo/auth', (req, res) => {
   res.json({ authorization: req.headers['authorization'] ?? '' });
 });
@@ -141,5 +138,9 @@ server.listen(port, () => {
   console.log(`[test-server] Listening on http://127.0.0.1:${port}`);
 });
 
-// gRPC echo server, on its own port.
+// gRPC echo server.
 startGrpcServer(grpcPort);
+
+// mTLS servers — every request requires a client certificate.
+startMtlsServer(MTLS_PORT);
+startMtlsGrpcServer(MTLS_GRPC_PORT);
