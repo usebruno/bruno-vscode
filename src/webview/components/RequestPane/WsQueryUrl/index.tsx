@@ -133,7 +133,7 @@ const WsQueryUrl = ({
   return (
     <StyledWrapper>
       <div className="flex items-center h-full">
-        <div className="flex items-center input-container flex-1 w-full input-container pr-2 h-full relative">
+        <div className="flex items-center input-container flex-1 w-full min-w-0 pr-2 h-full relative">
           <div className="flex items-center justify-center px-[10px]">
             <span className="text-xs font-medium method-ws">WS</span>
           </div>

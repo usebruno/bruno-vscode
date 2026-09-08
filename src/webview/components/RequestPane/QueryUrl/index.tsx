@@ -361,7 +361,7 @@ const QueryUrl = ({
       </div>
       <div
         id="request-url"
-        className="h-full w-full flex flex-row input-container"
+        className="h-full w-full min-w-0 flex flex-row input-container"
       >
         <SingleLineEditor
           ref={editorRef}
