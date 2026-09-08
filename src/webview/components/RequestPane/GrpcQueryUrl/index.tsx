@@ -315,7 +315,7 @@ const GrpcQueryUrl = ({
           <span className="text-xs font-medium" style={{ color: theme.request.grpc }}>gRPC</span>
         </div>
       </div>
-      <div className="flex items-center w-full input-container h-full relative">
+      <div className="flex items-center w-full min-w-0 input-container h-full relative">
         <SingleLineEditor
           ref={editorRef}
           value={url}
