@@ -114,38 +114,25 @@ const HttpRequestPane = ({
     };
   }, [activeCounts, body.mode, auth.mode, script, item.preRequestScriptErrorMessage, item.postResponseScriptErrorMessage, item.testScriptErrorMessage, tests, docs, tags]);
 
-  // App-enabled requests collapse the pane to just the App tab so the desktop-only
-  // feature stays visible and editable elsewhere while VS Code shows the unsupported
-  // notice in place of the usual editors.
   const allTabs = useMemo(
-    () => (appEnabled
-      ? [{ key: 'app', label: 'App', indicator: indicators.app }]
-      : TAB_CONFIG.filter(({ key }) => key !== 'app').map(({ key, label }) => ({ key, label, indicator: indicators[key] }))),
-    [indicators, appEnabled]
+    () => TAB_CONFIG.map(({ key, label }) => ({ key, label, indicator: indicators[key] })),
+    [indicators]
   );
 
-  const effectiveTab = appEnabled ? 'app' : requestPaneTab;
-
-  useEffect(() => {
-    if (appEnabled && requestPaneTab !== 'app') {
-      dispatch(updateRequestPaneTab({ uid: item.uid, requestPaneTab: 'app' }));
-    }
-  }, [appEnabled, requestPaneTab, dispatch, item.uid]);
-
   const tabPanel = useMemo(() => {
-    const Component = TAB_PANELS[effectiveTab];
+    const Component = TAB_PANELS[requestPaneTab];
     return Component ? <Component item={item} collection={collection} /> : <div className="mt-4">404 | Not found</div>;
-  }, [effectiveTab, item, collection]);
+  }, [requestPaneTab, item, collection]);
 
   if (!activeTabUid || !focusedTab?.uid || !requestPaneTab) {
     return <div className="pb-4 px-4">An error occurred!</div>;
   }
 
-  const rightContent = !appEnabled && effectiveTab === 'body' ? (
+  const rightContent = requestPaneTab === 'body' ? (
     <div ref={rightContentRef}>
       <RequestBodyMode item={item} collection={collection} />
     </div>
-  ) : !appEnabled && effectiveTab === 'auth' ? (
+  ) : requestPaneTab === 'auth' ? (
     <div ref={rightContentRef} className="flex flex-grow justify-start items-center">
       <AuthMode item={item} collection={collection} />
     </div>
@@ -155,7 +142,7 @@ const HttpRequestPane = ({
     <div className="flex flex-col h-full relative">
       <ResponsiveTabs
         tabs={allTabs}
-        activeTab={effectiveTab}
+        activeTab={requestPaneTab}
         onTabSelect={selectTab}
         rightContent={rightContent}
         rightContentRef={rightContent ? rightContentRef : null}
