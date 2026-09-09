@@ -484,7 +484,7 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
   const { collections } = state.collections;
 
   return new Promise((resolve, reject) => {
-    const savePromises: Promise<unknown>[] = [];
+    const savePromises: any = [];
 
     each(collectionDrafts, (collectionDraft) => {
       const collection = findCollectionByUid(collections, collectionDraft.collectionUid);
@@ -492,36 +492,29 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
         const collectionCopy = safeCloneCollection(collection);
         const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
         const { ipcRenderer } = window;
+        // Saving brunoConfig in openCollction.yml need to be handled in future.
+        let savePromises = [];
 
-        const collectionWrites: Promise<unknown>[] = [];
+        savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
 
-        if (isYmlCollection(collectionCopy)) {
-          collectionWrites.push(
-            ipcRenderer.invoke(
-              'renderer:save-collection-root',
-              collectionCopy.pathname,
-              collectionRootToSave,
-              collectionCopy.draft?.brunoConfig || collectionCopy.brunoConfig
-            )
-          );
-        } else {
-          collectionWrites.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
-
-          if (collectionCopy.draft?.brunoConfig) {
-            collectionWrites.push(ipcRenderer.invoke('renderer:update-bruno-config', collectionCopy.draft.brunoConfig, collectionCopy.pathname, collectionRootToSave));
-          }
+        if (collectionCopy.draft?.brunoConfig) {
+          // Pass collectionRootToSave to preserve headers/auth/scripts for YML format
+          savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', collectionCopy.draft.brunoConfig, collectionCopy.pathname, collectionRootToSave));
         }
 
-        savePromises.push(
-          Promise.all(collectionWrites).then(() => {
+        Promise.all(savePromises)
+          .then(() => {
             dispatch(saveCollectionDraft({ collectionUid: collectionDraft.collectionUid }));
           })
-        );
+          .catch((err) => {
+            toast.error('Failed to save collection settings!');
+            reject(err);
+          });
       }
     });
 
     Promise.all(savePromises)
-      .then(() => resolve(undefined))
+      .then(resolve)
       .catch((err) => {
         toast.error('Failed to save collection settings!');
         reject(err);
