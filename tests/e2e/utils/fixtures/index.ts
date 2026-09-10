@@ -8,6 +8,7 @@ import * as path from 'path';
 
 // This file lives at tests/e2e/utils/fixtures/, so climb four levels to the repo root.
 const EXTENSION_ROOT = path.resolve(__dirname, '../../../..');
+const VSCODE_VERSION = '1.136.2';
 
 export interface VSCodeFixture {
   /** The VS Code workbench page — use this to interact with the UI */
@@ -76,8 +77,8 @@ async function resolveExecutable(): Promise<string> {
     console.log(`[e2e] Using custom VS Code: ${process.env.VSCODE_PATH}`);
     return process.env.VSCODE_PATH;
   }
-  console.log('[e2e] Downloading stable VS Code…');
-  const exe = await downloadAndUnzipVSCode('stable');
+  console.log(`[e2e] Downloading VS Code ${VSCODE_VERSION}…`);
+  const exe = await downloadAndUnzipVSCode(VSCODE_VERSION);
   const resolved = fs.existsSync(exe) ? exe : resolveRenamedBinary(exe);
   if (!fs.existsSync(resolved)) {
     throw new Error(`VS Code executable not found (tried ${exe} and ${resolved})`);

@@ -62,7 +62,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   workbench: {
     editorTab: (title: string) => frame.locator('.tabs-container .tab').filter({ hasText: title }),
     editorTabClose: (title: string) =>
-      frame.locator('.tabs-container .tab').filter({ hasText: title }).locator('.action-label.codicon-close')
+      frame.locator('.tabs-container .tab').filter({ hasText: title }).locator('.tab-actions .action-label')
   },
   // New Request panel form.
   newRequest: {
@@ -88,6 +88,10 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     columnNameInput: () => frame.getByTestId('column-name').locator('input'),
     columnValueEditor: () => frame.getByTestId('column-value').locator('.CodeMirror'),
     columnCheckbox: () => frame.getByTestId('column-checkbox')
+  },
+  varsTable: {
+    rows: (scope: 'request' | 'collection' | 'folder', kind: 'req' | 'res' = 'req') =>
+      frame.getByTestId(`${scope}-vars-${kind}`).locator('tbody tr')
   },
   auth: {
     modeSelector: () => frame.locator('.auth-mode-selector'),
