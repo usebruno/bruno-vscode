@@ -492,7 +492,11 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
         const collectionCopy = safeCloneCollection(collection);
         const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
         const { ipcRenderer } = window;
-        // Saving brunoConfig in openCollction.yml need to be handled in future.
+        /* 
+        TODO: Saving brunoConfig in openCollction.yml need to be handled in future. 
+        ** `saveCollectionSettings` has been refactored to save brunoConfig in openCollection.yml. 
+        ** Changes are not done here as the code is not reached in the current flow. 
+        */
         let savePromises = [];
 
         savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));

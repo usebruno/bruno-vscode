@@ -95,7 +95,7 @@ const Headers = ({
         </button>
       </div>
       <div className="mt-6">
-        <Button type="submit" size="sm" onClick={handleSave}>
+        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-save">
           Save
         </Button>
       </div>

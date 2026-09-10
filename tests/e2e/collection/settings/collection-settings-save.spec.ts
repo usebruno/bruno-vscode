@@ -8,45 +8,16 @@ import {
   openCollectionSettings,
   openRequestPaneTab,
   addCollectionHeader,
-  findCollectionDir
+  findCollectionDir,
+  setPresetBaseUrl,
+  saveCollectionSettings,
+  recordIpcCalls,
+  countIpcCalls
 } from '../../utils/page/actions';
 
 const HEADER_NAME = 'x-e2e';
 const HEADER_VALUE = 'e2e-value';
 const PRESET_URL = 'http://127.0.0.1:8081/preset';
-
-async function recordIpcCalls(frame: Frame): Promise<void> {
-  await frame.evaluate(() => {
-    const w = window as any;
-    w.__ipcCalls = [];
-    if (w.__ipcCallsPatched) return;
-    w.__ipcCallsPatched = true;
-    const ipc = w.ipcRenderer;
-    const originalInvoke = ipc.invoke.bind(ipc);
-    ipc.invoke = (channel: string, ...args: any[]) => {
-      w.__ipcCalls.push(channel);
-      return originalInvoke(channel, ...args);
-    };
-  });
-}
-
-async function countIpcCalls(frame: Frame, channel: string): Promise<number> {
-  return frame.evaluate(
-    (ch) => ((window as any).__ipcCalls || []).filter((c: string) => c === ch).length,
-    channel
-  );
-}
-
-async function setPresetBaseUrl(settings: Frame, url: string): Promise<void> {
-  await openRequestPaneTab(settings, 'Presets');
-  const input = settings.locator('#request-url');
-  await expect(input).toBeVisible();
-  await input.fill(url);
-}
-
-async function clickSave(settings: Frame): Promise<void> {
-  await settings.getByRole('button', { name: 'Save', exact: true }).click();
-}
 
 async function stageSettingsEdits(
   page: Page,
@@ -77,7 +48,7 @@ test.describe('Collection settings save', () => {
     const settings = await stageSettingsEdits(page, tmpDir, 'Yml Settings', 'yml');
 
     await recordIpcCalls(settings);
-    await clickSave(settings);
+    await saveCollectionSettings(settings);
 
     const configFile = path.join(findCollectionDir(tmpDir, 'opencollection.yml'), 'opencollection.yml');
     const read = () => fs.readFileSync(configFile, 'utf8');
@@ -108,7 +79,7 @@ test.describe('Collection settings save', () => {
     const settings = await stageSettingsEdits(page, tmpDir, 'Bru Settings', 'bru');
 
     await recordIpcCalls(settings);
-    await clickSave(settings);
+    await saveCollectionSettings(settings);
 
     const collectionDir = findCollectionDir(tmpDir, 'bruno.json');
     const brunoJson = path.join(collectionDir, 'bruno.json');

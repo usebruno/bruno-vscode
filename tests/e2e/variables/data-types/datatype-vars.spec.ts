@@ -4,7 +4,7 @@ import type { Page, Frame } from '@playwright/test';
 import { test, expect } from '../../utils/fixtures';
 import { openBrunoSidebar, createCollection, expandCollection, openRequest, openRequestPaneTab, findCollectionDir } from '../../utils/page/actions';
 import { getActiveEditorFrame } from '../../utils/page/oauth2-actions';
-import { buildCommonLocators } from '../utils/page/locators';
+import { buildCommonLocators } from '../../utils/page/locators';
 
 // A request with a typed (object) pre-request var, a plain string pre-request var,
 // and a post-response var (which holds a JS expression, so it must NOT get a type).

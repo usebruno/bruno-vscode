@@ -59,7 +59,6 @@ export async function getWebviewFrame(
 export async function waitForNewWebviewFrame(
   page: Page,
   existingFrame: Frame,
-  timeout = 20_000
 ): Promise<Frame> {
   return getWebviewFrame(page, (frame) => frame.locator('#root'), existingFrame);
 }
@@ -699,6 +698,41 @@ export async function addCollectionHeader(
 
   await setCodeMirrorValue(page, row.columnNameEditor(), name);
   await setCodeMirrorValue(page, row.columnValueEditor(), value);
+}
+
+export async function saveCollectionSettings(settings: Frame): Promise<void> {
+  const saveButton = buildCommonLocators(settings).collectionSettings.saveButton();
+  await expect(saveButton).toBeVisible();
+  await saveButton.click();
+}
+
+export async function setPresetBaseUrl(settings: Frame, url: string): Promise<void> {
+  await openRequestPaneTab(settings, 'Presets');
+  const input = buildCommonLocators(settings).requestUrl.editor();
+  await expect(input).toBeVisible();
+  await input.fill(url);
+}
+
+export async function recordIpcCalls(frame: Frame): Promise<void> {
+  await frame.evaluate(() => {
+    const w = window as any;
+    w.__ipcCalls = [];
+    if (w.__ipcCallsPatched) return;
+    w.__ipcCallsPatched = true;
+    const ipc = w.ipcRenderer;
+    const originalInvoke = ipc.invoke.bind(ipc);
+    ipc.invoke = (channel: string, ...args: any[]) => {
+      w.__ipcCalls.push(channel);
+      return originalInvoke(channel, ...args);
+    };
+  });
+}
+
+export async function countIpcCalls(frame: Frame, channel: string): Promise<number> {
+  return frame.evaluate(
+    (ch) => ((window as any).__ipcCalls || []).filter((c: string) => c === ch).length,
+    channel
+  );
 }
 
 /**

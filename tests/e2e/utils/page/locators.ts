@@ -19,7 +19,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     container: () => frame.getByTestId('collection-settings'),
     // Overview → Requests line, e.g. "2 requests in collection".
     requestsInfo: () => frame.getByTestId('collection-requests-count'),
-    requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded')
+    requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded'),
+    saveButton: () => frame.getByTestId('collection-settings-save')
   },
   requestUrl: {
     editor: () => frame.locator('#request-url'),
@@ -83,6 +84,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   // scoped to a row, i.e. buildCommonLocators(row).editableTable.columnValueEditor().
   editableTable: {
     rows: () => frame.getByTestId('editable-table').locator('tbody tr'),
+    firstTableRows: () => frame.getByTestId('editable-table').first().locator('tbody tr'),
     columnNameEditor: () => frame.getByTestId('column-name').locator('.CodeMirror'),
     columnNameInput: () => frame.getByTestId('column-name').locator('input'),
     columnValueEditor: () => frame.getByTestId('column-value').locator('.CodeMirror'),
