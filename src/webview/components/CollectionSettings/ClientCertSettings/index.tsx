@@ -110,7 +110,7 @@ const ClientCertSettings = ({
 
     const fieldName = e.currentTarget.name;
 
-    const filePaths = (await (dispatch as any)(browseFiles(CERT_FILE_FILTERS, ['']))) as string[];
+    const filePaths = (await (dispatch as any)(browseFiles(CERT_FILE_FILTERS, []))) as string[];
     const filePath = filePaths?.[0];
     if (!filePath) return;
 

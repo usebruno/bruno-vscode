@@ -172,7 +172,10 @@ export const browseDirectory = async (): Promise<string | false> => {
   return isDirectory(resolvedPath) ? resolvedPath : false;
 };
 
-export const browseFiles = async (filters?: { name: string; extensions: string[] }[]): Promise<string[]> => {
+export const browseFiles = async (
+  filters?: { name: string; extensions: string[] }[],
+  properties?: string[]
+): Promise<string[]> => {
   const vscodeFilters: { [key: string]: string[] } = {};
   if (filters) {
     for (const filter of filters) {
@@ -183,7 +186,7 @@ export const browseFiles = async (filters?: { name: string; extensions: string[]
   const uris = await vscode.window.showOpenDialog({
     canSelectFiles: true,
     canSelectFolders: false,
-    canSelectMany: true,
+    canSelectMany: properties?.includes('multiSelections') ?? false,
     filters: vscodeFilters
   });
 

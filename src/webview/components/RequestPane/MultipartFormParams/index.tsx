@@ -52,7 +52,7 @@ const MultipartFormParams = ({
   }, [dispatch, collection.uid, item.uid]);
 
   const handleBrowseFiles = useCallback((row: any, onChange: any) => {
-    (dispatch(browseFiles([], [])) as unknown as Promise<string[]>)
+    (dispatch(browseFiles([], ['multiSelections'])) as unknown as Promise<string[]>)
       .then((filePaths: string[]) => {
         const processedPaths = filePaths.map((filePath: any) => {
           const collectionDir = collection.pathname;

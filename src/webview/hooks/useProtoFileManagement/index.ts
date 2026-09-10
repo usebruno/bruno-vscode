@@ -339,7 +339,7 @@ export default function useProtoFileManagement(collection: AppCollection): UsePr
     const filters = [{ name: 'Proto Files', extensions: ['proto'] }];
 
     try {
-      const filePaths = await dispatch(browseFiles(filters, [''])) as string[];
+      const filePaths = await dispatch(browseFiles(filters, [])) as string[];
       if (filePaths && filePaths.length > 0) {
         return { success: true, filePath: filePaths[0] };
       }
