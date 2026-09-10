@@ -16,6 +16,7 @@ interface Tab {
   responsePaneScrollPosition: number | null;
   responseFormat: string | null;
   responseViewTab: string | null;
+  responseJsonPreviewMode: 'tree' | 'table' | null;
   type: string;
   preview: boolean;
   folderUid?: string;
@@ -86,6 +87,7 @@ export const tabsSlice = createSlice({
           responsePaneScrollPosition: null,
           responseFormat: null,
           responseViewTab: null,
+          responseJsonPreviewMode: null,
           type: type || 'request',
           preview: preview !== undefined
             ? preview
@@ -108,6 +110,7 @@ export const tabsSlice = createSlice({
         responsePaneScrollPosition: null,
         responseFormat: null,
         responseViewTab: null,
+        responseJsonPreviewMode: null,
         type: type || 'request',
         ...(uid ? { folderUid: uid } : {}),
         preview: preview !== undefined
@@ -215,6 +218,13 @@ export const tabsSlice = createSlice({
         tab.responseViewTab = action.payload.responseViewTab;
       }
     },
+    updateResponseJsonPreviewMode: (state, action: PayloadAction<any>) => {
+      const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
+
+      if (tab) {
+        tab.responseJsonPreviewMode = action.payload.mode;
+      }
+    },
     closeTabs: (state, action: PayloadAction<any>) => {
       const activeTab = find(state.tabs, (t) => t.uid === state.activeTabUid);
       const tabUids = action.payload.tabUids || [];
@@ -302,6 +312,7 @@ export const {
   updateResponsePaneScrollPosition,
   updateResponseFormat,
   updateResponseViewTab,
+  updateResponseJsonPreviewMode,
   closeTabs,
   closeAllCollectionTabs,
   makeTabPermanent,
