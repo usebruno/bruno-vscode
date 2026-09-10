@@ -490,7 +490,7 @@ export async function addRequestVar(
 ): Promise<void> {
   await openRequestTab(editor, 'vars', 'Vars');
 
-  const rows = buildCommonLocators(editor).editableTable.firstTableRows();
+  const rows = buildCommonLocators(editor).varsTable.rows('request', 'req');
   await expect(rows.first()).toBeVisible({ timeout: 10_000 });
   const emptyRowIdx = (await rows.count()) - 1;
   const row = buildCommonLocators(rows.nth(emptyRowIdx)).editableTable;
