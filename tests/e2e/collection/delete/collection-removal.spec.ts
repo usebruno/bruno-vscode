@@ -1,4 +1,4 @@
-import { test, expect } from '../utils/fixtures';
+import { test, expect } from '../../utils/fixtures';
 import {
   openBrunoSidebar,
   createCollection,
@@ -6,7 +6,7 @@ import {
   createFolder,
   deleteItem,
   expandCollection,
-} from '../utils/page/actions';
+} from '../../utils/page/actions';
 
 test.describe('Collection removal', () => {
 

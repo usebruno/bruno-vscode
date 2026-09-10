@@ -67,7 +67,7 @@ const Docs = ({
               <Button type="button" color="secondary" onClick={handleDiscardChanges}>
                 Cancel
               </Button>
-              <Button type="button" onClick={onSave}>
+              <Button type="button" onClick={onSave} data-testid="collection-settings-save">
                 Save
               </Button>
             </>

@@ -384,7 +384,7 @@ const ClientCertSettings = ({
             Add
           </Button>
           <div className="h-4 border-l border-gray-600"></div>
-          <Button type="button" size="sm" onClick={handleSave}>
+          <Button type="button" size="sm" onClick={handleSave} data-testid="collection-settings-save">
             Save
           </Button>
         </div>

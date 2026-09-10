@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { test, expect } from '../utils/fixtures';
+import { test, expect } from '../../utils/fixtures';
 import {
   openBrunoSidebar,
   createCollection,
@@ -9,7 +9,7 @@ import {
   openRequest,
   setJsonBody,
   sendRequest,
-} from '../utils/page/actions';
+} from '../../utils/page/actions';
 
 // All tests share a single VS Code instance (workers: 1) so they run serially.
 // Each test gets its own tmpDir for collection storage.
@@ -31,7 +31,7 @@ test.describe('Collection management', () => {
 
   test('Import a collection from a JSON file', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    const fixturePath = path.resolve(__dirname, '../fixtures/echo-collection.json');
+    const fixturePath = path.resolve(__dirname, 'fixtures/echo-collection.json');
     const expectedName = 'Echo Collection';
 
     await importCollection(page, sidebar, fixturePath, tmpDir, expectedName);

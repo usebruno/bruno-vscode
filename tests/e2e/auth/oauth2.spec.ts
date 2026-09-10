@@ -263,7 +263,7 @@ test.describe('OAuth2 Authentication', () => {
 
   test('Interpolation: OAuth2 fields with {{variables}} resolve correctly', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    const fixturePath = path.resolve(__dirname, '../fixtures/oauth2-interpolation-collection.json');
+    const fixturePath = path.resolve(__dirname, 'fixtures/oauth2-interpolation-collection.json');
 
     // Import the collection that has {{tokenUrl}}, {{myClientId}}, {{myClientSecret}} in OAuth2 config
     // with request vars providing the actual values
@@ -294,7 +294,7 @@ test.describe('OAuth2 Authentication', () => {
 
   test('Interpolation: OAuth2 additional parameters with {{variables}} resolve correctly', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    const fixturePath = path.resolve(__dirname, '../fixtures/oauth2-additional-params-collection.json');
+    const fixturePath = path.resolve(__dirname, 'fixtures/oauth2-additional-params-collection.json');
 
     // Import the collection that has {{myAudience}} in additionalParameters.token
     // The server endpoint requires audience=my-api in the body to succeed
