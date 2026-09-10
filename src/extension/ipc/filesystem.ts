@@ -27,9 +27,9 @@ const registerFilesystemIpc = (): void => {
   });
 
   registerHandler('renderer:browse-files', async (args) => {
-    const [filters] = args as [FileFilter[]?];
+    const [filters, properties] = args as [FileFilter[]?, string[]?];
     try {
-      const result = await browseFiles(filters);
+      const result = await browseFiles(filters, properties);
       return result;
     } catch (error) {
       throw error;
