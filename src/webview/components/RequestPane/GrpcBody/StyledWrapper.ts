@@ -100,6 +100,10 @@ const Wrapper = styled.div`
   .editor-container {
     flex: 1;
     min-height: 0;
+
+    div.CodeMirror {
+      height: 100%;
+    }
   }
 
   .empty-state {

@@ -88,6 +88,7 @@ const GrpcQueryUrl = ({
 
     dispatch(updateRequestMethod({
       method: path,
+      methodType: type,
       itemUid: item.uid,
       collectionUid: collection.uid
     }));

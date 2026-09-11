@@ -262,6 +262,7 @@ export interface UpdateRequestGraphqlVariablesPayload extends ItemUidPayload {
 
 export interface UpdateRequestMethodPayload extends ItemUidPayload {
   method: string;
+  methodType?: string;
 }
 
 export interface AddFormUrlEncodedParamPayload extends ItemUidPayload {}
