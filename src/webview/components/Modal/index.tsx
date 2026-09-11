@@ -74,6 +74,7 @@ const ModalFooter = ({
           disabled={confirmDisabled}
           onClick={handleSubmit}
           className="submit"
+          data-testid="modal-confirm-button"
         >
           {confirmText}
         </Button>
