@@ -259,6 +259,50 @@ export async function openNewRequestPanel(
 }
 
 /**
+ * Create a transient request from the collection row's "+" menu
+ * and return its panel Frame.
+ */
+export async function openTransientRequest(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string,
+  type: 'HTTP' | 'GraphQL' | 'gRPC' | 'WebSocket' = 'HTTP'
+): Promise<Frame> {
+  const menuItemId = { HTTP: 'new-http', GraphQL: 'new-graphql', gRPC: 'new-grpc', WebSocket: 'new-ws' }[type];
+  const marker = type === 'WebSocket'
+    ? '[data-testid="ws-connect-button"]'
+    : type === 'gRPC'
+      ? '[data-testid="grpc-query-url-container"]'
+      : '#request-url';
+
+  // The "+" only renders on hover; MenuDropdown puts its own testid on the trigger.
+  const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
+  await collectionRow.hover();
+  await sidebar.getByTestId('collection-new-request').click();
+  await sidebar.getByTestId(`collection-new-request-${menuItemId}`).click();
+
+  return waitForFrameWithMarker(page, sidebar, marker);
+}
+
+/**
+ * Pick an environment from the collection toolbar's environment selector.
+ */
+export async function selectEnvironment(frame: Frame, name: string | null): Promise<void> {
+  const env = buildCommonLocators(frame).environment;
+  await env.trigger().click();
+
+  const option = name ? env.item(name) : env.noEnvironmentOption();
+  await expect(option).toBeVisible();
+  await option.click();
+
+  if (name) {
+    await expect(env.activeName()).toHaveText(name);
+  } else {
+    await expect(env.inactiveLabel()).toBeVisible();
+  }
+}
+
+/**
  * Fill the new request form and submit it.
  *
  * @param page - Playwright Page
@@ -679,14 +723,22 @@ async function openRequestByMarker(
   // Click the request to open it in the editor
   await requestRow.click();
 
-  // Wait for the request editor frame — identified by the marker selector.
-  const timeout = 20_000;
+  return waitForFrameWithMarker(page, sidebar, markerSelector);
+}
+
+// Wait for the request editor frame — identified by the marker selector.
+async function waitForFrameWithMarker(
+  page: Page,
+  excludeFrame: Frame,
+  markerSelector: string,
+  timeout = 20_000
+): Promise<Frame> {
   const deadline = Date.now() + timeout;
   let editor: Frame | undefined;
 
   while (Date.now() < deadline) {
     for (const frame of page.frames()) {
-      if (frame === sidebar || frame === page.mainFrame()) continue;
+      if (frame === excludeFrame || frame === page.mainFrame()) continue;
       try {
         const has = await frame.locator(markerSelector).count();
         if (has > 0) { editor = frame; break; }

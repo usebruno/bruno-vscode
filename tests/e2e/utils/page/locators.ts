@@ -21,6 +21,16 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     requestsInfo: () => frame.getByTestId('collection-requests-count'),
     requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded')
   },
+  environment: {
+    trigger: () => frame.getByTestId('environment-selector-trigger'),
+    activeName: () => frame.getByTestId('active-collection-environment'),
+    activeGlobalName: () => frame.getByTestId('active-global-environment'),
+    inactiveLabel: () => frame.getByTestId('no-active-environment'),
+    item: (name: string) => frame.getByTestId('environment-list-item').filter({ hasText: name }),
+    items: () => frame.getByTestId('environment-list-item'),
+    noEnvironmentOption: () => frame.getByTestId('environment-list-no-environment'),
+    emptyState: () => frame.getByTestId('environment-list-empty-state')
+  },
   requestUrl: {
     editor: () => frame.locator('#request-url'),
     highlightedToken: (name: string) =>

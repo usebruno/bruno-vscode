@@ -25,10 +25,17 @@ interface TransientItem {
   settings: Record<string, unknown>;
 }
 
+interface CollectionPresets {
+  requestType?: string;
+  requestUrl?: string;
+}
+
 interface CollectionInfo {
   uid: string;
   pathname: string;
   format?: string; // 'bru' or 'yml'
+  brunoConfig?: { presets?: CollectionPresets };
+  draft?: { brunoConfig?: { presets?: CollectionPresets } } | null;
   items?: any[]; // saved requests + open transients
 }
 
@@ -59,9 +66,18 @@ function generateItemMeta(collection: CollectionInfo): { name: string; filename:
   return { name, filename, pathname };
 }
 
-function createBaseRequest(): Record<string, unknown> {
+// Collection presets. 
+function getPresets(collection: CollectionInfo): CollectionPresets {
+  return collection?.draft?.brunoConfig?.presets || collection?.brunoConfig?.presets || {};
+}
+
+function getPresetUrl(collection: CollectionInfo): string {
+  return getPresets(collection).requestUrl || '';
+}
+
+function createBaseRequest(url = ''): Record<string, unknown> {
   return {
-    url: '',
+    url,
     method: 'GET',
     headers: [],
     params: [],
@@ -87,7 +103,7 @@ const transientManager = {
       draft: null,
       filename,
       pathname,
-      request: createBaseRequest(),
+      request: createBaseRequest(getPresetUrl(collection)),
       settings: { encodeUrl: true }
     };
   },
@@ -104,7 +120,7 @@ const transientManager = {
       filename,
       pathname,
       request: {
-        ...createBaseRequest(),
+        ...createBaseRequest(getPresetUrl(collection)),
         method: 'POST',
         body: {
           mode: 'graphql',
@@ -127,7 +143,7 @@ const transientManager = {
       filename,
       pathname,
       request: {
-        url: '',
+        url: getPresetUrl(collection),
         method: '',
         methodType: '',
         headers: [],
@@ -158,7 +174,7 @@ const transientManager = {
       filename,
       pathname,
       request: {
-        url: '',
+        url: getPresetUrl(collection),
         method: 'GET',
         headers: [],
         params: [],
