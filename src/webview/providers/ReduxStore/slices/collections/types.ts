@@ -72,7 +72,8 @@ export interface SaveEnvironmentPayload extends CollectionUidPayload {
 }
 
 export interface SelectEnvironmentPayload extends CollectionUidPayload {
-  environmentUid: UID | null;
+  environmentUid?: UID | null;
+  environmentName?: string | null;
 }
 
 export interface NewItemPayload extends CollectionUidPayload {

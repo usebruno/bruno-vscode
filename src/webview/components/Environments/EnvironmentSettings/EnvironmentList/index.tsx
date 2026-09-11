@@ -347,13 +347,14 @@ const EnvironmentList = ({
             />
           </div>
 
-          <div className="environments-list">
+          <div className="environments-list" data-testid="environments-list">
             {filteredEnvironments.map((env: any) => <div
               key={env.uid}
               id={env.uid}
               className={`environment-item ${selectedEnvironment.uid === env.uid ? 'active' : ''} ${renamingEnvUid === env.uid ? 'renaming' : ''} ${activeEnvironmentUid === env.uid ? 'activated' : ''}`}
               onClick={() => renamingEnvUid !== env.uid && handleEnvironmentClick(env)}
               onDoubleClick={() => handleEnvironmentDoubleClick(env)}
+              data-testid="environment-item"
             >
               {renamingEnvUid === env.uid ? (
                 <div className="rename-container" ref={renameContainerRef}>
@@ -393,7 +394,11 @@ const EnvironmentList = ({
                   <span className="environment-name">{env.name}</span>
                   <div className="environment-actions">
                     {activeEnvironmentUid === env.uid ? (
-                      <div className="activated-checkmark" title="Active environment">
+                      <div
+                        className="activated-checkmark"
+                        title="Active environment"
+                        data-testid="environment-active-checkmark"
+                      >
                         <IconCheck size={16} strokeWidth={2} />
                       </div>
                     ) : (

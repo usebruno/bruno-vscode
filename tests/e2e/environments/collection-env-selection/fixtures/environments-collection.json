@@ -1,0 +1,75 @@
+{
+  "name": "Environments Collection",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "Alpha Request",
+      "filename": "alpha-request.bru",
+      "seq": 1,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "{{host}}/alpha",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "none",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    }
+  ],
+  "environments": [
+    {
+      "uid": "env-local",
+      "name": "Local",
+      "variables": [
+        {
+          "uid": "env-local-host",
+          "name": "host",
+          "value": "http://127.0.0.1:8081",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "uid": "env-staging",
+      "name": "Staging",
+      "variables": [
+        {
+          "uid": "env-staging-host",
+          "name": "host",
+          "value": "https://staging.example.com",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "brunoConfig": {
+    "version": "1",
+    "name": "Environments Collection",
+    "type": "collection",
+    "ignore": [
+      "node_modules",
+      ".git"
+    ]
+  }
+}

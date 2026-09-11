@@ -20,6 +20,7 @@ import {
 import collectionWatcher, {
   setMessageSender as setWatcherMessageSender
 } from '../app/collection-watcher';
+import UiStateSnapshot from '../store/ui-state-snapshot';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -161,6 +162,20 @@ export async function openEnvironmentSettingsPanel(
       }
     } catch (error) {
       console.error('EnvironmentSettingsPanel: Error populating environments:', error);
+    }
+
+    try {
+      const uiStateSnapshotStore = new UiStateSnapshot();
+      const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
+      const posixCollectionRoot = posixifyPath(collectionRoot);
+      const collectionSnapshotState = collectionsSnapshotState?.find(
+        (c: { pathname?: string }) => c?.pathname === collectionRoot || c?.pathname === posixCollectionRoot
+      );
+      if (collectionSnapshotState) {
+        stateManager.sendTo(panel.webview, 'main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
+      }
+    } catch (error) {
+      console.error('EnvironmentSettingsPanel: Error hydrating ui state snapshot:', error);
     }
   };
 

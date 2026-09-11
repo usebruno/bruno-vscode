@@ -471,11 +471,25 @@ export const collectionsSlice = createSlice({
     },
 
     selectEnvironment: (state, action: PayloadAction<SelectEnvironmentPayload>) => {
-      const { collectionUid, environmentUid } = action.payload;
+      const { collectionUid, environmentUid, environmentName } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
-      if (collection) {
-        collection.activeEnvironmentUid = environmentUid;
+      if (!collection) {
+        return;
       }
+
+      if (environmentName) {
+        const environment = (collection.environments || []).find((env) => env.name === environmentName);
+        if (environment) {
+          collection.activeEnvironmentUid = environment.uid;
+          collection.pendingEnvironmentSelectionName = null;
+        } else {
+          collection.pendingEnvironmentSelectionName = environmentName;
+        }
+        return;
+      }
+
+      collection.activeEnvironmentUid = environmentUid ?? null;
+      collection.pendingEnvironmentSelectionName = null;
     },
 
     setEnvironmentsDraft: (state, action: PayloadAction<SetEnvironmentsDraftPayload>) => {
@@ -2670,6 +2684,11 @@ export const collectionsSlice = createSlice({
               collection.activeEnvironmentUid = environment.uid;
             }
           }
+        }
+        
+        if (collection.pendingEnvironmentSelectionName === environment.name) {
+          collection.activeEnvironmentUid = environment.uid;
+          collection.pendingEnvironmentSelectionName = null;
         }
       }
     },

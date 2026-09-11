@@ -191,7 +191,6 @@ import { sendCollectionOauth2Request as _sendCollectionOauth2Request } from 'uti
 import {
   getGlobalEnvironmentVariables,
   findCollectionByPathname,
-  findEnvironmentInCollectionByName,
   getReorderedItemsInTargetDirectory,
   resetSequencesInFolder,
   getReorderedItemsInSourceDirectory,
@@ -2847,17 +2846,14 @@ export const hydrateCollectionWithUiStateSnapshot = (payload: any) => (dispatch:
       if (!collectionSnapshotData) return resolve();
       const { pathname, selectedEnvironment } = collectionSnapshotData;
       const collection = findCollectionByPathname(state.collections.collections, pathname);
-      const collectionCopy = safeCloneCollection(collection);
-      const collectionUid = collectionCopy?.uid;
+      if (!collection) return resolve();
 
-      if (selectedEnvironment) {
-        const environment = findEnvironmentInCollectionByName(collectionCopy, selectedEnvironment);
-        if (environment) {
-          dispatch(_selectEnvironment({ environmentUid: environment?.uid, collectionUid }));
-        }
-      } else {
-        dispatch(_selectEnvironment({ environmentUid: null, collectionUid }));
-      }
+      dispatch(
+        _selectEnvironment({
+          collectionUid: collection.uid,
+          environmentName: selectedEnvironment || null
+        })
+      );
 
       // todo: add any other redux state that you want to save
 
