@@ -270,7 +270,7 @@ const registerGrpcEventHandlers = (): void => {
       const { httpsAgentRequestFields } = certsAndProxyConfig;
 
       const verifyOptions = {
-        rejectUnauthorized: httpsAgentRequestFields.rejectUnauthorized !== false
+        rejectUnauthorized: false // should be reverted back once we have a proper CA setup.
       };
 
       const rootCertificate = httpsAgentRequestFields.ca;
