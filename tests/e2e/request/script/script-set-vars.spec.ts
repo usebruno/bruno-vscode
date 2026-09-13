@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { test, expect } from '../utils/fixtures';
-import { openBrunoSidebar, createCollection, openRequest, sendRequest } from '../utils/page/actions';
+import { test, expect } from '../../utils/fixtures';
+import { openBrunoSidebar, createCollection, openRequest, sendRequest } from '../../utils/page/actions';
 
 const TEST_SERVER = 'http://127.0.0.1:8081';
 

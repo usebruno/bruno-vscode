@@ -13,7 +13,7 @@ const ACTIVE_CLASS = /item-focused-in-tab/;
 test.describe('Sidebar active item highlight', () => {
   test('highlights the request open in the active editor and moves with it', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    const fixturePath = path.resolve(__dirname, '../fixtures/two-requests-collection.json');
+    const fixturePath = path.resolve(__dirname, 'fixtures/two-requests-collection.json');
     const collectionName = 'Highlight Collection';
 
     await importCollection(page, sidebar, fixturePath, tmpDir, collectionName);

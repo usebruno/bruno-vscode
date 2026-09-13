@@ -310,7 +310,7 @@ interface ProtobufSettingsProps {
       </div>
 
       <div className="mt-6">
-        <Button type="button" size="sm" onClick={handleSave}>
+        <Button type="button" size="sm" onClick={handleSave} data-testid="collection-settings-save">
           Save
         </Button>
       </div>

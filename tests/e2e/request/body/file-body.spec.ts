@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Frame } from '@playwright/test';
-import { test, expect } from '../utils/fixtures';
+import { test, expect } from '../../utils/fixtures';
 import {
   openBrunoSidebar,
   createCollection,
@@ -10,8 +10,8 @@ import {
   openRequest,
   openRequestPaneTab,
   sendRequest
-} from '../utils/page/actions';
-import { buildCommonLocators } from '../utils/page/locators';
+} from '../../utils/page/actions';
+import { buildCommonLocators } from '../../utils/page/locators';
 
 const TEST_SERVER = 'http://127.0.0.1:8081';
 
