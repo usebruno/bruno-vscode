@@ -6,6 +6,10 @@ import { saveCollectionSettings } from 'providers/ReduxStore/slices/collections/
 import { get } from 'lodash';
 import Button from 'ui/Button';
 
+// Frozen so we can safely hand this out as a lodash `get` fallback without
+// callers reaching in and mutating the module default under our feet.
+const INITIAL_PRESETS = Object.freeze({ requestType: 'http', requestUrl: '' });
+
 interface PresetsSettingsProps {
   collection: React.ReactNode;
 }
@@ -14,12 +18,11 @@ const PresetsSettings = ({
   collection
 }: any) => {
   const dispatch = useDispatch();
-  const initialPresets = { requestType: 'http', requestUrl: '' };
 
-  // Get presets from draft.brunoConfig if it exists, otherwise from brunoConfig
+  // Prefer the in-progress draft so unsaved edits round-trip back into the form
   const currentPresets = collection.draft?.brunoConfig
-    ? get(collection, 'draft.brunoConfig.presets', initialPresets)
-    : get(collection, 'brunoConfig.presets', initialPresets);
+    ? get(collection, 'draft.brunoConfig.presets', INITIAL_PRESETS)
+    : get(collection, 'brunoConfig.presets', INITIAL_PRESETS);
 
   const updatePresets = (updates: any) => {
     const updatedPresets = { ...currentPresets, ...updates };
@@ -29,7 +32,10 @@ const PresetsSettings = ({
     }));
   };
 
-  const handleSave = () => dispatch(saveCollectionSettings(collection.uid));
+  // saveCollectionSettings shows its own success/error toast
+  const handleSave = () => {
+    Promise.resolve(dispatch(saveCollectionSettings(collection.uid))).catch(() => {});
+  };
 
   const handleRequestTypeChange = (e: any) => {
     updatePresets({ requestType: e.target.value });

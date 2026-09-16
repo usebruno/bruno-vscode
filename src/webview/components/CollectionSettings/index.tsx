@@ -58,7 +58,10 @@ const CollectionSettings = ({
     ? get(collection, 'draft.brunoConfig.protobuf', {})
     : get(collection, 'brunoConfig.protobuf', {});
   const presets = collection.draft?.brunoConfig ? get(collection, 'draft.brunoConfig.presets', {}) : get(collection, 'brunoConfig.presets', {});
-  const hasPresets = presets && presets.requestUrl !== '';
+  // "Has a preset" = a non-default request type OR a non-empty base URL.
+  const hasPresets = presets
+    && ((presets.requestType && presets.requestType !== 'http')
+      || (typeof presets.requestUrl === 'string' && presets.requestUrl.length > 0));
 
   const getTabPanel = (tab: any) => {
     switch (tab) {
