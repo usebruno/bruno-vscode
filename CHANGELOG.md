@@ -1,5 +1,16 @@
 # Changelog
 
+## [6.0.0]
+
+### Added
+- Request timeline for viewing network trace, timings, and response details
+- Data type support for variables (string, number, boolean, object, array)
+- Apps at collection and request level
+- Prompt variables to prompt the user for a value at send time
+
+### Fixed
+- Various bug fixes and stability improvements
+
 ## [5.0.2]
 
 ### Fixed
