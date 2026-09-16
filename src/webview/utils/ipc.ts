@@ -135,6 +135,18 @@ try {
   console.error('[Bruno IPC] Failed to initialize message handler:', err);
 }
 
+// Channels that block on user interaction (native file/folder pickers, input
+// prompts) run for as long as the user takes to click.
+const INTERACTIVE_INVOKE_CHANNELS = new Set<string>([
+  'renderer:browse-files',
+  'renderer:browse-directory',
+  'renderer:import-collection',
+  'renderer:open-workspace-dialog',
+  'renderer:load-gql-schema-file'
+]);
+
+const DEFAULT_INVOKE_TIMEOUT_MS = 30000;
+
 export const ipcRenderer = {
   invoke: async <T = unknown>(channel: string, ...args: unknown[]): Promise<T> => {
     return new Promise((resolve, reject) => {
@@ -156,12 +168,16 @@ export const ipcRenderer = {
         reject(err);
       }
 
+      if (INTERACTIVE_INVOKE_CHANNELS.has(channel)) {
+        return;
+      }
+
       setTimeout(() => {
         if (pendingRequests.has(requestId)) {
           pendingRequests.delete(requestId);
           reject(new Error(`IPC invoke timeout for channel: ${channel}`));
         }
-      }, 30000);
+      }, DEFAULT_INVOKE_TIMEOUT_MS);
     });
   },
 

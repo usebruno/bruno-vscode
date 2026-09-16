@@ -294,11 +294,6 @@ const ProtobufSettings = ({
                       </td>
                     </tr>
                   );
-
-interface ProtobufSettingsProps {
-  collection: React.ReactNode;
-}
-
                 })
               )}
             </tbody>
