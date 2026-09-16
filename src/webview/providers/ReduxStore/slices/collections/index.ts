@@ -268,6 +268,7 @@ const applyAddFilePayloadToItem = (item: AppItem, payload: CollectionAddFileEven
   item.request = data?.request;
   item.settings = data?.settings;
   item.examples = (data as any)?.examples;
+  item.app = (data as any)?.app;
   item.partial = partial;
   item.loading = loading;
   item.error = error;
@@ -1737,6 +1738,7 @@ export const collectionsSlice = createSlice({
             request: data?.request,
             settings: data?.settings,
             examples: (data as any)?.examples,
+            app: (data as any)?.app,
             filename: meta.name,
             pathname: meta.pathname,
             draft: null,
@@ -1848,6 +1850,7 @@ export const collectionsSlice = createSlice({
               request: data?.request,
               settings: data?.settings,
               examples: (data as any)?.examples,
+              app: (data as any)?.app,
               filename: meta.name,
               pathname: meta.pathname,
               draft: null,
@@ -1916,6 +1919,7 @@ export const collectionsSlice = createSlice({
           existingItem.request = data?.request;
           existingItem.settings = data?.settings;
           existingItem.examples = (data as any)?.examples;
+          existingItem.app = (data as any)?.app;
           existingItem.filename = meta.name;
           existingItem.pathname = meta.pathname;
           existingItem.partial = partial;
