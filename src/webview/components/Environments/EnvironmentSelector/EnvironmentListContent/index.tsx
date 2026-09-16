@@ -45,6 +45,7 @@ const EnvironmentListContent = ({
                   key={env.uid}
                   className={`dropdown-item ${env.uid === activeEnvironmentUid ? 'dropdown-item-active' : ''}`}
                   onClick={() => onEnvironmentSelect(env)}
+                  data-testid="environment-dropdown-item"
                   data-tooltip-content={env.name}
                   data-tooltip-hidden={env.name?.length < 90}
                 >
@@ -53,7 +54,7 @@ const EnvironmentListContent = ({
               </div>
             </ToolHint>
             <div className="dropdown-item configure-button">
-              <button onClick={onSettingsClick} id="configure-env">
+              <button onClick={onSettingsClick} id="configure-env" data-testid="environment-configure-button">
                 <IconSettings size={16} strokeWidth={1.5} />
                 <span>Configure</span>
               </button>
