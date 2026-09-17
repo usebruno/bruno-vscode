@@ -270,6 +270,21 @@ export const generateUniqueName = (baseName: string, checkExists: (name: string)
   return uniqueName;
 };
 
+export const findUniqueFolderName = (baseName: string, parentDir: string): string => {
+  const isTaken = (folderName: string): boolean => {
+    const dirPath = path.join(parentDir, folderName);
+    return fs.existsSync(dirPath) && fs.readdirSync(dirPath).length > 0;
+  };
+
+  let counter = 0;
+  let folderName = baseName;
+  while (isTaken(folderName)) {
+    counter++;
+    folderName = `${baseName} - ${counter}`;
+  }
+  return folderName;
+};
+
 export const validateName = (name: string): boolean => {
   const reservedDeviceNames = /^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$/i;
   const firstCharacter = /^[^\s\-<>:"/\\|?*\x00-\x1F]/;

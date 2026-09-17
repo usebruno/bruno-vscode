@@ -2,8 +2,7 @@ import React, { useRef, useState, useEffect, forwardRef } from 'react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import toast from 'react-hot-toast';
-import styled from 'styled-components';
-import { IconFileImport, IconFolder, IconCaretDown, IconLoader2 } from '@tabler/icons';
+import { IconFileImport, IconCaretDown, IconLoader2, IconCheck, IconX, IconSearch } from '@tabler/icons';
 import jsyaml from 'js-yaml';
 import { isPostmanCollection } from 'utils/importers/postman-collection';
 import { isInsomniaCollection } from 'utils/importers/insomnia-collection';
@@ -27,286 +26,9 @@ import {
   importCollection,
   importCollectionFromZip,
   validateAndSaveZip
-} from '../ipc-actions';
-import { useBootstrap, getDefaultLocation } from '../data-hooks';
-
-const StyledWrapper = styled.div`
-  width: 100%;
-  min-height: 100vh;
-  background-color: var(--vscode-editor-background, ${(props: any) => props.theme?.bg || '#1e1e1e'});
-  color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  font-size: 13px;
-  padding: 24px 32px;
-
-  .import-collection-container {
-    max-width: 520px;
-    margin: 0 auto;
-  }
-
-  .import-collection-header {
-    margin-bottom: 20px;
-
-    h1 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-
-      svg {
-        color: var(--vscode-button-background, ${(props: any) => props.theme?.button?.primary?.bg || '#0e639c'});
-      }
-    }
-
-    p {
-      margin: 6px 0 0 0;
-      color: var(--vscode-descriptionForeground, ${(props: any) => props.theme?.textMuted || '#999999'});
-      font-size: 12px;
-    }
-  }
-
-  .drop-zone {
-    border: 2px dashed var(--vscode-input-border, ${(props: any) => props.theme?.input?.border || '#454545'});
-    border-radius: 6px;
-    padding: 28px 20px;
-    text-align: center;
-    transition: border-color 0.2s ease, background-color 0.2s ease;
-    cursor: pointer;
-
-    &.drag-active {
-      border-color: var(--vscode-button-background, ${(props: any) => props.theme?.button?.primary?.bg || '#0e639c'});
-      background-color: var(--vscode-list-hoverBackground, ${(props: any) => props.theme?.sidebar?.collection?.item?.hoverBg || '#2d2d2d'});
-    }
-
-    .drop-icon {
-      color: var(--vscode-descriptionForeground, ${(props: any) => props.theme?.textMuted || '#999999'});
-      margin-bottom: 8px;
-    }
-
-    .drop-text {
-      color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-      margin-bottom: 6px;
-    }
-
-    .drop-hint {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground, ${(props: any) => props.theme?.textMuted || '#999999'});
-    }
-
-    .browse-link {
-      color: var(--vscode-textLink-foreground, ${(props: any) => props.theme?.textLink || '#3794ff'});
-      cursor: pointer;
-      text-decoration: underline;
-      background: none;
-      border: none;
-      font-size: 13px;
-      font-family: inherit;
-    }
-  }
-
-  .import-form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .collection-summary {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 4px;
-    background-color: var(--vscode-input-background, ${(props: any) => props.theme?.input?.bg || '#3c3c3c'});
-    border: 1px solid var(--vscode-input-border, ${(props: any) => props.theme?.input?.border || '#454545'});
-
-    .collection-name {
-      font-weight: 500;
-      color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-    }
-  }
-
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .form-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-  }
-
-  .form-input {
-    padding: 6px 10px;
-    border: 1px solid var(--vscode-input-border, ${(props: any) => props.theme?.input?.border || '#454545'});
-    border-radius: 4px;
-    background-color: var(--vscode-input-background, ${(props: any) => props.theme?.input?.bg || '#3c3c3c'});
-    color: var(--vscode-input-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-    font-size: 13px;
-    font-family: inherit;
-    transition: border-color 0.15s ease;
-
-    &:focus {
-      outline: none;
-      border-color: var(--vscode-focusBorder, ${(props: any) => props.theme?.button?.primary?.bg || '#007acc'});
-    }
-
-    &.error {
-      border-color: var(--vscode-inputValidation-errorBorder, #f14c4c);
-    }
-  }
-
-  .location-input-group {
-    display: flex;
-    gap: 8px;
-
-    .location-input {
-      flex: 1;
-      cursor: pointer;
-    }
-
-    .browse-button {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      background-color: var(--vscode-button-secondaryBackground, ${(props: any) => props.theme?.button?.secondary?.bg || '#3a3d41'});
-      color: var(--vscode-button-secondaryForeground, ${(props: any) => props.theme?.button?.secondary?.color || '#cccccc'});
-      border: 1px solid var(--vscode-button-border, transparent);
-      border-radius: 4px;
-      font-size: 13px;
-      font-family: inherit;
-      cursor: pointer;
-      transition: background-color 0.15s ease;
-      white-space: nowrap;
-
-      &:hover:not(:disabled) {
-        background-color: var(--vscode-button-secondaryHoverBackground, ${(props: any) => props.theme?.button?.secondary?.hoverBg || '#45494e'});
-      }
-
-      &:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-    }
-  }
-
-  .form-help {
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground, ${(props: any) => props.theme?.textMuted || '#999999'});
-  }
-
-  .form-error {
-    font-size: 12px;
-    color: var(--vscode-errorForeground, #f14c4c);
-  }
-
-  .detected-format {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    background-color: var(--vscode-badge-background, ${(props: any) => props.theme?.button?.primary?.bg || '#0e639c'});
-    color: var(--vscode-badge-foreground, ${(props: any) => props.theme?.button?.primary?.color || '#ffffff'});
-  }
-
-  .grouping-section {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    .grouping-label {
-      flex: 1;
-    }
-
-    .current-group {
-      background-color: var(--vscode-input-background, ${(props: any) => props.theme?.input?.bg || '#3c3c3c'});
-      border-radius: 4px;
-      padding: 6px 10px;
-      cursor: pointer;
-      border: 1px solid var(--vscode-input-border, ${(props: any) => props.theme?.input?.border || '#454545'});
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-      min-width: 100px;
-    }
-  }
-
-  .form-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    margin-top: 8px;
-    padding-top: 16px;
-    border-top: 1px solid var(--vscode-widget-border, ${(props: any) => props.theme?.input?.border || '#454545'});
-  }
-
-  .btn {
-    padding: 6px 16px;
-    border-radius: 4px;
-    font-size: 13px;
-    font-family: inherit;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-    min-width: 80px;
-
-    &:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-  }
-
-  .btn-secondary {
-    background-color: transparent;
-    color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-    border: 1px solid var(--vscode-button-border, ${(props: any) => props.theme?.input?.border || '#454545'});
-
-    &:hover:not(:disabled) {
-      background-color: var(--vscode-list-hoverBackground, ${(props: any) => props.theme?.sidebar?.collection?.item?.hoverBg || '#2d2d2d'});
-    }
-  }
-
-  .btn-primary {
-    background-color: var(--vscode-button-background, ${(props: any) => props.theme?.button?.primary?.bg || '#0e639c'});
-    color: var(--vscode-button-foreground, ${(props: any) => props.theme?.button?.primary?.color || '#ffffff'});
-    border: none;
-
-    &:hover:not(:disabled) {
-      background-color: var(--vscode-button-hoverBackground, ${(props: any) => props.theme?.button?.primary?.hoverBg || '#1177bb'});
-    }
-  }
-
-  .loading-overlay {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    text-align: center;
-
-    .loading-message {
-      margin-top: 16px;
-      font-size: 14px;
-      color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
-    }
-
-    .loading-hint {
-      margin-top: 8px;
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground, ${(props: any) => props.theme?.textMuted || '#999999'});
-    }
-  }
-`;
+} from '../../ipc-actions';
+import { useBootstrap, getDefaultLocation } from '../../data-hooks';
+import StyledWrapper from './StyledWrapper';
 
 const ACCEPTED_FILE_TYPES = [
   '.json', '.yaml', '.yml', '.wsdl', '.zip',
@@ -358,6 +80,26 @@ const convertFileToObject = async (file: File) => {
     throw new Error('Failed to parse the file \u2013 ensure it is valid JSON or YAML');
   }
 };
+
+const detectFormat = (data: any): string | null => {
+  if (isOpenApiSpec(data)) return 'openapi';
+  if (isWSDLCollection(data)) return 'wsdl';
+  if (isPostmanCollection(data)) return 'postman';
+  if (isInsomniaCollection(data)) return 'insomnia';
+  if (isOpenCollection(data)) return 'opencollection';
+  if (isBrunoCollection(data)) return 'bruno';
+  return null;
+};
+
+interface ImportFileEntry {
+  uid: string;
+  fileName: string;
+  format: string;
+  rawData: any;
+  name: string;
+}
+
+type ImportStatus = 'loading' | 'success' | 'error';
 
 const getCollectionName = (format: string, rawData: any): string => {
   if (!rawData) return 'Collection';
@@ -420,8 +162,36 @@ const ImportCollectionView: React.FC = () => {
   const [groupingType, setGroupingType] = useState('tags');
   const [collectionFormat, setCollectionFormat] = useState('yml');
 
+  const [multiFiles, setMultiFiles] = useState<ImportFileEntry[]>([]);
+  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
+  const [selectedUids, setSelectedUids] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [importStarted, setImportStarted] = useState(false);
+  const [importStatus, setImportStatus] = useState<Record<string, ImportStatus>>({});
+  const [importErrors, setImportErrors] = useState<Record<string, string>>({});
+
   const bootstrap = useBootstrap();
   const defaultLocation = getDefaultLocation(bootstrap);
+
+  const isMultiple = multiFiles.length > 0;
+  const selectedFiles = multiFiles.filter((f) => selectedUids.includes(f.uid));
+
+  const query = searchQuery.trim().toLowerCase();
+  const visibleFiles = query
+    ? multiFiles.filter(
+        (f) => f.name.toLowerCase().includes(query) || f.fileName.toLowerCase().includes(query)
+      )
+    : multiFiles;
+  const visibleSelectedCount = visibleFiles.filter((f) => selectedUids.includes(f.uid)).length;
+  const allVisibleSelected = visibleFiles.length > 0 && visibleSelectedCount === visibleFiles.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  const showGrouping = isMultiple
+    ? selectedFiles.some((f) => f.format === 'openapi')
+    : detectedFormat === 'openapi';
+  const finishedCount = selectedFiles.filter((f) => importStatus[f.uid] && importStatus[f.uid] !== 'loading').length;
+  const importDone = importStarted && finishedCount === selectedFiles.length;
+  const importedCount = selectedFiles.filter((f) => importStatus[f.uid] === 'success').length;
 
   const collectionName = getCollectionName(detectedFormat, rawData);
 
@@ -436,6 +206,10 @@ const ImportCollectionView: React.FC = () => {
         .required('Location is required')
     }),
     onSubmit: async (values) => {
+      if (isMultiple) {
+        return importSelectedCollections(values.collectionLocation);
+      }
+
       setIsImporting(true);
       try {
         if (detectedFormat === 'bruno-zip') {
@@ -453,6 +227,39 @@ const ImportCollectionView: React.FC = () => {
       }
     }
   });
+
+  const importSelectedCollections = async (collectionLocation: string) => {
+    const entries = selectedFiles;
+    setImportStarted(true);
+    setIsImporting(true);
+    setImportErrors({});
+    setImportStatus(Object.fromEntries(entries.map((f) => [f.uid, 'loading' as ImportStatus])));
+
+    let imported = 0;
+    for (const entry of entries) {
+      try {
+        const converted = await convertCollection(entry.format, entry.rawData, groupingType);
+        converted.uid = entry.uid;
+        const result = await importCollection([converted], collectionLocation, collectionFormat);
+        if (result.failures.length > 0) {
+          throw new Error(result.failures[0].message);
+        }
+        imported++;
+        setImportStatus((prev) => ({ ...prev, [entry.uid]: 'success' }));
+      } catch (e: any) {
+        setImportStatus((prev) => ({ ...prev, [entry.uid]: 'error' }));
+        setImportErrors((prev) => ({ ...prev, [entry.uid]: formatIpcError(e) || 'Failed to import collection' }));
+      }
+    }
+
+    setIsImporting(false);
+    const failed = entries.length - imported;
+    if (failed === 0) {
+      toast.success(`${imported} collection${imported === 1 ? '' : 's'} imported successfully`);
+    } else {
+      toast.error(`${imported} of ${entries.length} collections imported, ${failed} failed`);
+    }
+  };
 
   useEffect(() => {
     if (!isProcessing) return;
@@ -503,14 +310,8 @@ const ImportCollectionView: React.FC = () => {
       const data = await convertFileToObject(file);
       if (!data) throw new Error('Failed to parse file content');
 
-      let type: string | null = null;
-      if (isOpenApiSpec(data)) type = 'openapi';
-      else if (isWSDLCollection(data)) type = 'wsdl';
-      else if (isPostmanCollection(data)) type = 'postman';
-      else if (isInsomniaCollection(data)) type = 'insomnia';
-      else if (isOpenCollection(data)) type = 'opencollection';
-      else if (isBrunoCollection(data)) type = 'bruno';
-      else throw new Error('Unsupported collection format');
+      const type = detectFormat(data);
+      if (!type) throw new Error('Unsupported collection format');
 
       setRawData(data);
       setDetectedFormat(type);
@@ -520,6 +321,85 @@ const ImportCollectionView: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const processMultipleFiles = async (fileArray: File[]) => {
+    setIsProcessing(true);
+    try {
+      const entries: ImportFileEntry[] = [];
+      const skipped: string[] = [];
+
+      for (let index = 0; index < fileArray.length; index++) {
+        const file = fileArray[index];
+        try {
+          const data = await convertFileToObject(file);
+          const format = data ? detectFormat(data) : null;
+          if (!format) {
+            skipped.push(file.name);
+            continue;
+          }
+          entries.push({
+            uid: `file-${index}`,
+            fileName: file.name,
+            format,
+            rawData: data,
+            name: getCollectionName(format, data)
+          });
+        } catch (err) {
+          console.warn(`Failed to process file ${file.name}:`, err);
+          skipped.push(file.name);
+        }
+      }
+
+      if (entries.length === 0) {
+        throw new Error('No valid collections found in the selected files');
+      }
+
+      setMultiFiles(entries);
+      setSkippedFiles(skipped);
+      setSelectedUids(entries.map((e) => e.uid));
+      setStep('configure');
+    } catch (err) {
+      toastError(err, 'Import collections failed');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const processFiles = async (fileList: FileList) => {
+    const fileArray = Array.from(fileList);
+    const zipFiles = fileArray.filter((file) => file.name.endsWith('.zip'));
+
+    if (zipFiles.length > 0 && zipFiles.length < fileArray.length) {
+      toast.error('ZIP files cannot be mixed with other files. Select a single ZIP file or one or more JSON, YAML or WSDL files.');
+      return;
+    }
+    if (zipFiles.length > 1) {
+      toast.error('Only one ZIP file can be imported at a time.');
+      return;
+    }
+    if (zipFiles.length === 1) {
+      return processZipFile(zipFiles[0]);
+    }
+    if (fileArray.length > 1) {
+      return processMultipleFiles(fileArray);
+    }
+    if (fileArray.length === 1) {
+      return processFile(fileArray[0]);
+    }
+  };
+
+  const toggleCollection = (uid: string) => {
+    setSelectedUids((prev) => (prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]));
+  };
+
+  const toggleAllCollections = () => {
+    const visibleUids = visibleFiles.map((f) => f.uid);
+    setSelectedUids((prev) =>
+      allVisibleSelected
+        ? prev.filter((uid) => !visibleUids.includes(uid))
+        : Array.from(new Set([...prev, ...visibleUids]))
+    );
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -537,8 +417,8 @@ const ImportCollectionView: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      await processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFiles(e.dataTransfer.files);
     }
   };
 
@@ -547,8 +427,9 @@ const ImportCollectionView: React.FC = () => {
   };
 
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      await processFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      await processFiles(e.target.files);
+      e.target.value = '';
     }
   };
 
@@ -560,6 +441,13 @@ const ImportCollectionView: React.FC = () => {
     setStep('file-select');
     setRawData(null);
     setDetectedFormat('');
+    setMultiFiles([]);
+    setSkippedFiles([]);
+    setSelectedUids([]);
+    setSearchQuery('');
+    setImportStarted(false);
+    setImportStatus({});
+    setImportErrors({});
   };
 
   const browse = () => {
@@ -589,7 +477,7 @@ const ImportCollectionView: React.FC = () => {
   if (isProcessing) {
     return (
       <StyledWrapper>
-        <div className="import-collection-container">
+        <div className="import-collection-container" data-testid="import-collection-container">
           <div className="loading-overlay">
             <IconLoader2 size={40} className="animate-spin" strokeWidth={1.5} />
             <div className="loading-message">{loadingMessage}</div>
@@ -603,15 +491,20 @@ const ImportCollectionView: React.FC = () => {
   if (step === 'file-select') {
     return (
       <StyledWrapper>
-        <div className="import-collection-container">
+        <div className="import-collection-container" data-testid="import-collection-container">
           <div className="import-collection-header">
-            <h1>
-              <IconFileImport size={18} strokeWidth={1.5} />
-              Import Collection
-            </h1>
-            <p>
-              Supports Bruno, OpenCollection, Postman, Insomnia, OpenAPI v3, WSDL, and ZIP formats.
-            </p>
+            <div>
+              <h1>
+                <IconFileImport size={18} strokeWidth={1.5} />
+                Import Collection
+              </h1>
+              <p>
+                Supports Bruno, OpenCollection, Postman, Insomnia, OpenAPI v3, WSDL, and ZIP formats.
+              </p>
+            </div>
+            <button type="button" className="close-button" onClick={handleCancel} aria-label="Close">
+              <IconX size={18} strokeWidth={1.5} />
+            </button>
           </div>
 
           <div
@@ -637,6 +530,8 @@ const ImportCollectionView: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
+              data-testid="import-file-input"
+              multiple
               style={{ display: 'none' }}
               onChange={handleFileInputChange}
               accept={ACCEPTED_FILE_TYPES.join(',')}
@@ -653,35 +548,186 @@ const ImportCollectionView: React.FC = () => {
     );
   }
 
+  if (importStarted) {
+    return (
+      <StyledWrapper>
+        <div className="import-collection-container" data-testid="import-collection-container">
+          <div className="import-collection-header">
+            <h1>
+              <IconFileImport size={18} strokeWidth={1.5} />
+              Bulk Import
+            </h1>
+            <button
+              type="button"
+              className="close-button"
+              onClick={handleCancel}
+              disabled={!importDone}
+              aria-label="Close"
+            >
+              <IconX size={18} strokeWidth={1.5} />
+            </button>
+          </div>
+
+          <div className="import-form">
+            <div className="location-row">
+              <label htmlFor="collectionLocation" className="form-label">Location</label>
+              <input
+                id="collectionLocation"
+                data-testid="import-collection-location"
+                type="text"
+                className="form-input"
+                value={formik.values.collectionLocation}
+                readOnly
+              />
+            </div>
+
+            <div className="form-group">
+              <div className="section-title">
+                Importing Collections ({selectedFiles.length})
+              </div>
+              <div className="selected-count" data-testid="import-progress-summary">
+                {importDone
+                  ? `${importedCount} of ${selectedFiles.length} collections imported`
+                  : `Importing ${finishedCount + 1} of ${selectedFiles.length} collections...`}
+              </div>
+              <div className="collection-list bordered">
+                {selectedFiles.map((entry) => {
+                  const status = importStatus[entry.uid];
+                  return (
+                    <div className="collection-row" key={entry.uid} data-testid="import-collection-row" data-status={status}>
+                      <span className={`status-icon ${status}`}>
+                        {status === 'success' && <IconCheck size={16} strokeWidth={2} />}
+                        {status === 'error' && <IconX size={16} strokeWidth={2} />}
+                        {status === 'loading' && <IconLoader2 size={16} className="animate-spin" strokeWidth={2} />}
+                      </span>
+                      <div className="collection-row-info">
+                        <span className="collection-name">{entry.name}</span>
+                        {status === 'error' && (
+                          <span className="collection-error">{importErrors[entry.uid]}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="import-close"
+                onClick={handleCancel}
+                disabled={!importDone}
+              >
+                {importDone ? 'Close' : 'Importing...'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </StyledWrapper>
+    );
+  }
+
   return (
     <StyledWrapper>
-      <div className="import-collection-container">
+      <div className="import-collection-container" data-testid="import-collection-container">
         <div className="import-collection-header">
           <h1>
             <IconFileImport size={18} strokeWidth={1.5} />
-            Import Collection
+            {isMultiple ? 'Bulk Import' : 'Import Collection'}
           </h1>
+          <button type="button" className="close-button" onClick={handleCancel} disabled={isImporting} aria-label="Close">
+            <IconX size={18} strokeWidth={1.5} />
+          </button>
         </div>
 
         <form onSubmit={formik.handleSubmit} className="import-form">
-          <div className="collection-summary">
-            <span className="collection-name">{collectionName}</span>
-            <span className="detected-format">
-              {FORMAT_LABELS[detectedFormat] || detectedFormat}
-            </span>
-          </div>
+          {isMultiple ? (
+            <div className="form-group">
+              <div className="section-title">
+                Collections
+                <span className="count-badge">{multiFiles.length}</span>
+              </div>
+
+              <div className="collection-panel">
+                <div className="collection-panel-toolbar">
+                  <div className="search-box">
+                    <IconSearch size={14} strokeWidth={1.5} />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Search Collections"
+                      data-testid="import-search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      disabled={isImporting}
+                    />
+                  </div>
+                  <label className="select-all">
+                    <input
+                      type="checkbox"
+                      data-testid="import-select-all"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someVisibleSelected;
+                      }}
+                      onChange={toggleAllCollections}
+                      disabled={isImporting || visibleFiles.length === 0}
+                    />
+                    Select all
+                  </label>
+                </div>
+
+                <div className="collection-list">
+                  {visibleFiles.map((entry) => (
+                    <label className="collection-row" key={entry.uid} data-testid="import-collection-row">
+                      <input
+                        type="checkbox"
+                        data-testid="import-collection-checkbox"
+                        checked={selectedUids.includes(entry.uid)}
+                        onChange={() => toggleCollection(entry.uid)}
+                        disabled={isImporting}
+                      />
+                      <div className="collection-row-info">
+                        <span className="collection-name">{entry.name}</span>
+                        <span className="collection-file">{entry.fileName}</span>
+                      </div>
+                    </label>
+                  ))}
+                  {visibleFiles.length === 0 && (
+                    <div className="collection-list-empty">No collections match “{searchQuery}”</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="selected-count" data-testid="import-selected-count">
+                <strong>{selectedUids.length}</strong> of {multiFiles.length} selected
+              </div>
+
+              {skippedFiles.length > 0 && (
+                <div className="form-help">
+                  Skipped {skippedFiles.length} unsupported or unreadable file{skippedFiles.length === 1 ? '' : 's'}: {skippedFiles.join(', ')}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="collection-summary">
+              <span className="collection-name">{collectionName}</span>
+              <span className="detected-format">
+                {FORMAT_LABELS[detectedFormat] || detectedFormat}
+              </span>
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="collectionLocation" className="form-label">
               Location
-              <Help>
-                <p>Bruno stores your collections on your filesystem.</p>
-                <p className="mt-2">Choose where to store this collection.</p>
-              </Help>
             </label>
             <div className="location-input-group">
               <input
                 id="collectionLocation"
+                data-testid="import-collection-location"
                 type="text"
                 name="collectionLocation"
                 className={`form-input location-input ${formik.touched.collectionLocation && formik.errors.collectionLocation ? 'error' : ''}`}
@@ -695,10 +741,10 @@ const ImportCollectionView: React.FC = () => {
               <button
                 type="button"
                 className="browse-button"
+                data-testid="import-browse-button"
                 onClick={browse}
                 disabled={isImporting}
               >
-                <IconFolder size={14} strokeWidth={1.5} />
                 Browse
               </button>
             </div>
@@ -730,7 +776,7 @@ const ImportCollectionView: React.FC = () => {
             </div>
           )}
 
-          {detectedFormat === 'openapi' && (
+          {showGrouping && (
             <div className="form-group">
               <div className="grouping-section">
                 <div className="grouping-label">
@@ -767,7 +813,8 @@ const ImportCollectionView: React.FC = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={isImporting || !formik.values.collectionLocation}
+              data-testid="import-submit"
+              disabled={isImporting || !formik.values.collectionLocation || (isMultiple && selectedUids.length === 0)}
             >
               {isImporting ? 'Importing...' : 'Import'}
             </button>
