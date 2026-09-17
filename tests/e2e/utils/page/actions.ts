@@ -90,7 +90,7 @@ export async function openBrunoSidebar(page: Page): Promise<Frame> {
  * We temporarily intercept that single call so the native file-picker
  * dialog is bypassed and the value flows through Formik's `setFieldValue`.
  */
-async function mockBrowseDirectory(frame: Frame, dirPath: string): Promise<void> {
+export async function mockBrowseDirectory(frame: Frame, dirPath: string): Promise<void> {
   await frame.evaluate((val) => {
     const ipc = (window as any).ipcRenderer;
     const originalInvoke = ipc.invoke.bind(ipc);
@@ -159,6 +159,23 @@ export async function createCollection(
   ).toBeVisible({ timeout: 15_000 });
 }
 
+export async function openImportPanelWithFiles(
+  page: Page,
+  sidebar: Frame,
+  filePaths: string[]
+): Promise<Frame> {
+  const sidebarLoc = buildCommonLocators(sidebar);
+  await sidebarLoc.sidebar.addMenu().click();
+  await sidebarLoc.sidebar.addMenuImport().click();
+
+  const editor = await waitForNewWebviewFrame(page, sidebar);
+  const importPanel = buildCommonLocators(editor).importCollection;
+  await expect(importPanel.container()).toBeVisible();
+
+  await importPanel.fileInput().setInputFiles(filePaths);
+  return editor;
+}
+
 /**
  * Import a collection from a JSON file using the Bruno import flow.
  *
@@ -179,33 +196,55 @@ export async function importCollection(
   location: string,
   expectedName: string
 ): Promise<void> {
-  // Open the "+" dropdown and click "Import collection"
-  await sidebar.locator('[data-testid="collections-header-add-menu"]').click();
-  await sidebar.locator('[data-testid="collections-header-add-menu-import"]').click();
-
-  // The import opens a new WebviewPanel — wait for its frame to appear.
-  const editor = await waitForNewWebviewFrame(page, sidebar);
-  await expect(editor.locator('.import-collection-container')).toBeVisible({ timeout: 15_000 });
-
-  // Step 1: Select the file via the hidden file input
-  await editor.locator('input[type="file"]').setInputFiles(filePath);
+  const editor = await openImportPanelWithFiles(page, sidebar, [filePath]);
+  const importPanel = buildCommonLocators(editor).importCollection;
 
   // Step 2: The location step should now be visible (form with location input)
-  await expect(editor.locator('#collectionLocation')).toBeVisible({ timeout: 10_000 });
+  await expect(importPanel.location()).toBeVisible({ timeout: 10_000 });
 
   // The location input is readonly and opens a native file dialog via IPC.
   // Mock the IPC call to return our path, then click Browse.
   await mockBrowseDirectory(editor, location);
-  await editor.locator('.browse-button').click();
-  await expect(editor.locator('#collectionLocation')).toHaveValue(location, { timeout: 5_000 });
+  await importPanel.browse().click();
+  await expect(importPanel.location()).toHaveValue(location, { timeout: 5_000 });
 
   // Click Import
-  await editor.locator('button[type="submit"]').filter({ hasText: 'Import' }).click();
+  await importPanel.submit().click();
 
   // Wait for the collection to appear in the sidebar
   await expect(
-    sidebar.locator('[data-testid="sidebar-collection-row"]').filter({ hasText: expectedName })
+    buildCommonLocators(sidebar).sidebar.collectionName(expectedName)
   ).toBeVisible({ timeout: 20_000 });
+}
+
+export async function importMultipleCollections(
+  page: Page,
+  sidebar: Frame,
+  filePaths: string[],
+  location: string,
+  expectedNames: string[]
+): Promise<Frame> {
+  const editor = await openImportPanelWithFiles(page, sidebar, filePaths);
+  const importPanel = buildCommonLocators(editor).importCollection;
+
+  await expect(importPanel.rows()).toHaveCount(filePaths.length);
+  await expect(importPanel.selectedCount()).toHaveText(`${filePaths.length} of ${filePaths.length} selected`);
+
+  await mockBrowseDirectory(editor, location);
+  await importPanel.browse().click();
+  await expect(importPanel.location()).toHaveValue(location);
+
+  await importPanel.submit().click();
+
+  await expect(importPanel.progressSummary()).toHaveText(`${filePaths.length} of ${filePaths.length} collections imported`);
+  await expect(importPanel.close()).toBeEnabled();
+
+  const sidebarLoc = buildCommonLocators(sidebar);
+  for (const name of expectedNames) {
+    await expect(sidebarLoc.sidebar.collectionName(name)).toBeVisible();
+  }
+
+  return editor;
 }
 
 /**
