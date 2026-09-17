@@ -2,6 +2,7 @@
 import type { AxiosRequestConfig } from 'axios';
 import { get, filter } from 'lodash';
 import { utils as brunoUtilsRaw } from '@usebruno/common';
+import { stripJsonComments } from '../../utils/strip-json-comments';
 
 // Type assertion for @usebruno/common utils (no type definitions available)
 const brunoUtils = brunoUtilsRaw as {
@@ -84,13 +85,22 @@ const prepareBody = (body: BrunoRequest['body'], headers: Record<string, string>
   }
 
   switch (body.mode) {
-    case 'json':
+    case 'json': {
       headers['content-type'] = headers['content-type'] || 'application/json';
-      try {
-        return body.json ? JSON.parse(body.json) : undefined;
-      } catch {
-        return body.json;
+      if (!body.json) {
+        return undefined;
       }
+      // Comments are stripped the way the desktop app and the CLI do it. Without this a
+      // commented body fails to parse, and axios ends up sending the text as a JSON string.
+      const json = stripJsonComments(body.json);
+      try {
+        return JSON.parse(json);
+      } catch {
+        // Still not valid JSON on its own: unquoted variables are only resolved later, by
+        // interpolation. Hand over the comment-free text so it can parse after that.
+        return json;
+      }
+    }
 
     case 'text':
       headers['content-type'] = headers['content-type'] || 'text/plain';
