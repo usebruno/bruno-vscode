@@ -26,6 +26,7 @@ import {
   removePath,
   getPaths,
   generateUniqueName,
+  findUniqueFolderName,
   isDotEnvFile,
   isBrunoConfigFile,
   isBruEnvironmentConfig,
@@ -1154,19 +1155,21 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
   // - renderer:copy-environment
   // - renderer:export-collection
 
-  registerHandler('renderer:import-collection', async (args) => {
-    const [collection, collectionLocation, format = 'yml'] = args as [any, string, string];
-
+  const writeImportedCollection = async (
+    collection: any,
+    collectionLocation: string,
+    format: string
+  ): Promise<string> => {
     try {
-      const collectionName = collection.name || 'Imported Collection';
-      const collectionFolderName = sanitizeName(collectionName);
-      const dirPath = path.join(collectionLocation, collectionFolderName);
+      let collectionName = collection.name || 'Imported Collection';
+      let collectionFolderName = sanitizeName(collectionName);
+      let dirPath = path.join(collectionLocation, collectionFolderName);
 
-      if (fs.existsSync(dirPath)) {
-        const files = fs.readdirSync(dirPath);
-        if (files.length > 0) {
-          throw new Error(`collection: ${dirPath} already exists and is not empty`);
-        }
+      if (fs.existsSync(dirPath) && fs.readdirSync(dirPath).length > 0) {
+        collectionName = findUniqueFolderName(collectionName, collectionLocation);
+        collectionFolderName = sanitizeName(collectionName);
+        dirPath = path.join(collectionLocation, collectionFolderName);
+        collection.name = collectionName;
       }
 
       if (!fs.existsSync(dirPath)) {
@@ -1293,6 +1296,34 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     } catch (error) {
       throw error;
     }
+    
+
+    
+  };
+
+  registerHandler('renderer:import-collection', async (args) => {
+    const [collectionOrCollections, collectionLocation, format = 'yml'] = args as [any, string, string];
+    const isBatch = Array.isArray(collectionOrCollections);
+    const collections: any[] = isBatch ? collectionOrCollections : [collectionOrCollections];
+
+    const items: Array<{ uid: string; name: string; path: string }> = [];
+    const failures: Array<{ uid: string; name: string; message: string }> = [];
+
+    for (const collection of collections) {
+      try {
+        const dirPath = await writeImportedCollection(collection, collectionLocation, format);
+        items.push({ uid: collection.uid, name: collection.name, path: dirPath });
+      } catch (error) {
+        if (!isBatch) {
+          throw error;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[Import] Failed to import collection "${collection?.name}":`, error);
+        failures.push({ uid: collection?.uid, name: collection?.name, message });
+      }
+    }
+
+    return { success: { count: items.length, items }, failures };
   });
 
   // --- Collection format conversion handlers ---
@@ -1302,7 +1333,8 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
   registerHandler('renderer:convert-postman-to-bruno', async (args) => {
     const [postmanCollection] = args as [any];
     try {
-      return await postmanToBrunoConverter(postmanCollection);
+      const result = await postmanToBrunoConverter(postmanCollection);
+      return result?.collection ?? result;
     } catch (error) {
       console.error('[Collection IPC] Error converting Postman to Bruno:', error);
       throw error;

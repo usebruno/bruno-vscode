@@ -2782,18 +2782,21 @@ export const importCollection = (collection: any, collectionLocation: any, optio
       const state = getState();
       const activeWorkspace = state.workspaces.workspaces.find((w: any) => w.uid === state.workspaces.activeWorkspaceUid);
 
-      const collectionPath = await ipcRenderer.invoke('renderer:import-collection', collection, collectionLocation, options.format || 'yml');
+      const result = await ipcRenderer.invoke('renderer:import-collection', collection, collectionLocation, options.format || 'yml') as {
+        success: { items: Array<{ name: string; path: string }> };
+      };
+      const importedItems = result.success.items;
 
       if (activeWorkspace && activeWorkspace.pathname && activeWorkspace.type !== 'default') {
-        const workspaceCollection = {
-          name: collection.name,
-          path: collectionPath
-        };
-
-        await ipcRenderer.invoke('renderer:add-collection-to-workspace', activeWorkspace.pathname, workspaceCollection);
+        for (const importedItem of importedItems) {
+          await ipcRenderer.invoke('renderer:add-collection-to-workspace', activeWorkspace.pathname, {
+            name: importedItem.name,
+            path: importedItem.path
+          });
+        }
       }
 
-      resolve(collectionPath);
+      resolve(Array.isArray(collection) ? importedItems.map((item) => item.path) : importedItems[0]?.path);
     } catch (error) {
       reject(error);
     }
