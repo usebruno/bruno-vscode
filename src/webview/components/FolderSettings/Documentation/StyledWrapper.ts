@@ -5,6 +5,10 @@ const StyledWrapper = styled.div`
     cursor: pointer;
     color: ${(props) => props.theme.colors.text.yellow};
   }
+
+  div.CodeMirror {
+    height: 100%;
+  }
 `;
 
 export default StyledWrapper;

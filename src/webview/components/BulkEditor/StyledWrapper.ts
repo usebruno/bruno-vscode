@@ -1,7 +1,9 @@
 import styled from 'styled-components';
 
 const StyledWrapper = styled.div`
-  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 
   div.CodeMirror {
     height: 100%;

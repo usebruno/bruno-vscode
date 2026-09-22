@@ -143,7 +143,7 @@ const QueryParams = ({
 
   if (isBulkEditMode) {
     return (
-      <StyledWrapper className="w-full mt-3">
+      <StyledWrapper className="w-full h-full mt-3 flex flex-col min-h-0">
         <BulkEditor
           params={queryParams}
           onChange={handleQueryParamsChange}

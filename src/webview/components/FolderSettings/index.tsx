@@ -110,7 +110,7 @@ const FolderSettings = ({
             Docs
           </div>
         </div>
-        <section className="flex mt-4 h-full overflow-auto">{getTabPanel(tab)}</section>
+        <section className="flex mt-4 flex-1 min-h-0 overflow-auto">{getTabPanel(tab)}</section>
       </div>
     </StyledWrapper>
   );

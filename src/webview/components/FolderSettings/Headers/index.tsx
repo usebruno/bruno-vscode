@@ -68,8 +68,8 @@ const Headers = ({
 
   if (isBulkEditMode) {
     return (
-      <StyledWrapper className="w-full">
-        <div className="text-xs mb-4 text-muted">
+      <StyledWrapper className="w-full h-full flex flex-col min-h-0">
+        <div className="text-xs mb-4 text-muted shrink-0">
           Request headers that will be sent with every request inside this folder.
         </div>
         <BulkEditor

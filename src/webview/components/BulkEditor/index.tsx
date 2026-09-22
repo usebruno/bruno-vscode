@@ -4,6 +4,7 @@ import CodeEditor from 'components/CodeEditor';
 import { useTheme } from 'providers/Theme';
 import { useSelector } from 'react-redux';
 import { parseBulkKeyValue, serializeBulkKeyValue } from 'utils/common/bulkKeyValueUtils';
+import StyledWrapper from './StyledWrapper';
 
 interface BulkEditorProps {
   params?: unknown;
@@ -32,8 +33,8 @@ const BulkEditor = ({
   };
 
   return (
-    <>
-      <div className="h-[200px]">
+    <div className="flex flex-col flex-1 h-full min-h-0">
+      <StyledWrapper className="flex-1 min-h-0">
         <CodeEditor
           mode="text/plain"
           theme={displayedTheme}
@@ -44,13 +45,13 @@ const BulkEditor = ({
           onSave={onSave}
           onRun={onRun}
         />
-      </div>
-      <div className="flex btn-action justify-between items-center mt-3">
+      </StyledWrapper>
+      <div className="flex btn-action justify-between items-center mt-3 shrink-0">
         <button className="text-link select-none ml-auto" onClick={onToggle}>
           Key/Value Edit
         </button>
       </div>
-    </>
+    </div>
   );
 };
 

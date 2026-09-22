@@ -7,8 +7,12 @@ const StyledWrapper = styled.div`
   &.single {
     height: 100%;
 
-    .editor-container {
+    > .editor-container {
       height: calc(100% - 32px);
+    }
+
+    div.CodeMirror {
+      height: 100%;
     }
   }
 
@@ -64,7 +68,7 @@ const StyledWrapper = styled.div`
     }
   }
 
-  .editor-container {
+  > .editor-container {
     flex: 1;
     min-height: 0;
   }
