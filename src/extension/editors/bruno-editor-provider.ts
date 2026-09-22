@@ -56,6 +56,31 @@ const pendingScriptErrorFocus = new Map<string, ScriptErrorFocus>();
 const viewDataByWebview = new Map<vscode.Webview, Record<string, unknown>>();
 const webviewByFilePath = new Map<string, vscode.Webview>();
 
+function syncTabTitleWithRequestName(
+  webviewPanel: vscode.WebviewPanel,
+  document: vscode.TextDocument,
+  collectionRoot: string
+): vscode.Disposable {
+  const applyTitle = (): void => {
+    try {
+      const meta = parseFileMeta(document.getText(), getCollectionFormat(collectionRoot));
+      const name = typeof meta?.name === 'string' ? meta.name.trim() : '';
+      if (name) {
+        webviewPanel.title = name;
+      }
+    } catch {
+    }
+  };
+
+  applyTitle();
+
+  return vscode.workspace.onDidChangeTextDocument((e) => {
+    if (e.document.uri.toString() === document.uri.toString()) {
+      applyTitle();
+    }
+  });
+}
+
 export function setPendingVariablesMode(filePath: string, collectionRoot: string): void {
   pendingVariablesModeRequests.set(filePath, { collectionRoot });
 }
@@ -155,12 +180,16 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
     // collection-root check and collection-format awareness, so the editor and
     // the watcher agree on what a given file represents.
     let activeItemUid: string;
+    let titleSubscription: vscode.Disposable | undefined;
     if (collectionRoot && isCollectionRootFile(filePath, collectionRoot)) {
       activeItemUid = generateUidBasedOnHash(collectionRoot);
     } else if (collectionRoot && isFolderRootFile(filePath, collectionRoot)) {
       activeItemUid = generateUidBasedOnHash(path.dirname(filePath));
     } else {
       activeItemUid = generateUidBasedOnHash(filePath);
+      if (collectionRoot) {
+        titleSubscription = syncTabTitleWithRequestName(webviewPanel, document, collectionRoot);
+      }
     }
 
     stateManager.setActiveEditorWebview(webviewPanel.webview);
@@ -175,6 +204,7 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
     });
 
     webviewPanel.onDidDispose(() => {
+      titleSubscription?.dispose();
       clearActiveItemFromSidebar(activeItemUid);
       stateManager.removeWebview(webviewPanel.webview);
       unregisterDocument(document.uri.fsPath);
