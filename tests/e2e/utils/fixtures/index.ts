@@ -5,6 +5,7 @@ import * as net from 'net';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
+import { runCommand } from '../page/actions';
 
 // This file lives at tests/e2e/utils/fixtures/, so climb four levels to the repo root.
 const EXTENSION_ROOT = path.resolve(__dirname, '../../../..');
@@ -103,6 +104,8 @@ function writeVSCodeSettings(userDataDir: string): void {
       'security.workspace.trust.enabled': false,
       'extensions.ignoreRecommendations': true,
       'github.copilot.enable': false,
+      'chat.disableAIFeatures': true,
+      'workbench.secondarySideBar.defaultVisibility': 'hidden',
       'workbench.welcomePage.walkthroughs.openOnInstall': false,
       'workbench.accounts.experimental.showEntitlements': false,
       'accessibility.signUpPlaceholder': false,
@@ -139,6 +142,23 @@ function launchVSCode(
   return proc;
 }
 
+function makeTempDir(prefix: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    if (process.platform !== 'win32') {
+      return dir;
+    }
+    const longPath = fs.realpathSync.native(dir);
+    return longPath.replace(/^([A-Za-z]):/, (_match, drive: string) => `${drive.toLowerCase()}:`);
+  }
+
+async function ensureSecondarySidebarClosed(page: Page): Promise<void> {
+  const auxiliaryBar = page.locator('.part.auxiliarybar');
+  const isVisible = await auxiliaryBar.isVisible().catch(() => false);
+  if (!isVisible) return;
+  await runCommand(page, 'View: Close Secondary Side Bar');
+  await auxiliaryBar.waitFor({ state: 'hidden'}).catch(() => {});
+}
+
 /** Wait for the VS Code workbench UI to be ready */
 async function waitForWorkbench(page: Page): Promise<void> {
   // Wait for the monaco workbench shell to exist
@@ -157,6 +177,7 @@ async function waitForWorkbench(page: Page): Promise<void> {
   } catch {
     // Dialog didn't appear — that's fine
   }
+  await ensureSecondarySidebarClosed(page);
 
   // Small extra buffer for extension activation
   await new Promise(r => setTimeout(r, 2_000));
@@ -165,10 +186,10 @@ async function waitForWorkbench(page: Page): Promise<void> {
 export const test = base.extend<VSCodeFixture>({
   page: async ({}, use) => {
     const debugPort = await getFreePort();
-    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bruno-vscode-test-'));
+    const userDataDir = makeTempDir('bruno-vscode-test-');
 
     // Create a temp workspace folder so the extension host has a workspace to run against
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'bruno-workspace-'));
+    const workspacePath = makeTempDir('bruno-workspace-');
 
     writeVSCodeSettings(userDataDir);
 
@@ -226,7 +247,7 @@ export const test = base.extend<VSCodeFixture>({
   },
 
   tmpDir: async ({}, use) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bruno-test-collections-'));
+    const dir = makeTempDir('bruno-test-collections-');
     await use(dir);
     fs.rmSync(dir, { recursive: true, force: true });
   },
