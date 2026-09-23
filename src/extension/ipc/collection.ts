@@ -1296,9 +1296,6 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     } catch (error) {
       throw error;
     }
-    
-
-    
   };
 
   registerHandler('renderer:import-collection', async (args) => {
