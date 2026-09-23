@@ -520,6 +520,26 @@ export async function loadGrpcProtoFile(editor: Frame, protoAbsPath: string): Pr
   await expect(grpc.methodDropdownTrigger()).toBeVisible({ timeout: 15_000 });
 }
 
+export const GRPC_SERVER_URL = 'grpc://localhost:8082';
+
+export async function createGrpcRequestWithProto(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string,
+  options: { name: string; protoFixture: string; targetDir: string; url?: string }
+): Promise<Frame> {
+  const { name, protoFixture, targetDir, url = GRPC_SERVER_URL } = options;
+
+  const protoInCollection = path.join(targetDir, protoFixture);
+  fs.copyFileSync(path.resolve(__dirname, '../fixtures', protoFixture), protoInCollection);
+
+  await createRequestByType(page, sidebar, collectionName, { name, url, type: 'gRPC' });
+  const editor = await openGrpcRequest(page, sidebar, collectionName, name);
+
+  await loadGrpcProtoFile(editor, protoInCollection);
+  return editor;
+}
+
 /** Select a gRPC method by (partial) name from the method dropdown. */
 export async function selectGrpcMethod(editor: Frame, methodText: string): Promise<void> {
   const grpc = buildCommonLocators(editor).grpc;
