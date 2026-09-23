@@ -1,16 +1,10 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import type { Frame, Page } from '@playwright/test';
 import { test, expect } from '../../utils/fixtures';
 import {
   openBrunoSidebar,
   createCollection,
-  createRequestByType,
-  openGrpcRequest,
-  loadGrpcProtoFile,
+  createGrpcRequestWithProto,
   selectGrpcMethod,
-  openGrpcMessageTab,
-  findCollectionDir
+  openGrpcMessageTab
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 
@@ -20,31 +14,19 @@ import { buildCommonLocators } from '../../utils/page/locators';
  * Methods come from `streaming.proto` (one rpc per method type).
  */
 
-const GRPC_SERVER = 'grpc://localhost:8082';
-
-async function setupGrpcRequest(
-  page: Page,
-  tmpDir: string,
-  collectionName: string,
-  requestName: string
-): Promise<Frame> {
-  const sidebar = await openBrunoSidebar(page);
-  await createCollection(page, sidebar, collectionName, tmpDir);
-
-  const protoInCollection = path.join(tmpDir, 'streaming.proto');
-  fs.copyFileSync(path.resolve(__dirname, '../../utils/fixtures/streaming.proto'), protoInCollection);
-
-  await createRequestByType(page, sidebar, collectionName, { name: requestName, url: GRPC_SERVER, type: 'gRPC' });
-  const editor = await openGrpcRequest(page, sidebar, collectionName, requestName);
-
-  await loadGrpcProtoFile(editor, protoInCollection);
-  await openGrpcMessageTab(editor);
-  return editor;
-}
-
 test.describe('gRPC method type', () => {
   test('the selected method type drives how many request messages are allowed', async ({ page, tmpDir }) => {
-    const editor = await setupGrpcRequest(page, tmpDir, 'gRPC Method Type', 'MethodType');
+    const collectionName = 'gRPC Method Type';
+    const sidebar = await openBrunoSidebar(page);
+    await createCollection(page, sidebar, collectionName, tmpDir);
+
+    const editor = await createGrpcRequestWithProto(page, sidebar, collectionName, {
+      name: 'MethodType',
+      protoFixture: 'streaming.proto',
+      targetDir: tmpDir
+    });
+    await openGrpcMessageTab(editor);
+
     const grpc = buildCommonLocators(editor).grpc;
 
     // Unary
