@@ -13,7 +13,24 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     collectionName: (name: string) =>
       frame.getByTestId('sidebar-collection-row').filter({ hasText: name }),
     collectionItem: (name: string) =>
-      frame.getByTestId('sidebar-collection-item-row').filter({ hasText: name })
+      frame.getByTestId('sidebar-collection-item-row').filter({ hasText: name }),
+    addMenu: () => frame.getByTestId('collections-header-add-menu'),
+    addMenuCreate: () => frame.getByTestId('collections-header-add-menu-create'),
+    addMenuImport: () => frame.getByTestId('collections-header-add-menu-import')
+  },
+  importCollection: {
+    container: () => frame.getByTestId('import-collection-container'),
+    fileInput: () => frame.getByTestId('import-file-input'),
+    search: () => frame.getByTestId('import-search'),
+    selectAll: () => frame.getByTestId('import-select-all'),
+    selectedCount: () => frame.getByTestId('import-selected-count'),
+    rows: () => frame.getByTestId('import-collection-row'),
+    rowCheckbox: () => frame.getByTestId('import-collection-checkbox'),
+    location: () => frame.getByTestId('import-collection-location'),
+    browse: () => frame.getByTestId('import-browse-button'),
+    submit: () => frame.getByTestId('import-submit'),
+    progressSummary: () => frame.getByTestId('import-progress-summary'),
+    close: () => frame.getByTestId('import-close')
   },
   collectionSettings: {
     container: () => frame.getByTestId('collection-settings'),

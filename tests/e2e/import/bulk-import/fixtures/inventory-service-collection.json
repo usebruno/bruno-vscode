@@ -1,0 +1,84 @@
+{
+  "name": "Inventory Service",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "List Warehouse Items",
+      "filename": "list-warehouse-items.bru",
+      "seq": 1,
+      "settings": { "encodeUrl": true },
+      "tags": [],
+      "request": {
+        "url": "https://echo.usebruno.com/inventory/items",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": { "mode": "none" }
+      }
+    },
+    {
+      "type": "http",
+      "name": "Restock Item",
+      "filename": "restock-item.bru",
+      "seq": 2,
+      "settings": { "encodeUrl": true },
+      "tags": [],
+      "request": {
+        "url": "https://echo.usebruno.com/inventory/restock",
+        "method": "POST",
+        "headers": [],
+        "params": [],
+        "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": { "mode": "none" }
+      }
+    },
+    {
+      "type": "folder",
+      "name": "Suppliers",
+      "filename": "suppliers",
+      "seq": 3,
+      "items": [
+        {
+          "type": "http",
+          "name": "List Suppliers",
+          "filename": "list-suppliers.bru",
+          "seq": 1,
+          "settings": { "encodeUrl": true },
+          "tags": [],
+          "request": {
+            "url": "https://echo.usebruno.com/inventory/suppliers",
+            "method": "GET",
+            "headers": [],
+            "params": [],
+            "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": { "mode": "none" }
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [],
+  "brunoConfig": {
+    "version": "1",
+    "name": "Inventory Service",
+    "type": "collection",
+    "ignore": ["node_modules", ".git"]
+  }
+}
