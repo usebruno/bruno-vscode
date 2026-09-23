@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { WebviewHelper } from '../webview/helper';
 import { showSaveRequestPicker } from '../utils/folder-picker';
+import { posixifyPath } from '../utils/filesystem';
 import { stateManager } from '../webview/state-manager';
 import {
   setCurrentWebview,
@@ -18,9 +19,8 @@ import {
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
-import { openCollection, loadCollectionMetadata, setMessageSender as setCollectionsMessageSender } from '../app/collections';
+import { loadCollectionMetadata } from '../app/collections';
 import { notifyActiveItemToSidebar, clearActiveItemFromSidebar } from '../ipc/collection';
-import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
 import { AppItem } from '@bruno-types';
 
@@ -130,24 +130,21 @@ export async function openTransientRequestPanel(
     stateManager.sendTo(panel.webview, channel, ...args);
   };
 
-  const originalBroadcastSender = (channel: string, ...args: unknown[]) => {
-    stateManager.broadcast(channel, ...args);
-  };
-
   let collectionLoaded = false;
 
   // Render the transient request as soon as the webview is ready. We send the
   // collection metadata + the transient item + the view type in a single
   // burst so the UI shows the request immediately. The full collection tree
-  // (environments, siblings, watchers) is populated in the background via
-  // openCollection so scripts/vars eventually resolve, but the user does not
-  // wait for a full scan to see the request pane.
+  // (environments, siblings, watchers) is populated in the background so
+  // scripts/vars eventually resolve, but the user does not wait for a full
+  // scan to see the request pane.
   const loadCollection = async () => {
     if (collectionLoaded) return;
     collectionLoaded = true;
 
     // 1) Seed collection metadata and the transient item in Redux immediately.
-    await loadCollectionMetadata(collectionPath, webviewSender);
+    const loadedUid = await loadCollectionMetadata(collectionPath, webviewSender);
+    const uid = loadedUid || collectionUid;
 
     const item = transientItems.get(itemUid);
     if (item) {
@@ -167,16 +164,17 @@ export async function openTransientRequestPanel(
       });
     }
 
-    // 3) Kick off the full collection load in the background for env/tree.
-    setCollectionsMessageSender(webviewSender);
-    setWatcherMessageSender(webviewSender);
+    // 3) Stream the whole collection into THIS webview's store.
     try {
-      await openCollection(collectionWatcher, collectionPath);
+      // Register watcher if not already present.
+      const nativePath = path.normalize(collectionPath);
+      const posixPath = posixifyPath(collectionPath);
+      if (!collectionWatcher.hasWatcher(nativePath) && !collectionWatcher.hasWatcher(posixPath)) {
+        collectionWatcher.setupWatchersOnly(nativePath, uid);
+      }
+      await collectionWatcher.loadFullCollection(collectionPath, uid, webviewSender);
     } catch (error) {
-      console.error('TransientRequestPanel: Error opening collection:', error);
-    } finally {
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
+      console.error('TransientRequestPanel: Error loading collection:', error);
     }
   };
 
