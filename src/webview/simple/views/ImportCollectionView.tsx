@@ -711,7 +711,7 @@ const ImportCollectionView: React.FC = () => {
             <div className="form-group">
               <label htmlFor="format" className="form-label">
                 File Format
-                <Help width="260">
+                <Help width={260}>
                   <p><strong>OpenCollection (YAML):</strong> Industry-standard YAML format (.yml)</p>
                   <p className="mt-1"><strong>BRU:</strong> Bruno's native format (.bru)</p>
                 </Help>
