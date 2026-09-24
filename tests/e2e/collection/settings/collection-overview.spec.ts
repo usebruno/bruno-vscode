@@ -13,10 +13,12 @@ test.describe('Collection overview', () => {
 
     const settings = await openCollectionSettings(page, sidebar, collectionName);
 
-    const requestsInfo = buildCommonLocators(settings).collectionSettings.requestsInfo();
-    await expect(requestsInfo).toHaveText('3 requests in collection', { timeout: 5_000 });
+    await test.step('Verify the request count is correct', async () => {
+      const requestsInfo = buildCommonLocators(settings).collectionSettings.requestsInfo();
+      await expect(requestsInfo).toHaveText('3 requests in collection', { timeout: 5_000 });
 
-    const requestsNotLoaded = buildCommonLocators(settings).collectionSettings.requestsNotLoaded();
-    await expect(requestsNotLoaded).toHaveCount(0);
+      const requestsNotLoaded = buildCommonLocators(settings).collectionSettings.requestsNotLoaded();
+      await expect(requestsNotLoaded).toHaveCount(0);
+    });
   });
 });
