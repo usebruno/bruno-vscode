@@ -7,45 +7,47 @@ import {
   deleteItem,
   expandCollection,
 } from '../../utils/page/actions';
+import { buildCommonLocators } from '../../utils/page/locators';
 
 test.describe('Collection removal', () => {
 
-  test('Removed collection does not reappear when creating a new collection', async ({ page, tmpDir }) => {
-    const sidebar = await openBrunoSidebar(page);
+  test('TC-3645: Verify that Removing the collection from the sidebar and does not reappear when creating a new collection', { tag: '@sanity' },
+    async ({ page, tmpDir }) => {
+      const sidebar = await openBrunoSidebar(page);
+      const collectionA = 'Collection A';
+      const collectionB = 'Collection B';
+      const sidebarLocators = buildCommonLocators(sidebar);
+      const rowA = sidebarLocators.sidebar.collectionName(collectionA);
+      const rowB = sidebarLocators.sidebar.collectionName(collectionB);
 
-    // Step 1: Create collection A
-    const collectionA = 'Collection A';
-    await createCollection(page, sidebar, collectionA, tmpDir);
+      await createCollection(page, sidebar, collectionA, tmpDir);
+      await test.step('Verify collection A is visible', async () => {
+        await expect(rowA).toBeVisible();
+      });
 
-    const rowA = sidebar
-      .locator('[data-testid="sidebar-collection-row"]')
-      .filter({ hasText: collectionA });
-    await expect(rowA).toBeVisible();
+      await test.step('Remove collection A', async () => {
+        await removeCollection(page, sidebar, collectionA);
+        await expect(rowA).not.toBeVisible({ timeout: 10_000 });
+      });
 
-    // Step 2: Remove collection A
-    await removeCollection(page, sidebar, collectionA);
-    await expect(rowA).not.toBeVisible({ timeout: 10_000 });
+      await test.step('Create collection B', async () => {
+        await createCollection(page, sidebar, collectionB, tmpDir);
+      });
 
-    // Step 3: Create collection B — this triggers workspace-config-updated
-    // which re-reads workspace.yml. If collection A wasn't properly removed,
-    // it will reappear here.
-    const collectionB = 'Collection B';
-    await createCollection(page, sidebar, collectionB, tmpDir);
+      await test.step('Verify collection B is visible', async () => {
+        await expect(rowB).toBeVisible();
+      });
 
-    const rowB = sidebar
-      .locator('[data-testid="sidebar-collection-row"]')
-      .filter({ hasText: collectionB });
-    await expect(rowB).toBeVisible();
+      await test.step('Verify collection A is still gone', async () => {
+        await expect(rowA).not.toBeVisible();
+      });
 
-    // Step 4: Verify collection A is still gone
-    await expect(rowA).not.toBeVisible();
-
-    // Step 5: Count total collections — should be exactly 1 (Collection B)
-    const allCollections = sidebar.locator('[data-testid="sidebar-collection-row"]');
-    // Filter to only the ones we created (exclude any pre-existing workspace collections)
-    const ourCollections = allCollections.filter({ hasText: /Collection [AB]/ });
-    await expect(ourCollections).toHaveCount(1);
-  });
+      await test.step('Count total collections', async () => {
+        const ourCollections = sidebarLocators.sidebar.collectionName(/Collection [AB]/);
+        await expect(ourCollections).toHaveCount(1);
+      });
+    }
+  );
 
   test('Removing and recreating a collection with the same name works', async ({ page, tmpDir }) => {
     const fs = require('fs');
@@ -59,9 +61,7 @@ test.describe('Collection removal', () => {
     await createCollection(page, sidebar, collectionName, dir1);
     await removeCollection(page, sidebar, collectionName);
 
-    const row = sidebar
-      .locator('[data-testid="sidebar-collection-row"]')
-      .filter({ hasText: collectionName });
+    const row = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
     await expect(row).not.toBeVisible({ timeout: 10_000 });
 
     // Recreate with the same name in a different folder to avoid filesystem conflict
@@ -71,10 +71,7 @@ test.describe('Collection removal', () => {
     await expect(row).toBeVisible();
 
     // Should be exactly 1 instance, not 2
-    const matches = sidebar
-      .locator('[data-testid="sidebar-collection-row"]')
-      .filter({ hasText: collectionName });
-    await expect(matches).toHaveCount(1);
+    await expect(row).toHaveCount(1);
   });
 
   test('Deleted folder disappears from the sidebar', async ({ page, tmpDir }) => {
@@ -88,9 +85,7 @@ test.describe('Collection removal', () => {
 
     // Expand the collection to see the folder
     await expandCollection(sidebar, collectionName);
-    const folderRow = sidebar
-      .locator('[data-testid="sidebar-collection-item-row"]')
-      .filter({ hasText: folderName });
+    const folderRow = buildCommonLocators(sidebar).sidebar.collectionItem(folderName);
     await expect(folderRow).toBeVisible({ timeout: 10_000 });
 
     // Delete the folder

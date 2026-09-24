@@ -27,6 +27,17 @@ export function findCollectionDir(
   throw new Error(`No collection (${configFile}) found under ${root}`);
 }
 
+/** Recursively return paths of every file under `dir` whose name matches `fileName`. */
+export function findFilesNamed(dir: string, fileName: string): string[] {
+  const matches: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) matches.push(...findFilesNamed(full, fileName));
+    else if (entry.name === fileName) matches.push(full);
+  }
+  return matches;
+}
+
 // Find the webview Frame that contains the given marker selector.
 export async function getWebviewFrame(
   page: Page,
@@ -566,6 +577,30 @@ export async function expandCollection(
   if (!isExpanded) {
     await chevron.click();
   }
+}
+
+export async function expandFolder(sidebar: Frame, folderName: string): Promise<void> {
+  const folderRow = buildCommonLocators(sidebar).sidebar.collectionItem(folderName);
+  const chevron = buildCommonLocators(folderRow).sidebar.folderChevron();
+  const isExpanded = await chevron.evaluate((el) => el.classList.contains('rotate-90'));
+  if (!isExpanded) {
+    await chevron.click();
+  }
+}
+
+export async function dragItemIntoFolder(
+  sidebar: Frame,
+  itemName: string,
+  folderName: string
+): Promise<void> {
+  const locators = buildCommonLocators(sidebar);
+  const itemRow = locators.sidebar.collectionItem(itemName);
+  const folderRow = locators.sidebar.collectionItem(folderName);
+  await expect(itemRow).toBeVisible();
+  await expect(folderRow).toBeVisible();
+
+  // steps gives the sidebar a real drag; a single jump does not start one.
+  await itemRow.locator('.item-name').dragTo(folderRow, { steps: 15 });
 }
 
 /**

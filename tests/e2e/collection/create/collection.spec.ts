@@ -10,40 +10,36 @@ import {
   setJsonBody,
   sendRequest,
 } from '../../utils/page/actions';
+import { buildCommonLocators } from '../../utils/page/locators';
 
 // All tests share a single VS Code instance (workers: 1) so they run serially.
 // Each test gets its own tmpDir for collection storage.
 
 test.describe('Collection management', () => {
 
-  test('Create a collection from the sidebar', async ({ page, tmpDir }) => {
+  test('TC-3504: Create a collection from the sidebar', { tag: '@sanity' }, async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'My Test Collection';
-
     await createCollection(page, sidebar, collectionName, tmpDir);
-
     // Verify the collection is visible in the sidebar
-    const collectionRow = sidebar
-      .locator('[data-testid="sidebar-collection-row"]')
-      .filter({ hasText: collectionName });
+    const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
     await expect(collectionRow).toBeVisible();
   });
 
-  test('Import a collection from a JSON file', async ({ page, tmpDir }) => {
+  test('TC-3618: Import a collection from a JSON file', { tag: '@sanity' }, async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const fixturePath = path.resolve(__dirname, 'fixtures/echo-collection.json');
     const expectedName = 'Echo Collection';
-
     await importCollection(page, sidebar, fixturePath, tmpDir, expectedName);
 
     // Verify the imported collection is visible in the sidebar
-    const collectionRow = sidebar
-      .locator('[data-testid="sidebar-collection-row"]')
-      .filter({ hasText: expectedName });
-    await expect(collectionRow).toBeVisible();
+    await test.step('Verify the imported collection is visible in the sidebar', async () => {
+      const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(expectedName);
+      await expect(collectionRow).toBeVisible();
+    });
   });
 
-  test('Create a collection, send a request to echo.usebruno.com, and verify the response', async ({ page, tmpDir }) => {
+  test('Create a collection, send a request to echo.usebruno.com, and verify the response', { tag: '@regression' }, async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Echo Test';
     const requestName = 'Ping Echo';
@@ -67,7 +63,7 @@ test.describe('Collection management', () => {
     await sendRequest(editor, 200);
 
     // Step 6: Verify the response body echoes back our JSON
-    const responseBody = editor.locator('[data-testid="response-status-code"]').locator('..');
+    const responseBody = buildCommonLocators(editor).response.body();
     await expect(responseBody).toBeVisible({ timeout: 10_000 });
   });
 });
