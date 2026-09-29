@@ -1,0 +1,37 @@
+{
+  "name": "Bruno Collection",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "Ping",
+      "filename": "ping.bru",
+      "seq": 1,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "https://echo.usebruno.com/ping",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "none",
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": []
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "none"
+        }
+      }
+    }
+  ],
+  "environments": []
+}

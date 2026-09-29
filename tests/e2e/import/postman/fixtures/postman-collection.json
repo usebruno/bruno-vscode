@@ -1,0 +1,111 @@
+{
+    "info": {
+      "_postman_id": "379b5ad0-2612-4c27-b9a2-e48cbbd9cb44",
+      "name": "Postman_collection",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+      "_exporter_id": "21438727"
+    },
+    "item": [
+      {
+        "name": "pm_folder",
+        "item": [
+          {
+            "name": "pm_request",
+            "event": [
+              {
+                "listen": "prerequest",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    " pm.globals.has(\"API_key\")"
+                  ]
+                }
+              },
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.globals.has(\"testKey\")\r\n"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "https://httpbin.org/anything/users/",
+                "protocol": "https",
+                "host": [
+                  "httpbin",
+                  "org"
+                ],
+                "path": [
+                  "anything",
+                  "users",
+                  ""
+                ]
+              }
+            },
+            "response": []
+          },
+          {
+            "name": "New Request",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "https://httpbin.org/anything/users/:username/orders/:orderId",
+                "protocol": "https",
+                "host": [
+                  "httpbin",
+                  "org"
+                ],
+                "path": [
+                  "anything",
+                  "users",
+                  ":username",
+                  "orders",
+                  ":orderId"
+                ],
+                "variable": [
+                  {
+                    "key": "username",
+                    "value": ""
+                  },
+                  {
+                    "key": "orderId",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "response": []
+          },
+          {
+            "name": "New Request",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": ""
+              }
+            },
+            "response": []
+          }
+        ]
+      },
+      {
+        "name": "New Request",
+        "request": {
+          "method": "GET",
+          "header": [],
+          "url": {
+            "raw": ""
+          }
+        },
+        "response": []
+      }
+    ]
+  }

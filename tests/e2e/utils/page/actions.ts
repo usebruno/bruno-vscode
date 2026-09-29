@@ -199,13 +199,15 @@ export async function openImportPanelWithFiles(
  * @param filePath - Absolute path to the collection JSON file
  * @param location - Filesystem path where the imported collection will be stored
  * @param expectedName - Expected collection name to verify in the sidebar
+ * @param format - On-disk format chosen on the location step: 'yml' (default) or 'bru'
  */
 export async function importCollection(
   page: Page,
   sidebar: Frame,
   filePath: string,
   location: string,
-  expectedName: string
+  expectedName: string,
+  format: 'yml' | 'bru' = 'yml'
 ): Promise<void> {
   const editor = await openImportPanelWithFiles(page, sidebar, [filePath]);
   const importPanel = buildCommonLocators(editor).importCollection;
@@ -218,6 +220,10 @@ export async function importCollection(
   await mockBrowseDirectory(editor, location);
   await importPanel.browse().click();
   await expect(importPanel.location()).toHaveValue(location, { timeout: 5_000 });
+
+  if (format !== 'yml') {
+    await editor.locator('#format').selectOption(format);
+  }
 
   // Click Import
   await importPanel.submit().click();
