@@ -171,13 +171,15 @@ export const ipcRenderer = {
       if (INTERACTIVE_INVOKE_CHANNELS.has(channel)) {
         return;
       }
-
-      setTimeout(() => {
-        if (pendingRequests.has(requestId)) {
-          pendingRequests.delete(requestId);
-          reject(new Error(`IPC invoke timeout for channel: ${channel}`));
-        }
-      }, DEFAULT_INVOKE_TIMEOUT_MS);
+      
+      // Removing the timeout for now, as it causes issues with long-running operations. 
+      // It will be handled after implementing preferences(app level settings).
+      // setTimeout(() => {
+      //   if (pendingRequests.has(requestId)) {
+      //     pendingRequests.delete(requestId);
+      //     reject(new Error(`IPC invoke timeout for channel: ${channel}`));
+      //   }
+      // }, DEFAULT_INVOKE_TIMEOUT_MS);
     });
   },
 
