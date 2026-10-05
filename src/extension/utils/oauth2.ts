@@ -83,6 +83,16 @@ export const generateCodeVerifier = (): string => {
   return crypto.randomBytes(22).toString('hex');
 };
 
+// Uses the user-configured state as-is if set, otherwise a cryptographically random value.
+export const generateState = (userState?: string): string => {
+  const trimmedUserState = userState?.trim();
+  if (trimmedUserState) {
+    return trimmedUserState;
+  }
+  let cryptographicallyRandomString = crypto.randomBytes(16).toString('hex');
+  return cryptographicallyRandomString;
+};
+
 export const generateCodeChallenge = (codeVerifier: string): string => {
   const hash = crypto.createHash('sha256');
   hash.update(codeVerifier);
@@ -204,6 +214,16 @@ const fetchTokenFromUrl = async (requestConfig: TokenRequestConfig): Promise<{ c
   return { credentials: parsedResponseData, requestDetails };
 };
 
+
+// The authorize redirect and callback happen in the system browser, so there is no real
+// response to record — only what Bruno opened and what it got back.
+const buildBrowserStepDetails = (url: string, statusText: string, data: Record<string, unknown> | null = null): Record<string, unknown> => ({
+  request: { url, method: 'GET', headers: {} },
+  response: { status: '-', statusText, headers: {}, data },
+  requestId: Date.now().toString(),
+  fromCache: false,
+  completed: true
+});
 
 const buildBaseRequestConfig = (url: string): TokenRequestConfig => ({
   method: 'POST',
@@ -476,14 +496,23 @@ export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collection
     callbackUrl: effectiveCallbackUrl,
     clientId,
     scope: scope || undefined,
-    state: state || undefined,
+    state: generateState(state),
     pkce: pkce || false,
     codeChallenge,
     additionalParameters: additionalParameters?.authorization as OAuthAdditionalParameter[] || undefined
   });
 
+  const debugInfo: { data: unknown[] } = { data: [] };
+  if (authResult.authorizeUrl) {
+    debugInfo.data.push(buildBrowserStepDetails(authResult.authorizeUrl, ''));
+  }
+  if (authResult.callbackUri) {
+    const callbackParams = Object.fromEntries(new URL(authResult.callbackUri).searchParams);
+    debugInfo.data.push(buildBrowserStepDetails(authResult.callbackUri, '', callbackParams));
+  }
+
   if (!authResult.authorizationCode) {
-    return { error: 'No authorization code received', credentials: null, url, credentialsId: credentialsId || 'default', collectionUid };
+    return { error: 'No authorization code received', credentials: null, url, credentialsId: credentialsId || 'default', collectionUid, debugInfo };
   }
 
   // Exchange authorization code for token
@@ -507,7 +536,6 @@ export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collection
   }
   requestConfig.data = qs.stringify(data);
 
-  const debugInfo: { data: unknown[] } = { data: [] };
   const { credentials, requestDetails } = await fetchTokenFromUrl(requestConfig);
   debugInfo.data.push(requestDetails);
 
@@ -565,7 +593,7 @@ export const getOAuth2TokenUsingImplicitGrant = async ({ request, collectionUid,
     callbackUrl: effectiveCallbackUrl,
     clientId: clientId || '',
     scope: scope || undefined,
-    state: state || undefined,
+    state: generateState(state),
     additionalParameters: additionalParameters?.authorization as OAuthAdditionalParameter[] || undefined
   });
 

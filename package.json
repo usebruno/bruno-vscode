@@ -414,6 +414,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:server": "npx tsx tests/e2e/server/index.ts",
+    "test:keycloak:up": "docker compose -f tests/e2e/auth/oauth2/keycloak/docker-compose.yml up -d --wait",
+    "test:keycloak:down": "docker compose -f tests/e2e/auth/oauth2/keycloak/docker-compose.yml down",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",

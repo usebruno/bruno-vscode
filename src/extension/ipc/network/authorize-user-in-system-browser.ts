@@ -20,6 +20,7 @@ const AUTHORIZATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 let pendingAuthResolve: ((value: AuthorizationResult) => void) | null = null;
 let pendingAuthReject: ((reason: Error) => void) | null = null;
+let expectedState: string | null = null;
 let authTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 let localServer: http.Server | null = null;
 
@@ -37,6 +38,7 @@ export function cancelAuthorization(): void {
 }
 
 function cleanup(): void {
+  expectedState = null;
   if (authTimeoutHandle) {
     clearTimeout(authTimeoutHandle);
     authTimeoutHandle = null;
@@ -65,10 +67,20 @@ export function createOAuth2UriHandler(): vscode.UriHandler {
         return;
       }
 
+      // Validate state to protect against CSRF / authorization code injection.
+      const returnedState = params.get('state') || new URLSearchParams(uri.fragment).get('state');
+      if (!expectedState || returnedState !== expectedState) {
+        cleanup();
+        pendingAuthReject?.(new Error('OAuth2 state mismatch: the returned state does not match the issued state.'));
+        pendingAuthResolve = null;
+        pendingAuthReject = null;
+        return;
+      }
+
       const code = params.get('code');
       if (code) {
         cleanup();
-        pendingAuthResolve({ authorizationCode: code });
+        pendingAuthResolve({ authorizationCode: code, callbackUri: uri.toString(true) });
         pendingAuthResolve = null;
         pendingAuthReject = null;
         return;
@@ -98,6 +110,8 @@ export function createOAuth2UriHandler(): vscode.UriHandler {
 
 export interface AuthorizationResult {
   authorizationCode?: string;
+  authorizeUrl?: string;
+  callbackUri?: string;
   implicitTokens?: {
     access_token: string;
     token_type: string;
@@ -161,7 +175,7 @@ export async function getOAuth2AuthorizationCode(options: AuthorizationCodeOptio
     });
   }
 
-  return openBrowserAndWaitForCallback(url.toString());
+  return openBrowserAndWaitForCallback(url.toString(), state);
 }
 
 export async function getOAuth2ImplicitToken(options: ImplicitFlowOptions): Promise<AuthorizationResult> {
@@ -193,13 +207,14 @@ export async function getOAuth2ImplicitToken(options: ImplicitFlowOptions): Prom
     });
   }
 
-  return openBrowserAndWaitForCallback(url.toString());
+  return openBrowserAndWaitForCallback(url.toString(), state);
 }
 
-async function openBrowserAndWaitForCallback(authorizeUrl: string): Promise<AuthorizationResult> {
+async function openBrowserAndWaitForCallback(authorizeUrl: string, state?: string): Promise<AuthorizationResult> {
   return new Promise<AuthorizationResult>((resolve, reject) => {
-    pendingAuthResolve = resolve;
+    pendingAuthResolve = (result) => resolve({ ...result, authorizeUrl });
     pendingAuthReject = reject;
+    expectedState = state || null;
 
     authTimeoutHandle = setTimeout(() => {
       cleanup();

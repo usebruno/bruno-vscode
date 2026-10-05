@@ -37,7 +37,11 @@ const OAuth2Implicit = ({
   const dispatch = useDispatch();
   const preferences = useSelector((state: any) => state.app.preferences);
   const useSystemBrowser = get(preferences, 'request.oauth2.useSystemBrowser', false);
-  const { storedTheme } = useTheme();
+  const { storedTheme, theme } = useTheme();
+  const tooltipStyle = {
+    backgroundColor: theme?.background?.surface0,
+    color: theme?.text
+  };
   const dropdownTippyRef = useRef<{ hide: () => void } | null>(null);
   const onDropdownCreate = (ref: any) => dropdownTippyRef.current = ref;
 
@@ -170,11 +174,21 @@ const OAuth2Implicit = ({
         </div>
       </div>
       {inputsConfig.map((input) => {
-        const { key, label } = input;
+        const { key, label, tooltip } = input;
         const isSecret = (input as any).isSecret;
         return (
           <div className="flex items-center gap-4 w-full" key={`input-${key}`}>
-            <label className="block min-w-[140px]">{label}</label>
+            <label className="min-w-[140px] flex items-center gap-4">
+              {label}
+              {tooltip && (
+                <div className="relative group cursor-pointer inline-flex items-center">
+                  <IconHelp size={16} className="text-gray-500" />
+                  <span className="group-hover:opacity-100 pointer-events-none opacity-0 max-w-60 absolute left-0 top-full mt-1 w-max p-2 text-xs rounded-md transition-opacity duration-200 z-10" style={tooltipStyle}>
+                    {tooltip}
+                  </span>
+                </div>
+              )}
+            </label>
             <div className="oauth2-input-wrapper flex-1">
               <SingleLineEditor
                 value={oAuth[key] || ''}
