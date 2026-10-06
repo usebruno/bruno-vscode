@@ -99,6 +99,7 @@ function writeVSCodeSettings(userDataDir: string, extraSettings: Record<string, 
   fs.writeFileSync(
     path.join(userDir, 'settings.json'),
     JSON.stringify({
+      'window.newWindowDimensions': 'maximized',
       'workbench.startupEditor': 'none',
       'update.mode': 'none',
       'extensions.autoCheckUpdates': false,

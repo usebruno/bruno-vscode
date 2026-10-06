@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { test, expect } from '../../utils/fixtures';
-import { openBrunoSidebar, importCollection, findFilesNamed } from '../../utils/page/actions';
+import { openBrunoSidebar, importCollection, findFilesWithName } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 
 test.describe('Import Bruno collection', () => {
@@ -17,8 +17,8 @@ test.describe('Import Bruno collection', () => {
     });
 
     await test.step('Verify the collection is stored as .bru files', async () => {
-      expect(findFilesNamed(tmpDir, 'collection.bru')).toHaveLength(1);
-      expect(findFilesNamed(tmpDir, 'ping.bru')).toHaveLength(1);
+      expect(findFilesWithName(tmpDir, 'collection.bru')).toHaveLength(1);
+      expect(findFilesWithName(tmpDir, 'ping.bru')).toHaveLength(1);
     });
   });
 });

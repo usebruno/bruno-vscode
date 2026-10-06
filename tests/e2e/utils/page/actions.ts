@@ -28,11 +28,11 @@ export function findCollectionDir(
 }
 
 /** Recursively return paths of every file under `dir` whose name matches `fileName`. */
-export function findFilesNamed(dir: string, fileName: string): string[] {
+export function findFilesWithName(dir: string, fileName: string): string[] {
   const matches: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) matches.push(...findFilesNamed(full, fileName));
+    if (entry.isDirectory()) matches.push(...findFilesWithName(full, fileName));
     else if (entry.name === fileName) matches.push(full);
   }
   return matches;
@@ -101,19 +101,22 @@ export async function openBrunoSidebar(page: Page): Promise<Frame> {
  * We temporarily intercept that single call so the native file-picker
  * dialog is bypassed and the value flows through Formik's `setFieldValue`.
  */
-export async function mockBrowseDirectory(frame: Frame, dirPath: string): Promise<void> {
-  await frame.evaluate((val) => {
+async function mockIpcInvoke(frame: Frame, channelName: string, dirPath: unknown): Promise<void> {
+  await frame.evaluate(({ channelName, dirPath }) => {
     const ipc = (window as any).ipcRenderer;
     const originalInvoke = ipc.invoke.bind(ipc);
     ipc.invoke = async (channel: string, ...args: any[]) => {
-      if (channel === 'renderer:browse-directory') {
-        // Restore after one use
+      if (channel === channelName) {
         ipc.invoke = originalInvoke;
-        return val;
+        return dirPath;
       }
       return originalInvoke(channel, ...args);
     };
-  }, dirPath);
+  }, { channelName, dirPath });
+}
+
+export async function mockBrowseDirectory(frame: Frame, dirPath: string): Promise<void> {
+  await mockIpcInvoke(frame, 'renderer:browse-directory', dirPath);
 }
 
 /**
@@ -185,6 +188,39 @@ export async function openImportPanelWithFiles(
 
   await importPanel.fileInput().setInputFiles(filePaths);
   return editor;
+}
+
+/**
+ * Clone a collection from the sidebar ellipse menu.
+ * The clone panel names the copy "<source> copy" and asks for a parent folder.
+ */
+export async function cloneCollection(
+  page: Page,
+  sidebar: Frame,
+  sourceName: string,
+  location: string
+): Promise<string> {
+  const cloneName = `${sourceName} copy`;
+  const sidebarLocators = buildCommonLocators(sidebar);
+  const collectionRow = sidebarLocators.sidebar.collectionName(sourceName);
+  await collectionRow.hover();
+  await buildCommonLocators(collectionRow).sidebar.actionsMenu().click();
+  await sidebarLocators.sidebar.actionsItem('clone').click();
+
+  const editor = await waitForNewWebviewFrame(page, sidebar);
+  const cloneForm = buildCommonLocators(editor).cloneCollection;
+  await expect(cloneForm.container()).toBeVisible();
+  await expect(cloneForm.nameInput()).toHaveValue(cloneName);
+
+  await mockIpcInvoke(editor, 'clone-collection:browse-location', location);
+  await cloneForm.browseButton().click();
+  await expect(cloneForm.locationInput()).toHaveValue(location);
+
+  await cloneForm.submit().click();
+
+  await expect(sidebarLocators.sidebar.collectionName(cloneName)).toBeVisible();
+
+  return cloneName;
 }
 
 /**

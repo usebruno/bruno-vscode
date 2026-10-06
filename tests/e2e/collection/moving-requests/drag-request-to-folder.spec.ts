@@ -9,7 +9,7 @@ import {
   expandCollection,
   expandFolder,
   dragItemIntoFolder,
-  findFilesNamed,
+  findFilesWithName,
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 
@@ -48,7 +48,7 @@ test.describe('Drag and drop requests', () => {
       const folderRow = locators.sidebar.collectionItem(folderName);
       const requestInFolder = buildCommonLocators(folderRow.locator('..')).sidebar.collectionItem(requestName);
       await expect(requestInFolder).toBeVisible();
-      const moved = findFilesNamed(tmpDir, `${requestName}.yml`);
+      const moved = findFilesWithName(tmpDir, `${requestName}.yml`);
       expect(moved).toHaveLength(1);
       expect(path.basename(path.dirname(moved[0]))).toBe(folderName);
     });
