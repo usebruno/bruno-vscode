@@ -685,6 +685,78 @@ export async function openCollectionSettings(
   return settings;
 }
 
+/**
+ * Open the collection runner from the collection ellipse menu ("Run").
+ * Returns the runner panel's webview Frame. The Run button stays disabled
+ * until the collection's requests have finished loading.
+ */
+export async function openCollectionRunner(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string
+): Promise<Frame> {
+  const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
+  await expect(collectionRow).toBeVisible({ timeout: 10_000 });
+  await collectionRow.hover();
+  await collectionRow.locator('[data-testid="collection-actions"]').click();
+  await sidebar.locator('[data-testid="collection-actions-run"]').click();
+
+  const runner = await getWebviewFrame(
+    page,
+    (frame) => buildCommonLocators(frame).runner.runCollection(),
+    sidebar
+  );
+  await expect(buildCommonLocators(runner).runner.runCollection()).toBeEnabled({ timeout: 20_000 });
+
+  return runner;
+}
+
+/**
+ * Type a tag into a runner tag field and confirm it was added.
+ * The suggestion list must be closed first: Enter would only pick the hint.
+ */
+async function addRunnerTag(page: Page, runner: Frame, input: Locator, tag: string): Promise<void> {
+  await expect(input).toBeVisible({ timeout: 10_000 });
+  await input.click();
+  await page.keyboard.type(tag, { delay: 20 });
+  const hints = runner.locator('.CodeMirror-hints');
+  if (await hints.isVisible().catch(() => false)) {
+    await page.keyboard.press('Escape');
+    await expect(hints).toBeHidden({ timeout: 5_000 });
+  }
+  await page.keyboard.press('Enter');
+  await expect(buildCommonLocators(runner).runner.tagChip(tag)).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Turn on "Filter requests with tags" and add `tag` to Included tags.
+ * The tag must already exist on a request in the collection.
+ */
+export async function includeRunnerTag(page: Page, runner: Frame, tag: string): Promise<void> {
+  const locators = buildCommonLocators(runner).runner;
+  await locators.filterByTags().click();
+  await addRunnerTag(page, runner, locators.includeTagInput(), tag);
+}
+
+/**
+ * Turn on "Filter requests with tags" and add `tag` to Excluded tags.
+ * The tag must already exist on a request in the collection.
+ */
+export async function excludeRunnerTag(page: Page, runner: Frame, tag: string): Promise<void> {
+  const locators = buildCommonLocators(runner).runner;
+  await locators.filterByTags().click();
+  await addRunnerTag(page, runner, locators.excludeTagInput(), tag);
+}
+
+/**
+ * Click "Run Collection" and wait until the run finishes ("Run Again" is shown).
+ */
+export async function runCollection(runner: Frame): Promise<void> {
+  const locators = buildCommonLocators(runner).runner;
+  await locators.runCollection().click();
+  await expect(locators.runAgain()).toBeVisible({ timeout: 30_000 });
+}
+
 export async function addCollectionHeader(
   page: Page,
   settings: Frame,
