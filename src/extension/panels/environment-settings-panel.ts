@@ -132,6 +132,21 @@ export async function openEnvironmentSettingsPanel(
     stateManager.broadcast(channel, ...args);
   };
 
+  const hydrateUiStateSnapshot = () => {
+    try {
+      const collectionsSnapshotState = new UiStateSnapshot().getCollections();
+      const posixCollectionRoot = posixifyPath(collectionRoot);
+      const collectionSnapshotState = collectionsSnapshotState?.find(
+        (c: { pathname?: string }) => c?.pathname === collectionRoot || c?.pathname === posixCollectionRoot
+      );
+      if (collectionSnapshotState) {
+        stateManager.sendTo(panel.webview, 'main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
+      }
+    } catch (error) {
+      console.error('EnvironmentSettingsPanel: Error hydrating ui state snapshot:', error);
+    }
+  };
+
   const loadCollection = async () => {
     if (collectionLoaded) return;
     collectionLoaded = true;
@@ -150,6 +165,8 @@ export async function openEnvironmentSettingsPanel(
         // Watcher already exists (collection open elsewhere). Only stream env
         // files to this panel — don't re-scan the full tree.
         await collectionWatcher.loadEnvironments(collectionRoot, collectionUid, panelSender);
+        // Hydrate only after environments are sent.
+        hydrateUiStateSnapshot();
       } else {
         setCollectionsMessageSender(panelSender);
         setWatcherMessageSender(panelSender);
@@ -162,20 +179,6 @@ export async function openEnvironmentSettingsPanel(
       }
     } catch (error) {
       console.error('EnvironmentSettingsPanel: Error populating environments:', error);
-    }
-
-    try {
-      const uiStateSnapshotStore = new UiStateSnapshot();
-      const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
-      const posixCollectionRoot = posixifyPath(collectionRoot);
-      const collectionSnapshotState = collectionsSnapshotState?.find(
-        (c: { pathname?: string }) => c?.pathname === collectionRoot || c?.pathname === posixCollectionRoot
-      );
-      if (collectionSnapshotState) {
-        stateManager.sendTo(panel.webview, 'main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
-      }
-    } catch (error) {
-      console.error('EnvironmentSettingsPanel: Error hydrating ui state snapshot:', error);
     }
   };
 

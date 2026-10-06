@@ -191,6 +191,7 @@ import { sendCollectionOauth2Request as _sendCollectionOauth2Request } from 'uti
 import {
   getGlobalEnvironmentVariables,
   findCollectionByPathname,
+  findEnvironmentInCollectionByName,
   getReorderedItemsInTargetDirectory,
   resetSequencesInFolder,
   getReorderedItemsInSourceDirectory,
@@ -2758,18 +2759,19 @@ export const collectionAddEnvFileEvent = (payload: any) => (dispatch: any, getSt
       return reject(new Error('Collection not found'));
     }
 
-    environmentSchema
-      .validate(environment)
-      .then(() =>
-        dispatch(
-          _collectionAddEnvFileEvent({
-            environment,
-            collectionUid: meta.collectionUid
-          })
-        )
-      )
-      .then(resolve)
-      .catch(reject);
+    // Validate synchronously so the environment is in the store before any following event is handled
+    try {
+      environmentSchema.validateSync(environment);
+      dispatch(
+        _collectionAddEnvFileEvent({
+          environment,
+          collectionUid: meta.collectionUid
+        })
+      );
+      resolve(undefined);
+    } catch (error) {
+      reject(error);
+    }
   });
 };
 
@@ -2865,14 +2867,17 @@ export const hydrateCollectionWithUiStateSnapshot = (payload: any) => (dispatch:
       if (!collectionSnapshotData) return resolve();
       const { pathname, selectedEnvironment } = collectionSnapshotData;
       const collection = findCollectionByPathname(state.collections.collections, pathname);
-      if (!collection) return resolve();
+      const collectionCopy = safeCloneCollection(collection);
+      const collectionUid = collectionCopy?.uid;
 
-      dispatch(
-        _selectEnvironment({
-          collectionUid: collection.uid,
-          environmentName: selectedEnvironment || null
-        })
-      );
+      if (selectedEnvironment) {
+        const environment = findEnvironmentInCollectionByName(collectionCopy, selectedEnvironment);
+        if (environment) {
+          dispatch(_selectEnvironment({ environmentUid: environment?.uid, collectionUid }));
+        }
+      } else {
+        dispatch(_selectEnvironment({ environmentUid: null, collectionUid }));
+      }
 
       // todo: add any other redux state that you want to save
 
