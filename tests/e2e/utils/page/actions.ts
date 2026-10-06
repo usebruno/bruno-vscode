@@ -101,7 +101,7 @@ export async function openBrunoSidebar(page: Page): Promise<Frame> {
  * We temporarily intercept that single call so the native file-picker
  * dialog is bypassed and the value flows through Formik's `setFieldValue`.
  */
-async function mockIpcInvoke(frame: Frame, channelName: string, dirPath: unknown): Promise<void> {
+async function mockIpcInvoke(frame: Frame, channelName: string, dirPath: string): Promise<void> {
   await frame.evaluate(({ channelName, dirPath }) => {
     const ipc = (window as any).ipcRenderer;
     const originalInvoke = ipc.invoke.bind(ipc);
@@ -198,9 +198,10 @@ export async function cloneCollection(
   page: Page,
   sidebar: Frame,
   sourceName: string,
-  location: string
+  location: string,
+  cloneSuffix: string = ' copy'
 ): Promise<string> {
-  const cloneName = `${sourceName} copy`;
+  const cloneName = `${sourceName}${cloneSuffix}`;
   const sidebarLocators = buildCommonLocators(sidebar);
   const collectionRow = sidebarLocators.sidebar.collectionName(sourceName);
   await collectionRow.hover();
