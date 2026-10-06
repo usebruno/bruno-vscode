@@ -105,7 +105,7 @@ const ClientCertSettings = ({
   const { isSensitive } = useDetectSensitiveField(collection);
   const { showWarning, warningMessage } = isSensitive(formik.values.passphrase);
 
-  const getFile = async (e: any) => {
+  const getFile = async (e: React.MouseEvent<HTMLInputElement>) => {
     e.preventDefault();
 
     const fieldName = e.currentTarget.name;
