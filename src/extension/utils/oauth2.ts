@@ -84,13 +84,9 @@ export const generateCodeVerifier = (): string => {
 };
 
 // Uses the user-configured state as-is if set, otherwise a cryptographically random value.
-export const generateState = (userState?: string): string => {
+export const generateOAuthState = (userState?: string): string => {
   const trimmedUserState = userState?.trim();
-  if (trimmedUserState) {
-    return trimmedUserState;
-  }
-  let cryptographicallyRandomString = crypto.randomBytes(16).toString('hex');
-  return cryptographicallyRandomString;
+  return trimmedUserState ? trimmedUserState : crypto.randomBytes(16).toString('hex')
 };
 
 export const generateCodeChallenge = (codeVerifier: string): string => {
@@ -216,7 +212,7 @@ const fetchTokenFromUrl = async (requestConfig: TokenRequestConfig): Promise<{ c
 
 
 // The authorize redirect and callback happen in the system browser, so there is no real
-// response to record — only what Bruno opened and what it got back.
+// response to record — only what Bruno opened and what it got back. It's used for showing in timeline
 const buildBrowserStepDetails = (url: string, statusText: string, data: Record<string, unknown> | null = null): Record<string, unknown> => ({
   request: { url, method: 'GET', headers: {} },
   response: { status: '-', statusText, headers: {}, data },
@@ -496,7 +492,7 @@ export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collection
     callbackUrl: effectiveCallbackUrl,
     clientId,
     scope: scope || undefined,
-    state: generateState(state),
+    state: generateOAuthState(state),
     pkce: pkce || false,
     codeChallenge,
     additionalParameters: additionalParameters?.authorization as OAuthAdditionalParameter[] || undefined
@@ -593,7 +589,7 @@ export const getOAuth2TokenUsingImplicitGrant = async ({ request, collectionUid,
     callbackUrl: effectiveCallbackUrl,
     clientId: clientId || '',
     scope: scope || undefined,
-    state: generateState(state),
+    state: generateOAuthState(state),
     additionalParameters: additionalParameters?.authorization as OAuthAdditionalParameter[] || undefined
   });
 

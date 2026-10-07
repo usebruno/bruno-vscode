@@ -29,16 +29,13 @@ export function isAuthorizationInProgress(): boolean {
 }
 
 export function cancelAuthorization(): void {
-  cleanup();
-  if (pendingAuthReject) {
-    pendingAuthReject(new Error('Authorization was cancelled by user'));
-    pendingAuthResolve = null;
-    pendingAuthReject = null;
-  }
+  settleReject(new Error('Authorization was cancelled by user'));
 }
 
 function cleanup(): void {
   expectedState = null;
+  pendingAuthResolve = null;
+  pendingAuthReject = null;
   if (authTimeoutHandle) {
     clearTimeout(authTimeoutHandle);
     authTimeoutHandle = null;
@@ -47,6 +44,19 @@ function cleanup(): void {
     localServer.close();
     localServer = null;
   }
+}
+
+// Capture the pending callback before cleanup() clears it, then settle.
+function settleResolve(result: AuthorizationResult): void {
+  const resolve = pendingAuthResolve;
+  cleanup();
+  resolve?.(result);
+}
+
+function settleReject(error: Error): void {
+  const reject = pendingAuthReject;
+  cleanup();
+  reject?.(error);
 }
 
 // --- URI handler for authorization code callback ---
@@ -60,37 +70,27 @@ export function createOAuth2UriHandler(): vscode.UriHandler {
       const error = params.get('error');
       if (error) {
         const desc = params.get('error_description') || error;
-        cleanup();
-        pendingAuthReject?.(new Error(`OAuth2 authorization error: ${desc}`));
-        pendingAuthResolve = null;
-        pendingAuthReject = null;
+        settleReject(new Error(`OAuth2 authorization error: ${desc}`));
         return;
       }
 
       // Validate state to protect against CSRF / authorization code injection.
       const returnedState = params.get('state') || new URLSearchParams(uri.fragment).get('state');
       if (!expectedState || returnedState !== expectedState) {
-        cleanup();
-        pendingAuthReject?.(new Error('OAuth2 state mismatch: the returned state does not match the issued state.'));
-        pendingAuthResolve = null;
-        pendingAuthReject = null;
+        settleReject(new Error('OAuth2 state mismatch: the returned state does not match the issued state.'));
         return;
       }
 
       const code = params.get('code');
       if (code) {
-        cleanup();
-        pendingAuthResolve({ authorizationCode: code, callbackUri: uri.toString(true) });
-        pendingAuthResolve = null;
-        pendingAuthReject = null;
+        settleResolve({ authorizationCode: code, callbackUri: uri.toString(true) });
         return;
       }
 
       // For implicit flow via URI handler (unlikely since fragments aren't forwarded)
       const accessToken = params.get('access_token');
       if (accessToken) {
-        cleanup();
-        pendingAuthResolve({
+        settleResolve({
           implicitTokens: {
             access_token: accessToken,
             token_type: params.get('token_type') || 'Bearer',
@@ -99,8 +99,6 @@ export function createOAuth2UriHandler(): vscode.UriHandler {
             state: params.get('state') || undefined
           }
         });
-        pendingAuthResolve = null;
-        pendingAuthReject = null;
       }
     }
   };
@@ -217,18 +215,12 @@ async function openBrowserAndWaitForCallback(authorizeUrl: string, state?: strin
     expectedState = state || null;
 
     authTimeoutHandle = setTimeout(() => {
-      cleanup();
-      pendingAuthResolve = null;
-      pendingAuthReject = null;
-      reject(new Error('OAuth2 authorization timed out after 5 minutes'));
+      settleReject(new Error('OAuth2 authorization timed out after 5 minutes'));
     }, AUTHORIZATION_TIMEOUT_MS);
 
     vscode.env.openExternal(vscode.Uri.parse(authorizeUrl)).then((opened) => {
       if (!opened) {
-        cleanup();
-        pendingAuthResolve = null;
-        pendingAuthReject = null;
-        reject(new Error('Failed to open authorization URL in system browser'));
+        settleReject(new Error('Failed to open authorization URL in system browser'));
       }
     });
   });
