@@ -270,7 +270,7 @@ export const generateUniqueName = (baseName: string, checkExists: (name: string)
   return uniqueName;
 };
 
-export const findUniqueFolderName = (baseName: string, parentDir: string): string => {
+export const makeFolderNameUnique = (baseName: string, parentDir: string): string => {
   const isTaken = (folderName: string): boolean => {
     const dirPath = path.join(parentDir, folderName);
     return fs.existsSync(dirPath) && fs.readdirSync(dirPath).length > 0;

@@ -81,7 +81,10 @@ const convertFileToObject = async (file: File) => {
   }
 };
 
-const detectFormat = (data: any): string | null => {
+type CollectionFileData = string | Record<string, unknown>;
+type CollectionFormat = 'openapi' | 'wsdl' | 'postman' | 'insomnia' | 'opencollection' | 'bruno';
+
+const detectFormat = (data: CollectionFileData): CollectionFormat | null => {
   if (isOpenApiSpec(data)) return 'openapi';
   if (isWSDLCollection(data)) return 'wsdl';
   if (isPostmanCollection(data)) return 'postman';
@@ -100,6 +103,22 @@ interface ImportFileEntry {
 }
 
 type ImportStatus = 'loading' | 'success' | 'error';
+
+interface FileListState {
+  multiFiles: ImportFileEntry[];
+  skippedFiles: string[];
+  selectedUids: string[];
+  searchQuery: string;
+}
+
+interface ImportState {
+  importStarted: boolean;
+  importStatus: Record<string, ImportStatus>;
+  importErrors: Record<string, string>;
+}
+
+const INITIAL_FILE_LIST: FileListState = { multiFiles: [], skippedFiles: [], selectedUids: [], searchQuery: '' };
+const INITIAL_IMPORT_STATE: ImportState = { importStarted: false, importStatus: {}, importErrors: {} };
 
 const getCollectionName = (format: string, rawData: any): string => {
   if (!rawData) return 'Collection';
@@ -162,13 +181,10 @@ const ImportCollectionView: React.FC = () => {
   const [groupingType, setGroupingType] = useState('tags');
   const [collectionFormat, setCollectionFormat] = useState('yml');
 
-  const [multiFiles, setMultiFiles] = useState<ImportFileEntry[]>([]);
-  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
-  const [selectedUids, setSelectedUids] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [importStarted, setImportStarted] = useState(false);
-  const [importStatus, setImportStatus] = useState<Record<string, ImportStatus>>({});
-  const [importErrors, setImportErrors] = useState<Record<string, string>>({});
+  const [fileList, setFileList] = useState<FileListState>(INITIAL_FILE_LIST);
+  const [importState, setImportState] = useState<ImportState>(INITIAL_IMPORT_STATE);
+  const { multiFiles, skippedFiles, selectedUids, searchQuery } = fileList;
+  const { importStarted, importStatus, importErrors } = importState;
 
   const bootstrap = useBootstrap();
   const defaultLocation = getDefaultLocation(bootstrap);
@@ -230,10 +246,12 @@ const ImportCollectionView: React.FC = () => {
 
   const importSelectedCollections = async (collectionLocation: string) => {
     const entries = selectedFiles;
-    setImportStarted(true);
     setIsImporting(true);
-    setImportErrors({});
-    setImportStatus(Object.fromEntries(entries.map((f) => [f.uid, 'loading' as ImportStatus])));
+    setImportState({
+      importStarted: true,
+      importStatus: Object.fromEntries(entries.map((f) => [f.uid, 'loading' as ImportStatus])),
+      importErrors: {}
+    });
 
     let imported = 0;
     for (const entry of entries) {
@@ -245,10 +263,13 @@ const ImportCollectionView: React.FC = () => {
           throw new Error(result.failures[0].message);
         }
         imported++;
-        setImportStatus((prev) => ({ ...prev, [entry.uid]: 'success' }));
+        setImportState((prev) => ({ ...prev, importStatus: { ...prev.importStatus, [entry.uid]: 'success' } }));
       } catch (e: any) {
-        setImportStatus((prev) => ({ ...prev, [entry.uid]: 'error' }));
-        setImportErrors((prev) => ({ ...prev, [entry.uid]: formatIpcError(e) || 'Failed to import collection' }));
+        setImportState((prev) => ({
+          ...prev,
+          importStatus: { ...prev.importStatus, [entry.uid]: 'error' },
+          importErrors: { ...prev.importErrors, [entry.uid]: formatIpcError(e) || 'Failed to import collection' }
+        }));
       }
     }
 
@@ -355,9 +376,12 @@ const ImportCollectionView: React.FC = () => {
         throw new Error('No valid collections found in the selected files');
       }
 
-      setMultiFiles(entries);
-      setSkippedFiles(skipped);
-      setSelectedUids(entries.map((e) => e.uid));
+      setFileList({
+        multiFiles: entries,
+        skippedFiles: skipped,
+        selectedUids: entries.map((e) => e.uid),
+        searchQuery: ''
+      });
       setStep('configure');
     } catch (err) {
       toastError(err, 'Import collections failed');
@@ -390,16 +414,22 @@ const ImportCollectionView: React.FC = () => {
   };
 
   const toggleCollection = (uid: string) => {
-    setSelectedUids((prev) => (prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]));
+    setFileList((prev) => ({
+      ...prev,
+      selectedUids: prev.selectedUids.includes(uid)
+        ? prev.selectedUids.filter((id) => id !== uid)
+        : [...prev.selectedUids, uid]
+    }));
   };
 
   const toggleAllCollections = () => {
     const visibleUids = visibleFiles.map((f) => f.uid);
-    setSelectedUids((prev) =>
-      allVisibleSelected
-        ? prev.filter((uid) => !visibleUids.includes(uid))
-        : Array.from(new Set([...prev, ...visibleUids]))
-    );
+    setFileList((prev) => ({
+      ...prev,
+      selectedUids: allVisibleSelected
+        ? prev.selectedUids.filter((uid) => !visibleUids.includes(uid))
+        : Array.from(new Set([...prev.selectedUids, ...visibleUids]))
+    }));
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -441,13 +471,8 @@ const ImportCollectionView: React.FC = () => {
     setStep('file-select');
     setRawData(null);
     setDetectedFormat('');
-    setMultiFiles([]);
-    setSkippedFiles([]);
-    setSelectedUids([]);
-    setSearchQuery('');
-    setImportStarted(false);
-    setImportStatus({});
-    setImportErrors({});
+    setFileList(INITIAL_FILE_LIST);
+    setImportState(INITIAL_IMPORT_STATE);
   };
 
   const browse = () => {
@@ -660,7 +685,7 @@ const ImportCollectionView: React.FC = () => {
                       placeholder="Search Collections"
                       data-testid="import-search"
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => setFileList((prev) => ({ ...prev, searchQuery: e.target.value }))}
                       disabled={isImporting}
                     />
                   </div>

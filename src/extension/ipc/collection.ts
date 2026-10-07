@@ -7,6 +7,7 @@ import * as fsExtra from 'fs-extra';
 import AdmZip from 'adm-zip';
 import extractZip from 'extract-zip';
 import type { BrunoVariableDataType } from '@usebruno/common/utils';
+import type { BrunoCollection } from '@bruno-types';
 import { registerHandler, registerEventListener, sendToWebview, broadcastToAllWebviews, emit, getCurrentWebview } from './handlers';
 import { stateManager } from '../webview/state-manager';
 import {
@@ -26,7 +27,7 @@ import {
   removePath,
   getPaths,
   generateUniqueName,
-  findUniqueFolderName,
+  makeFolderNameUnique,
   isDotEnvFile,
   isBrunoConfigFile,
   isBruEnvironmentConfig,
@@ -1150,27 +1151,16 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
-  // Additional handlers to be implemented:
-  // - renderer:save-multiple-requests
-  // - renderer:copy-environment
-  // - renderer:export-collection
-
-  const writeImportedCollection = async (
+  const importCollection = async (
     collection: any,
     collectionLocation: string,
     format: string
   ): Promise<string> => {
     try {
-      let collectionName = collection.name || 'Imported Collection';
-      let collectionFolderName = sanitizeName(collectionName);
-      let dirPath = path.join(collectionLocation, collectionFolderName);
-
-      if (fs.existsSync(dirPath) && fs.readdirSync(dirPath).length > 0) {
-        collectionName = findUniqueFolderName(collectionName, collectionLocation);
-        collectionFolderName = sanitizeName(collectionName);
-        dirPath = path.join(collectionLocation, collectionFolderName);
-        collection.name = collectionName;
-      }
+      const collectionName = makeFolderNameUnique(collection.name || 'Imported Collection', collectionLocation)
+      const collectionFolderName = sanitizeName(collectionName);
+      const dirPath = path.join(collectionLocation, collectionFolderName);
+      collection.name = collectionName;
 
       if (!fs.existsSync(dirPath)) {
         await createDirectory(dirPath);
@@ -1298,22 +1288,23 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   };
 
+  // Additional handlers to be implemented:
+  // - renderer:save-multiple-requests
+  // - renderer:copy-environment
+  // - renderer:export-collection
+
   registerHandler('renderer:import-collection', async (args) => {
-    const [collectionOrCollections, collectionLocation, format = 'yml'] = args as [any, string, string];
-    const isBatch = Array.isArray(collectionOrCollections);
-    const collections: any[] = isBatch ? collectionOrCollections : [collectionOrCollections];
+    const [uploadedContent, collectionLocation, format = 'yml'] = args as [BrunoCollection | BrunoCollection[], string, string];
+    const collections = Array.isArray(uploadedContent) ? uploadedContent : [uploadedContent]
 
     const items: Array<{ uid: string; name: string; path: string }> = [];
     const failures: Array<{ uid: string; name: string; message: string }> = [];
 
     for (const collection of collections) {
       try {
-        const dirPath = await writeImportedCollection(collection, collectionLocation, format);
+        const dirPath = await importCollection(collection, collectionLocation, format);
         items.push({ uid: collection.uid, name: collection.name, path: dirPath });
       } catch (error) {
-        if (!isBatch) {
-          throw error;
-        }
         const message = error instanceof Error ? error.message : String(error);
         console.error(`[Import] Failed to import collection "${collection?.name}":`, error);
         failures.push({ uid: collection?.uid, name: collection?.name, message });
