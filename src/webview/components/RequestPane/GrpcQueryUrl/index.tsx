@@ -242,6 +242,7 @@ const GrpcQueryUrl = ({
       type: methodType
     });
     onMethodSelect({ path: method.path, type: methodType });
+    methodDropdownRef.current?.hide();
   };
 
   const handleCancelConnection = (e: any) => {
