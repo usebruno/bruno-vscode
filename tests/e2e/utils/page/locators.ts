@@ -39,6 +39,23 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded'),
     saveButton: () => frame.getByTestId('collection-settings-save')
   },
+  // Collection runner panel (empty state, then results after a run).
+  runner: {
+    runCollection: () => frame.getByRole('button', { name: 'Run Collection' }),
+    runAgain: () => frame.getByRole('button', { name: 'Run Again' }),
+    // "Delay (in ms)" on the empty runner state. The label is not tied to the input.
+    delayInput: () => frame.locator('input[type="number"]'),
+    filterByTags: () => frame.getByLabel('Filter requests with tags'),
+    // Include list is the first tag field; Exclude is the second.
+    includeTagInput: () => frame.getByTestId('tag-input').first(),
+    excludeTagInput: () => frame.getByTestId('tag-input').nth(1),
+    tagChip: (tag: string) => frame.locator('.tag-text').filter({ hasText: tag }),
+    // Empty state, e.g. "You have 1 requests in this collection."
+    requestCount: () => frame.getByText(/requests in this collection/),
+    result: (name: string) => frame.locator('.item-path').filter({ hasText: name }),
+    filter: (label: 'All' | 'Passed' | 'Failed' | 'Skipped') =>
+      frame.locator('.filter-button').filter({ hasText: label })
+  },
   requestUrl: {
     editor: () => frame.locator('#request-url'),
     highlightedToken: (name: string) =>
