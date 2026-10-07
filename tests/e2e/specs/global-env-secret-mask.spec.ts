@@ -40,7 +40,7 @@ async function readVarPopoverValue(editor: Frame): Promise<string> {
   const ui = buildCommonLocators(editor);
   await ui.varPopover.container().evaluateAll((popovers) => popovers.forEach((el) => el.remove()));
 
-  const token = ui.requestUrl.pathParamToken('token');
+  const token = ui.requestUrl.highlightedToken('token');
   await expect(token).toBeVisible();
   await token.hover();
 
@@ -66,7 +66,7 @@ test.describe('Global environment secrets', () => {
     await globalEnvUi.environments.confirmCreate().click();
 
     await expect(globalEnvUi.environments.save()).toBeVisible();
-    await globalEnvUi.environments.varNameInput(0).fill('token');
+    await globalEnvUi.environments.newVarNameInput().fill('token');
     await setCodeMirrorValue(page, globalEnvUi.environments.varValueEditor('token'), SECRET_VALUE);
     await globalEnvUi.environments.save().click();
 
@@ -87,7 +87,7 @@ test.describe('Global environment secrets', () => {
     await globalEnvUi.environments.varSecretCheckbox('token').check();
     await globalEnvUi.environments.save().click();
 
-    await workbench.editorTab('Masked.bru').click();
+    await workbench.editorTab('Masked').click();
 
     await expect
       .poll(() => readVarPopoverValue(editor))

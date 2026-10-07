@@ -63,7 +63,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     createEnvironment: () => frame.getByTestId('create-environment'),
     nameInput: () => frame.getByTestId('environment-name'),
     confirmCreate: () => frame.getByTestId('modal-confirm-button'),
-    varNameInput: (index: number) => frame.getByTestId(`env-var-name-${index}`),
+    newVarNameInput: () => frame.getByTestId('env-var-name-new'),
     varValueEditor: (name: string) => frame.getByTestId(`env-var-row-${name}`).locator('.CodeMirror'),
     varSecretCheckbox: (name: string) => frame.getByTestId(`env-var-secret-${name}`),
     save: () => frame.getByTestId('save-env')
