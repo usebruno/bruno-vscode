@@ -724,6 +724,20 @@ export async function openCollectionSettings(
   return settings;
 }
 
+export async function selectEnvironment(frame: Frame, environmentName: string): Promise<void> {
+  const environments = buildCommonLocators(frame).environments;
+  await environments.selectorTrigger().click();
+  await environments.dropdownItem(environmentName).click();
+  await expect(environments.selectorTrigger()).toHaveText(new RegExp(environmentName));
+}
+
+export async function openEnvironmentsTab(page: Page, from: Frame): Promise<Frame> {
+  const environments = buildCommonLocators(from).environments;
+  await environments.selectorTrigger().click();
+  await environments.configureButton().click();
+  return getWebviewFrame(page, (frame) => buildCommonLocators(frame).environments.settingsList(), from);
+}
+
 export async function addCollectionHeader(
   page: Page,
   settings: Frame,
