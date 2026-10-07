@@ -174,6 +174,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     methodsSearchInput: () => frame.getByTestId('grpc-methods-search-input'),
     methodItems: () => frame.getByTestId('grpc-method-item'),
     methodItem: (text: string) => frame.getByTestId('grpc-method-item').filter({ hasText: text }),
+    methodsEmptyState: () => frame.getByTestId('grpc-methods-empty-state'),
     selectedMethodName: () => frame.getByTestId('selected-grpc-method-name'),
     messageEditor: () => frame.getByTestId('grpc-messages-container').locator('.CodeMirror-wrap').first(),
     messages: () => frame.getByTestId('grpc-messages-container').locator('.message-container'),

@@ -212,7 +212,7 @@ const MethodDropdown = ({
             ))}
 
             {filteredMethods.length === 0 && (
-              <div className="method-dropdown-empty-state">
+              <div className="method-dropdown-empty-state" data-testid="grpc-methods-empty-state">
                 <div className="method-dropdown-empty-state-text">
                   No methods found for the search term
                 </div>
