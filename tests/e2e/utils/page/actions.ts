@@ -287,20 +287,20 @@ export async function openTransientRequest(
   collectionName: string,
   type: 'HTTP' | 'GraphQL' | 'gRPC' | 'WebSocket' = 'HTTP'
 ): Promise<Frame> {
-  const menuItemId = { HTTP: 'new-http', GraphQL: 'new-graphql', gRPC: 'new-grpc', WebSocket: 'new-ws' }[type];
-  const marker = type === 'WebSocket'
-    ? '[data-testid="ws-connect-button"]'
-    : type === 'gRPC'
-      ? '[data-testid="grpc-query-url-container"]'
-      : '#request-url';
+  const menuType = ({ HTTP: 'http', GraphQL: 'graphql', gRPC: 'grpc', WebSocket: 'ws' } as const)[type];
+  const marker = (frame: Frame) => {
+    const ui = buildCommonLocators(frame);
+    if (type === 'WebSocket') return ui.ws.connectButton();
+    if (type === 'gRPC') return ui.grpc.queryUrlContainer();
+    return ui.requestUrl.editor();
+  };
 
-  // The "+" only renders on hover; MenuDropdown puts its own testid on the trigger.
-  const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
-  await collectionRow.hover();
-  await sidebar.getByTestId('collection-new-request').click();
-  await sidebar.getByTestId(`collection-new-request-${menuItemId}`).click();
+  await createTransientRequest(sidebar, collectionName, menuType);
 
-  return waitForFrameWithMarker(page, sidebar, marker);
+  const editor = await getWebviewFrame(page, marker, sidebar);
+  await expect(marker(editor)).toBeVisible({ timeout: 10_000 });
+
+  return editor;
 }
 
 /**

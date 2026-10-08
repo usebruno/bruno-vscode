@@ -243,29 +243,32 @@ describe('createWebSocketRequest', () => {
 // ─── Collection-level inheritance ───────────────────────────────────────────
 
 describe('collection presets', () => {
+  const presetUrl = 'https://api.example.com';
+  const draftPresetUrl = 'https://draft.example.com';
+
   const withPresets: CollectionInfo = {
     uid: 'col-5',
     pathname: '/Users/test/preset-collection',
     format: 'bru',
-    brunoConfig: { presets: { requestType: 'http', requestUrl: 'https://api.example.com' } }
+    brunoConfig: { presets: { requestType: 'http', requestUrl: presetUrl } }
   };
 
   const withDraftPresets: CollectionInfo = {
     ...withPresets,
     uid: 'col-6',
-    draft: { brunoConfig: { presets: { requestUrl: 'https://draft.example.com' } } }
+    draft: { brunoConfig: { presets: { requestUrl: draftPresetUrl } } }
   };
 
   test('base URL preset seeds the url of every request type', () => {
-    expect(transientManager.createHttpRequest(withPresets).request.url).toBe('https://api.example.com');
-    expect(transientManager.createGraphQLRequest(withPresets).request.url).toBe('https://api.example.com');
-    expect(transientManager.createGrpcRequest(withPresets).request.url).toBe('https://api.example.com');
-    expect(transientManager.createWebSocketRequest(withPresets).request.url).toBe('https://api.example.com');
+    expect(transientManager.createHttpRequest(withPresets).request.url).toBe(presetUrl);
+    expect(transientManager.createGraphQLRequest(withPresets).request.url).toBe(presetUrl);
+    expect(transientManager.createGrpcRequest(withPresets).request.url).toBe(presetUrl);
+    expect(transientManager.createWebSocketRequest(withPresets).request.url).toBe(presetUrl);
   });
 
   test('unsaved preset edits on the draft win over the saved config', () => {
     const item = transientManager.createHttpRequest(withDraftPresets);
-    expect(item.request.url).toBe('https://draft.example.com');
+    expect(item.request.url).toBe(draftPresetUrl);
   });
 
   test('collections without presets still produce an empty url', () => {

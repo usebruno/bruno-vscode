@@ -160,6 +160,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     variablesEditor: () => frame.locator('.CodeMirror-wrap').first()
   },
   grpc: {
+    queryUrlContainer: () => frame.getByTestId('grpc-query-url-container'),
     protoDropdownIcon: () => frame.getByTestId('grpc-proto-file-dropdown-icon'),
     browseButton: () => frame.locator('.browse-button').filter({ hasText: 'Browse' }),
     modeToggleLabel: () => frame.getByTestId('grpc-mode-toggle').locator('label[for="toggle-switch"]'),
