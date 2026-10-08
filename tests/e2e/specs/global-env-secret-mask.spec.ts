@@ -89,6 +89,7 @@ test.describe('Global environment secrets', () => {
 
     await workbench.editorTab('Masked').click();
 
+    // Once marked secret, the popover should show only asterisks instead of the value
     await expect
       .poll(() => readVarPopoverValue(editor))
       .toMatch(/^\*+$/);
