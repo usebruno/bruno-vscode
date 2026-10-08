@@ -15,7 +15,7 @@ const DefaultTab = ({
     <IconFileAlert size={48} strokeWidth={1.5} />
     <div className="title">No Global Environments</div>
     <div className="actions">
-      <Button size="sm" color="secondary" onClick={() => setTab('create')}>
+      <Button size="sm" color="secondary" onClick={() => setTab('create')} data-testid="create-environment">
         Create Environment
       </Button>
       <Button size="sm" color="secondary" onClick={() => setTab('import')}>

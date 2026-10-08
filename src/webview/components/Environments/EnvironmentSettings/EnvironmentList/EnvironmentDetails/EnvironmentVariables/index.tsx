@@ -456,6 +456,7 @@ const EnvironmentVariables = ({
                         autoCapitalize="off"
                         spellCheck="false"
                         className="mousetrap"
+                        data-testid={isLastEmptyRow ? 'env-var-name-new' : `env-var-name-${variable.name}`}
                         id={`${index}.name`}
                         name={`${index}.name`}
                         value={variable.name}
@@ -501,6 +502,7 @@ const EnvironmentVariables = ({
                       <input
                         type="checkbox"
                         className="mousetrap"
+                        data-testid={`env-var-secret-${variable.name}`}
                         name={`${index}.secret`}
                         checked={variable.secret}
                         onChange={formik.handleChange}
