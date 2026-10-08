@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Page, Frame, Locator, expect } from '@playwright/test';
 import { buildCommonLocators } from './locators';
+import { GRPC_SERVER_URL } from '../urls';
 
 /**
  * Locate the collection directory created under a test's tmpDir.
@@ -612,8 +613,6 @@ export async function loadGrpcProtoFile(editor: Frame, protoAbsPath: string): Pr
   // Methods loaded → the method dropdown trigger appears.
   await expect(grpc.methodDropdownTrigger()).toBeVisible({ timeout: 15_000 });
 }
-
-export const GRPC_SERVER_URL = 'grpc://localhost:8082';
 
 export async function createGrpcRequestWithProto(
   page: Page,

@@ -26,6 +26,23 @@ interface MethodDropdownProps {
   onMethodDropdownCreate?: (ref: any) => void;
 }
 
+interface MethodsDropdownIconProps {
+  ref?: React.Ref<HTMLDivElement>;
+  selectedGrpcMethod: GrpcMethod | null;
+  methodIcon?: React.ReactNode;
+}
+
+const MethodsDropdownIcon = ({ ref, selectedGrpcMethod, methodIcon }: MethodsDropdownIconProps) => {
+  return (
+    <div ref={ref} className="method-dropdown-trigger" data-testid="grpc-method-dropdown-trigger">
+      {selectedGrpcMethod && <div className="method-dropdown-trigger-icon">{methodIcon}</div>}
+      <span className="method-dropdown-trigger-text" data-testid="selected-grpc-method-name">
+        {selectedGrpcMethod ? (selectedGrpcMethod.path.split('.').at(-1) || selectedGrpcMethod.path) : 'Select Method'}
+      </span>
+      <IconChevronDown className="method-dropdown-caret" size={14} strokeWidth={2} />
+    </div>
+  );
+};
 
 const MethodDropdown = ({
   grpcMethods,
@@ -88,16 +105,6 @@ const MethodDropdown = ({
     }
   };
 
-  const methodsDropdownIcon = (
-    <div className="method-dropdown-trigger" data-testid="grpc-method-dropdown-trigger">
-      {selectedGrpcMethod && <div className="method-dropdown-trigger-icon">{getIconForMethodType(selectedGrpcMethod.type)}</div>}
-      <span className="method-dropdown-trigger-text" data-testid="selected-grpc-method-name">
-        {selectedGrpcMethod ? (selectedGrpcMethod.path.split('.').at(-1) || selectedGrpcMethod.path) : 'Select Method'}
-      </span>
-      <IconChevronDown className="method-dropdown-caret" size={14} strokeWidth={2} />
-    </div>
-  );
-
   const handleGrpcMethodSelect = (method: GrpcMethod) => {
     const methodType = method.type;
     onMethodSelect?.({ path: method.path, type: methodType });
@@ -155,7 +162,12 @@ const MethodDropdown = ({
   return (
     <StyledWrapper>
       <div className="method-dropdown-container" data-testid="grpc-methods-dropdown">
-        <Dropdown onCreate={onMethodDropdownCreate} icon={methodsDropdownIcon} placement="bottom-end" style={{ maxWidth: 'unset' }} onShow={handleDropdownShow}>
+        <Dropdown onCreate={onMethodDropdownCreate} icon={(
+          <MethodsDropdownIcon
+            selectedGrpcMethod={selectedGrpcMethod}
+            methodIcon={selectedGrpcMethod && getIconForMethodType(selectedGrpcMethod.type)}
+          />
+        )} placement="bottom-end" style={{ maxWidth: 'unset' }} onShow={handleDropdownShow}>
           <SearchInput
             searchText={searchText}
             setSearchText={setSearchText}
