@@ -176,7 +176,7 @@ const CreateCollection = ({
                   <div className="flex items-center justify-between">
                     <label htmlFor="filename" className="flex items-center font-medium">
                       Folder Name
-                      <Help width="300">
+                      <Help width={300}>
                         <p>
                           The name of the folder used to store the collection.
                         </p>
@@ -231,7 +231,7 @@ const CreateCollection = ({
                 <div className="mt-4">
                   <label htmlFor="format" className="flex items-center font-medium">
                     File Format
-                    <Help width="300">
+                    <Help width={300}>
                       <p>
                         Choose the file format for storing requests in this collection.
                       </p>
