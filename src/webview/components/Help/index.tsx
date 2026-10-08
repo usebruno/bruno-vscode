@@ -24,6 +24,7 @@ interface HelpProps {
   size?: number;
 }
 
+// Space between the help icon and the tooltip, applied on the side given by `placement`
 const GAP = 8;
 
 const getPortalPosition = (rect: DOMRect, placement: Placement, width: number): TooltipPosition => {
@@ -59,11 +60,10 @@ const Help = ({
   children,
   width = 200,
   placement = 'right',
-  iconComponent: IconComponent,
+  iconComponent: IconComponent = HelpIcon,
   size = 14
 }: HelpProps) => {
   const tooltipWidth = Number(width) || 200;
-  const ResolvedIcon = IconComponent || HelpIcon;
 
   const [showTooltip, setShowTooltip] = useState(false);
   const [position, setPosition] = useState<TooltipPosition | null>(null);
@@ -85,7 +85,7 @@ const Help = ({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setShowTooltip(false)}
       >
-        <ResolvedIcon size={size} />
+        <IconComponent size={size} />
       </span>
       {showTooltip && position && (
         <StyledWrapper
