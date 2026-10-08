@@ -333,6 +333,50 @@ export async function openNewRequestPanel(
 }
 
 /**
+ * Create a transient request from the collection row's "+" menu
+ * and return its panel Frame.
+ */
+export async function openTransientRequest(
+  page: Page,
+  sidebar: Frame,
+  collectionName: string,
+  type: 'HTTP' | 'GraphQL' | 'gRPC' | 'WebSocket' = 'HTTP'
+): Promise<Frame> {
+  const menuType = ({ HTTP: 'http', GraphQL: 'graphql', gRPC: 'grpc', WebSocket: 'ws' } as const)[type];
+  const marker = (frame: Frame) => {
+    const ui = buildCommonLocators(frame);
+    if (type === 'WebSocket') return ui.ws.connectButton();
+    if (type === 'gRPC') return ui.grpc.queryUrlContainer();
+    return ui.requestUrl.editor();
+  };
+
+  await createTransientRequest(sidebar, collectionName, menuType);
+
+  const editor = await getWebviewFrame(page, marker, sidebar);
+  await expect(marker(editor)).toBeVisible({ timeout: 10_000 });
+
+  return editor;
+}
+
+/**
+ * Pick an environment from the collection toolbar's environment selector.
+ */
+export async function selectEnvironment(frame: Frame, name: string | null): Promise<void> {
+  const env = buildCommonLocators(frame).environments;
+  await env.selectorTrigger().click();
+
+  const option = name ? env.dropdownItem(name) : env.noEnvironmentOption();
+  await expect(option).toBeVisible();
+  await option.click();
+
+  if (name) {
+    await expect(env.activeName()).toHaveText(name);
+  } else {
+    await expect(env.inactiveLabel()).toBeVisible();
+  }
+}
+
+/**
  * Fill the new request form and submit it.
  *
  * @param page - Playwright Page
@@ -797,8 +841,17 @@ async function openRequestByMarker(
   // Click the request to open it in the editor
   await requestRow.click();
 
-  // Wait for the request editor frame — identified by the marker selector.
-  const editor = await getWebviewFrame(page, (frame) => frame.locator(markerSelector), sidebar);
+  return waitForFrameWithMarker(page, sidebar, markerSelector);
+}
+
+// Wait for the request editor frame — identified by the marker selector.
+async function waitForFrameWithMarker(
+  page: Page,
+  excludeFrame: Frame,
+  markerSelector: string,
+  timeout = 20_000
+): Promise<Frame> {
+  const editor = await getWebviewFrame(page, (frame) => frame.locator(markerSelector), excludeFrame, timeout);
   await expect(editor.locator(markerSelector)).toBeVisible({ timeout: 10_000 });
 
   return editor;
@@ -819,13 +872,6 @@ export async function openCollectionSettings(
   await expect(buildCommonLocators(settings).collectionSettings.container()).toBeVisible({ timeout: 10_000 });
 
   return settings;
-}
-
-export async function selectEnvironment(frame: Frame, environmentName: string): Promise<void> {
-  const environments = buildCommonLocators(frame).environments;
-  await environments.selectorTrigger().click();
-  await environments.dropdownItem(environmentName).click();
-  await expect(environments.selectorTrigger()).toHaveText(new RegExp(environmentName));
 }
 
 export async function openEnvironmentsTab(page: Page, from: Frame): Promise<Frame> {

@@ -26,8 +26,12 @@ const EnvironmentListContent = ({
     <div>
       {environments && environments.length > 0 ? (
         <>
-          <div className="environment-list">
-            <div className="dropdown-item no-environment" onClick={() => onEnvironmentSelect(null)}>
+          <div className="environment-list" data-testid="environment-list">
+            <div
+              className="dropdown-item no-environment"
+              onClick={() => onEnvironmentSelect(null)}
+              data-testid="environment-list-no-environment"
+            >
               <span>No Environment</span>
             </div>
             <ToolHint
@@ -62,7 +66,7 @@ const EnvironmentListContent = ({
           </div>
         </>
       ) : (
-        <div className="empty-state">
+        <div className="empty-state" data-testid="environment-list-empty-state">
           <h3>Ready to get started?</h3>
           <p>{description}</p>
           <div className="space-y-2">
