@@ -70,7 +70,15 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     settingsItem: (name: string) =>
       frame.getByTestId('environment-item').filter({ hasText: name }),
     activeCheckmark: (name: string) =>
-      frame.getByTestId('environment-item').filter({ hasText: name }).getByTestId('environment-active-checkmark')
+      frame.getByTestId('environment-item').filter({ hasText: name }).getByTestId('environment-active-checkmark'),
+    scopeTab: (scope: 'collection' | 'global') => frame.getByTestId(`env-tab-${scope}`),
+    createEnvironment: () => frame.getByTestId('create-environment'),
+    nameInput: () => frame.getByTestId('environment-name'),
+    confirmCreate: () => frame.getByTestId('modal-confirm-button'),
+    newVarNameInput: () => frame.getByTestId('env-var-name-new'),
+    varValueEditor: (name: string) => frame.getByTestId(`env-var-row-${name}`).locator('.CodeMirror'),
+    varSecretCheckbox: (name: string) => frame.getByTestId(`env-var-secret-${name}`),
+    save: () => frame.getByTestId('save-env')
   },
   requestUrl: {
     editor: () => frame.locator('#request-url'),
@@ -89,17 +97,6 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     editor: () => frame.locator('.CodeMirror-brunoVarInfo .var-value-editor .CodeMirror'),
     editorFocused: () => frame.locator('.CodeMirror-brunoVarInfo .var-value-editor .CodeMirror-focused'),
     editorLine: () => frame.locator('.CodeMirror-brunoVarInfo .var-value-editor .CodeMirror-line').first()
-  },
-  environments: {
-    selectorTrigger: () => frame.getByTestId('environment-selector-trigger'),
-    scopeTab: (scope: 'collection' | 'global') => frame.getByTestId(`env-tab-${scope}`),
-    createEnvironment: () => frame.getByTestId('create-environment'),
-    nameInput: () => frame.getByTestId('environment-name'),
-    confirmCreate: () => frame.getByTestId('modal-confirm-button'),
-    newVarNameInput: () => frame.getByTestId('env-var-name-new'),
-    varValueEditor: (name: string) => frame.getByTestId(`env-var-row-${name}`).locator('.CodeMirror'),
-    varSecretCheckbox: (name: string) => frame.getByTestId(`env-var-secret-${name}`),
-    save: () => frame.getByTestId('save-env')
   },
   paramsTable: {
     // Value cell of the path-params table.
@@ -137,7 +134,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   },
   // Request-editor tabs (Params / Body / Headers / Auth / Vars …).
   tabs: {
-    byKey: (key: string) => frame.locator(`div[role="tab"].${key}`),
+    // Request-pane tab; the response pane reuses keys like `headers`.
+    byKey: (key: string) => frame.locator(`div[role="tab"].${key}:not([data-testid="response-pane-tabs"] *)`),
     byText: (text: string) => frame.locator('div[role="tab"]').filter({ hasText: text }),
     more: () => frame.locator('.more-tabs')
   },

@@ -1,7 +1,7 @@
 /**
  * OAuth2 Implicit against a real Keycloak server.
  *
- * Needs Keycloak on :8180 (`npm run test:keycloak:up`); the test skips when it isn't running.
+ * Needs Keycloak on :8180; it is started with docker compose if needed, and the test skips if that fails.
  * The login goes through a fake system browser (see keycloak/browser-shim.ts): the test reads the
  * authorize URL the extension opened, logs in to Keycloak over HTTP, then hands the callback back
  * to VS Code as a `vscode://` URI.
@@ -15,8 +15,9 @@ import { buildCommonLocators } from '../../utils/page/locators';
 import {
   KEYCLOAK,
   KEYCLOAK_DOWN_REASON,
+  KEYCLOAK_START_TIMEOUT,
   BRUNO_CALLBACK_URL,
-  isKeycloakUp,
+  ensureKeycloakUp,
   loginToKeycloak,
   toVSCodeCallbackUri
 } from './keycloak';
@@ -33,7 +34,8 @@ import {
 
 test.describe('OAuth2 with Keycloak: Implicit', () => {
   test.beforeAll(async () => {
-    test.skip(!(await isKeycloakUp()), KEYCLOAK_DOWN_REASON);
+    test.setTimeout(KEYCLOAK_START_TIMEOUT);
+    test.skip(!(await ensureKeycloakUp()), KEYCLOAK_DOWN_REASON);
   });
 
   test('log in through the system browser', async ({ page, tmpDir, browserShim }) => {

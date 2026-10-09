@@ -1,6 +1,6 @@
 /**
  * OAuth2 Client Credentials against a real Keycloak server.
- * Needs Keycloak on :8180 (`npm run test:keycloak:up`); the test skips when it isn't running.
+ * Needs Keycloak on :8180; it is started with docker compose if needed, and the test skips if that fails.
  *
  * One VS Code session, one request; each scenario is a step. A step that expects a fresh 200
  * first sees a 401, so a response left over from an earlier step can't satisfy it.
@@ -9,7 +9,7 @@ import { test, expect } from '../../utils/fixtures';
 import { openBrunoSidebar, sendRequest } from '../../utils/page/actions';
 import { getActiveEditorFrame } from '../../utils/page/oauth2-actions';
 import { buildCommonLocators } from '../../utils/page/locators';
-import { KEYCLOAK, KEYCLOAK_DOWN_REASON, isKeycloakUp } from './keycloak';
+import { KEYCLOAK, KEYCLOAK_DOWN_REASON, KEYCLOAK_START_TIMEOUT, ensureKeycloakUp } from './keycloak';
 import {
   setupOAuth2Request,
   fillField,
@@ -23,7 +23,8 @@ test.describe('OAuth2 with Keycloak: Client Credentials', () => {
   const { clientId, clientSecret } = KEYCLOAK.clients.clientCredentials;
 
   test.beforeAll(async () => {
-    test.skip(!(await isKeycloakUp()), KEYCLOAK_DOWN_REASON);
+    test.setTimeout(KEYCLOAK_START_TIMEOUT);
+    test.skip(!(await ensureKeycloakUp()), KEYCLOAK_DOWN_REASON);
   });
 
   test('fetch tokens and call a protected resource', async ({ page, tmpDir }) => {
