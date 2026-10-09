@@ -229,7 +229,7 @@ const ImportCollectionLocation = ({
             <div className="mt-4">
               <label htmlFor="format" className="flex items-center font-medium">
                 File Format
-                <Help width="300">
+                <Help width={300}>
                   <p>Choose the file format for storing requests in this collection.</p>
                   <p className="mt-2">
                     <strong>OpenCollection (YAML):</strong> Industry-standard YAML format (.yml files)
