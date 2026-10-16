@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AxiosAdapter, AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import http from 'http';
+import https from 'https';
 import type { Readable } from 'stream';
 import type { NetworkLogEntry } from '@bruno-types';
 import { createAxiosInstance } from './axios-instance';
@@ -206,7 +207,7 @@ describe('axios-instance network log', () => {
       'Resolving relative redirect URL: /target → https://api.example.com/target',
       'Changed method from GET to GET for 302 redirect and removed request body',
       'Proxy mode: off',
-      'SSL validation: disabled',
+      'SSL validation: enabled',
       'Preparing request to https://api.example.com/target',
       expect.stringMatching(/^Current time is /),
       expect.stringMatching(/^Request completed in \d+ ms$/)
@@ -240,6 +241,73 @@ describe('axios-instance network log', () => {
     });
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe('axios-instance TLS options', () => {
+  // A stub adapter replaces axios's http adapter, which is the only caller of `transport`, so these tests
+  // take the transport off `instance.defaults` and call it directly, with `https.request` mocked out.
+  const sendThroughTransport = (options: Parameters<typeof createAxiosInstance>[0]) => {
+    const requestSpy = vi.spyOn(https, 'request').mockImplementation(() => {
+      throw new Error('not sent');
+    });
+    const transport = createAxiosInstance(options).defaults.transport as {
+      request: (options: http.RequestOptions) => unknown;
+    };
+    expect(() => transport.request({ protocol: 'https:', hostname: 'api.example.com', path: '/' })).toThrow('not sent');
+    return requestSpy.mock.calls[0][0] as https.RequestOptions;
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('never sets NODE_TLS_REJECT_UNAUTHORIZED on the shared extension host', async () => {
+    const previous = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    try {
+      await createAxiosInstance({ httpsAgentOptions: { rejectUnauthorized: false } }).request({
+        url: 'https://api.example.com/breeds',
+        method: 'get',
+        adapter: createStubAdapter([{}])
+      });
+
+      expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBeUndefined();
+    } finally {
+      if (previous !== undefined) {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = previous;
+      }
+    }
+  });
+
+  it('verifies certificates by default', () => {
+    expect(sendThroughTransport({}).rejectUnauthorized).toBe(true);
+  });
+
+  it('passes TLS options on the request itself, where VS Code\'s proxy agent keeps them', () => {
+    const requestOptions = sendThroughTransport({
+      httpsAgentOptions: { rejectUnauthorized: false, ca: 'custom-ca', passphrase: 'secret' }
+    });
+
+    expect(requestOptions).toMatchObject({ rejectUnauthorized: false, ca: 'custom-ca', passphrase: 'secret' });
+  });
+
+  it('logs SSL validation as disabled only when verification is turned off', async () => {
+    const sslMessages = async (httpsAgentOptions?: https.AgentOptions) => {
+      const timeline: NetworkLogEntry[] = [];
+      await createAxiosInstance({ timeline, httpsAgentOptions }).request({
+        url: 'https://api.example.com/redirect',
+        method: 'get',
+        adapter: createStubAdapter([
+          { status: 302, statusText: 'Found', headers: { location: '/target' } },
+          { status: 200 }
+        ])
+      });
+      return messagesOfType(timeline, 'info').filter((message) => message.startsWith('SSL validation'));
+    };
+
+    expect(await sslMessages({ rejectUnauthorized: false })).toEqual(['SSL validation: disabled']);
+    expect(await sslMessages()).toEqual(['SSL validation: enabled']);
   });
 });
 
