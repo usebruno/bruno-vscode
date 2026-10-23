@@ -1064,6 +1064,43 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   };
 
+  registerHandler('renderer:resequence-items', async (args) => {
+    const [itemsToResequence, collectionPathname] = args as [Array<{ type: string; pathname: string; seq: number }>, string];
+
+    try {
+      const format = getCollectionFormat(collectionPathname);
+
+      for (const item of itemsToResequence) {
+        validatePathIsInsideCollection(item.pathname);
+
+        if (item.type === 'folder') {
+          if (!fs.existsSync(item.pathname)) {
+            continue;
+          }
+          // A folder keeps its order in its own folder.bru / folder.yml
+          const folderFilePath = path.join(item.pathname, `folder.${format}`);
+          let folderJson: any = { meta: { name: path.basename(item.pathname) } };
+          if (fs.existsSync(folderFilePath)) {
+            folderJson = await parseFolder(fs.readFileSync(folderFilePath, 'utf8'), { format });
+          }
+          // A folder file can have no meta block
+          folderJson.meta = folderJson.meta || { name: path.basename(item.pathname) };
+          folderJson.meta.seq = item.seq;
+          await writeCollectionFile(folderFilePath, await stringifyFolder(folderJson, { format }));
+        } else if (fs.existsSync(item.pathname)) {
+          // Only update seq, so unsaved changes are not saved
+          const request = await parseRequest(fs.readFileSync(item.pathname, 'utf8'), { format });
+          request.seq = item.seq;
+          await writeCollectionFile(item.pathname, await stringifyRequest(request, { format }));
+        }
+      }
+
+      return true;
+    } catch (error) {
+      throw error;
+    }
+  });
+
   registerHandler('renderer:save-bruno-config', async (args) => {
     const [collectionPath, brunoConfig] = args as [string, BrunoConfig];
 

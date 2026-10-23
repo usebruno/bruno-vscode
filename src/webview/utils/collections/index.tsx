@@ -672,7 +672,7 @@ export const transformRequestToSaveToFilesystem = (item: any) => {
     uid: _item.uid,
     type: _item.type,
     name: _item.name,
-    seq: _item.seq ?? item.seq ?? 1,
+    seq: item.seq ?? _item.seq ?? 1,
     settings: _item.settings,
     tags: _item.tags,
     examples: _item.examples || [],
@@ -1448,40 +1448,27 @@ export const resetSequencesInFolder = (folderItems: any) => {
   });
 };
 
-export const isItemBetweenSequences = (itemSequence: any, sourceItemSequence: any, targetItemSequence: any) => {
-  if (targetItemSequence > sourceItemSequence) {
-    return itemSequence > sourceItemSequence && itemSequence < targetItemSequence;
-  }
-  return itemSequence < sourceItemSequence && itemSequence >= targetItemSequence;
-};
-
-export const calculateNewSequence = (isDraggedItem: any, targetSequence: any, draggedSequence: any) => {
-  if (!isDraggedItem) {
-    return null;
-  }
-  return targetSequence > draggedSequence ? targetSequence - 1 : targetSequence;
-};
-
 export const getReorderedItemsInTargetDirectory = ({
   items,
   targetItemUid,
-  draggedItemUid
+  draggedItemUid,
+  dropType
 }: any) => {
   const itemsWithFixedSequences = resetSequencesInFolder(cloneDeep(items));
-  const targetItem = findItem(itemsWithFixedSequences, targetItemUid);
-  const draggedItem = findItem(itemsWithFixedSequences, draggedItemUid);
-  const targetSequence = targetItem?.seq;
-  const draggedSequence = draggedItem?.seq;
-  itemsWithFixedSequences?.forEach((item: any) => {
-    const isDraggedItem = item?.uid === draggedItemUid;
-    const isBetween = isItemBetweenSequences(item?.seq, draggedSequence, targetSequence);
-    if (isBetween) {
-      item.seq += targetSequence > draggedSequence ? -1 : 1;
-    }
-    const newSequence = calculateNewSequence(isDraggedItem, targetSequence, draggedSequence);
-    if (newSequence !== null) {
-      item.seq = newSequence;
-    }
+  const targetIndex = itemsWithFixedSequences.findIndex((i) => i.uid === targetItemUid);
+  const draggedIndex = itemsWithFixedSequences.findIndex((i) => i.uid === draggedItemUid);
+  if (targetIndex === -1 || draggedIndex === -1) {
+    return [];
+  }
+
+  let newIndex = dropType === 'below' ? targetIndex + 1 : targetIndex;
+  if (draggedIndex < newIndex) {
+    newIndex -= 1;
+  }
+  const [draggedItem] = itemsWithFixedSequences.splice(draggedIndex, 1);
+  itemsWithFixedSequences.splice(newIndex, 0, draggedItem);
+  itemsWithFixedSequences.forEach((item, index) => {
+    item.seq = index + 1;
   });
   // only return items that have been reordered
   return itemsWithFixedSequences.filter((item: any) => items?.find((originalItem: any) => originalItem?.uid === item?.uid)?.seq !== item?.seq
@@ -1510,7 +1497,7 @@ export const calculateDraggedItemNewPathname = ({
 
   if (dropType === 'inside' && (isTargetItemAFolder || isTargetTheCollection)) {
     return path.join(targetItemPathname, draggedItemFilename);
-  } else if (dropType === 'adjacent') {
+  } else if (dropType === 'above' || dropType === 'below') {
     return path.join(targetItemDirname, draggedItemFilename);
   }
   return null;

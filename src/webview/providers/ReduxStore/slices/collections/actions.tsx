@@ -1251,7 +1251,7 @@ export const moveItem
 interface HandleCollectionItemDropParams {
   targetItem: TargetItem;
   draggedItem: DraggedItem;
-  dropType: 'adjacent' | 'inside';
+  dropType: 'above' | 'inside' | 'below';
   collectionUid: string;
 }
 
@@ -1287,7 +1287,7 @@ export const handleCollectionItemDrop
         targetItem: TargetItem;
         targetItemDirectoryItems: AppItem[];
         newPathname: string;
-        dropType: 'adjacent' | 'inside';
+        dropType: 'above' | 'inside' | 'below';
       }
 
       const handleMoveToNewLocation = async ({
@@ -1333,7 +1333,7 @@ export const handleCollectionItemDrop
           }
         }
 
-        if (dropType === 'adjacent') {
+        if (dropType === 'above' || dropType === 'below') {
           const targetItemIndex = targetItemDirectoryItems.findIndex((i) => i.uid === targetItemUid);
           const targetItemSequence = targetItemIndex >= 0 ? targetItemDirectoryItems[targetItemIndex]?.seq : undefined;
 
@@ -1347,7 +1347,8 @@ export const handleCollectionItemDrop
           const reorderedTargetItems = getReorderedItemsInTargetDirectory({
             items: [...targetItemDirectoryItems, draggedItemWithNewPathAndSequence],
             targetItemUid,
-            draggedItemUid
+            draggedItemUid,
+            dropType
           });
 
           if (reorderedTargetItems?.length) {
@@ -1374,7 +1375,8 @@ export const handleCollectionItemDrop
         const reorderedItems = getReorderedItemsInTargetDirectory({
           items: targetItemDirectoryItems,
           targetItemUid,
-          draggedItemUid
+          draggedItemUid,
+          dropType
         });
 
         if (reorderedItems?.length) {

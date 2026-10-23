@@ -351,6 +351,16 @@ export function registerDirtyStateHandlers(): void {
  * Save All and the close-tab prompt go straight to disk and would persist it.
  */
 export function registerSaveHandler(context: vscode.ExtensionContext): void {
+  // Drop a document once VS Code closes it
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      const normalizedPath = normalizePath(document.uri.fsPath);
+      if (registeredDocuments.get(normalizedPath) === document) {
+        registeredDocuments.delete(normalizedPath);
+      }
+    })
+  );
+
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
       const filePath = event.document.uri.fsPath;

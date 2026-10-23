@@ -775,6 +775,20 @@ export async function dragItemIntoFolder(
   await itemRow.locator('.item-name').dragTo(folderRow, { steps: 15 });
 }
 
+export async function dragItemAboveOrBelow(
+  sidebar: Frame,
+  itemName: string,
+  targetName: string,
+  position: 'above' | 'below'
+): Promise<void> {
+  const locators = buildCommonLocators(sidebar);
+  const itemRow = locators.sidebar.collectionItem(itemName);
+  const targetRow = locators.sidebar.collectionItem(targetName);
+  const targetPosition = { x: 50, y: position === 'above' ? 3 : 22 };
+
+  await itemRow.locator('.item-name').dragTo(targetRow, { targetPosition, steps: 15 });
+}
+
 /**
  * Collapse a collection in the sidebar by clicking its chevron toggle.
  * A collapsed collection removes its children from the DOM.

@@ -87,6 +87,7 @@ export const workspace = {
   applyEdit: vi.fn().mockResolvedValue(true),
   openTextDocument: vi.fn(),
   onDidChangeTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  onDidCloseTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   onWillSaveTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() })
 };
 

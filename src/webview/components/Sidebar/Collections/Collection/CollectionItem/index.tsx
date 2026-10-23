@@ -126,14 +126,18 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     if (!hoverBoundingRect || !clientOffset) return null;
 
     const clientY = clientOffset.y - hoverBoundingRect.top;
-    const folderUpperThreshold = hoverBoundingRect.height * 0.35;
-    const fileUpperThreshold = hoverBoundingRect.height * 0.5;
 
     if (isItemAFolder(item)) {
-      return clientY < folderUpperThreshold ? 'adjacent' : 'inside';
-    } else {
-      return clientY < fileUpperThreshold ? 'adjacent' : null;
+      const folderUpperThreshold = hoverBoundingRect.height * 0.3;
+      const folderLowerThreshold = hoverBoundingRect.height * 0.7;
+
+      if (clientY < folderUpperThreshold) return 'above';
+      if (clientY > folderLowerThreshold) return 'below';
+      return 'inside';
     }
+
+    const midpoint = hoverBoundingRect.height * 0.5;
+    return clientY < midpoint ? 'above' : 'below';
   };
 
   const canItemBeDropped = ({ draggedItem, targetItem, dropType }: any) => {
@@ -192,7 +196,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     'item-focused-in-tab': isTabForItemActive,
     'item-hovered': isOver,
     'drop-target': isOver && dropType === 'inside',
-    'drop-target-above': isOver && dropType === 'adjacent',
+    'drop-target-above': isOver && dropType === 'above',
+    'drop-target-below': isOver && dropType === 'below',
     'item-keyboard-focused': isKeyboardFocused
   });
 
