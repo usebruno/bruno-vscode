@@ -205,6 +205,20 @@ const getCertsAndProxyConfig = async ({
 }: CertsAndProxyConfigParams): Promise<CertsAndProxyConfigResult> => {
   const httpsAgentRequestFields: HttpsAgentFields = { keepAlive: true };
 
+  if (!preferencesUtil.shouldVerifyTls()) {
+    httpsAgentRequestFields.rejectUnauthorized = false;
+  }
+
+  const caCertFilePath = preferencesUtil.shouldUseCustomCaCertificate()
+    ? preferencesUtil.getCustomCaCertificateFilePath() ?? undefined
+    : undefined;
+  const { caCertificates, caCertificatesCount } = getCACertificates({
+    caCertFilePath,
+    shouldKeepDefaultCerts: preferencesUtil.shouldKeepDefaultCaCertificates()
+  });
+  httpsAgentRequestFields.ca = caCertificates;
+  httpsAgentRequestFields.caCertificatesCount = caCertificatesCount;
+
   const { promptVariables } = collection;
   const collectionVariables = request.collectionVariables || {};
   const folderVariables = request.folderVariables || {};

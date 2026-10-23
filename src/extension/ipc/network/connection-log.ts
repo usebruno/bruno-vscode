@@ -15,6 +15,8 @@ export interface ConnectionLogOptions {
   rejectUnauthorized?: boolean;
   caCertificatesCount?: Partial<CACertificatesCount>;
   proxyModeMessage: string;
+  /** Set on every https request, since VS Code's proxy agent drops the ones set on the agent. */
+  tlsOptions?: https.AgentOptions;
 }
 
 export const sslValidationMessage = (rejectUnauthorized?: boolean): string =>
@@ -160,7 +162,8 @@ export const createConnectionLoggingTransport = (options: ConnectionLogOptions) 
     const transport = isHttps ? https : http;
 
     let clearRequestTimeout: (() => void) | undefined;
-    const request = transport.request(requestOptions, (response) => {
+    const sendOptions = isHttps ? { ...requestOptions, ...options.tlsOptions } : requestOptions;
+    const request = transport.request(sendOptions, (response) => {
       clearRequestTimeout?.();
       callback?.(response);
     });
