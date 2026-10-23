@@ -1,15 +1,8 @@
 /**
- * In-memory store for per-collection runtime variables.
- *
- * Runtime variables (`bru.setVar` / `bru.getVar`) exist for the lifetime of
- * the VS Code process. They must survive:
- *   - closing a request tab
- *   - opening the same request in a new tab (each tab is its own webview
- *     with its own Redux store)
- * and reset when the extension host restarts.
- *
- * The extension is the single source of truth. Webviews mirror this into
- * their local Redux state via `main:runtime-variables-update` broadcasts.
+ * Per-collection runtime variables (`bru.setVar`), held in the extension host
+ * because each tab is a separate webview with its own Redux store. Survives
+ * tab close/reopen; resets on extension host restart. Webviews mirror it via
+ * `main:runtime-variables-update`.
  */
 
 type RuntimeVariables = Record<string, unknown>;
@@ -27,8 +20,6 @@ export const setRuntimeVariables = (
   runtimeVariablesByCollection[collectionUid] = { ...(runtimeVariables || {}) };
 };
 
-/** Shallow-merge new keys into the stored runtime variables. Returns the
- *  merged snapshot for callers that want to broadcast without re-reading. */
 export const mergeRuntimeVariables = (
   collectionUid: string,
   runtimeVariables: RuntimeVariables

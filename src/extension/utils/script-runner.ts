@@ -99,11 +99,6 @@ const emitScriptVariableUpdates = (
   context: ScriptContext,
   envVarsBefore?: Record<string, unknown>
 ): void => {
-  // Broadcast (not send-to-current-webview): the same script-authored env +
-  // runtime var changes need to land in every open request tab's Redux store,
-  // not just the one that ran the request. The desktop app can rely on one
-  // window's Redux tree, but here each tab is its own webview and would
-  // otherwise miss the update — the exact bug in the ticket.
   broadcastToAllWebviews('main:script-environment-update', {
     envVariables: result.envVariables,
     runtimeVariables: result.runtimeVariables,
@@ -120,9 +115,6 @@ const emitScriptVariableUpdates = (
     });
   }
 
-  // Persistence stays scoped to the invoking webview: the merge-and-write
-  // action runs in Redux + writes to disk, and we only want *one* write per
-  // script run. The file watcher then broadcasts the change to sibling tabs.
   if (result.envVariables && !isEqual(result.envVariables, envVarsBefore)) {
     sendToWebview('main:persistent-env-variables-update', {
       persistentEnvVariables: result.envVariables,

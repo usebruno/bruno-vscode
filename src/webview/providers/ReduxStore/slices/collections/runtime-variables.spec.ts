@@ -24,7 +24,7 @@ function makeState(runtimeVariables: Record<string, unknown> = {}) {
 }
 
 describe('runtimeVariablesUpdateEvent', () => {
-  test('overwrites the stored map (extension is source of truth)', () => {
+  test('overwrites the stored map so extension-side deletions propagate', () => {
     const state = makeState({ oldKey: 'stale' });
 
     const result = collectionsReducer(
@@ -35,8 +35,6 @@ describe('runtimeVariablesUpdateEvent', () => {
       } as any)
     );
 
-    // Assignment, not merge — oldKey is gone so deletions on the extension
-    // side are observable in every mirrored tab.
     expect(result.collections[0].runtimeVariables).toEqual({ newKey: 'fresh' });
   });
 

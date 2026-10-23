@@ -82,7 +82,7 @@ interface PreparedGrpcRequest {
   headers: Record<string, string>;
   processEnvVars: Record<string, string>;
   envVars: Record<string, unknown>;
-  runtimeVariables: Record<string, string>;
+  runtimeVariables: Record<string, unknown>;
   promptVariables: Record<string, string>;
   body?: GrpcBody;
   protoPath?: string;
@@ -108,7 +108,7 @@ const prepareGrpcRequest = async (
   item: GrpcRequestItem,
   collection: Collection,
   environment: Environment | null,
-  runtimeVariables: Record<string, string>
+  runtimeVariables: Record<string, unknown>
 ): Promise<PreparedGrpcRequest> => {
   const request = item.draft ? item.draft.request : item.request;
   if (!request) {
@@ -187,7 +187,7 @@ const configureRequest = async (
   _request: GrpcRequestItem,
   _collection: Collection,
   _envVars: Record<string, unknown>,
-  _runtimeVariables: Record<string, string>,
+  _runtimeVariables: Record<string, unknown>,
   _processEnvVars: Record<string, string>,
   _promptVariables: Record<string, string>,
   _certsAndProxyConfig: Record<string, unknown>
@@ -236,7 +236,7 @@ const registerGrpcEventHandlers = (): void => {
     }];
 
     const { request, collection, environment } = params;
-    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);
@@ -381,7 +381,7 @@ const registerGrpcEventHandlers = (): void => {
     }];
 
     const { request, collection, environment } = params;
-    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);
@@ -511,7 +511,7 @@ const registerGrpcEventHandlers = (): void => {
     }];
 
     const { request, collection, environment } = params;
-    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);

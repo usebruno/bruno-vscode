@@ -39,13 +39,6 @@ const brunoUtils = brunoUtilsRaw as {
   encodeUrl: (url: string) => string;
 };
 
-/**
- * Broadcast the current runtime-variable snapshot to every open webview so all
- * request tabs on the same collection keep the same Redux state. Uses
- * broadcast (not the invoking-webview-scoped sendToWebview) precisely because
- * the goal is to push the update out to the other tabs, not just the one that
- * ran the request.
- */
 const broadcastRuntimeVariables = (
   collectionUid: string,
   runtimeVariables: Record<string, unknown>
@@ -1759,7 +1752,7 @@ const registerNetworkIpc = (): void => {
   // Run collection folder - executes all requests in a folder sequentially
   // Based on bruno-electron's implementation
   registerHandler('renderer:run-collection-folder', async (args) => {
-    const [folder, collection, environment, , recursive, delay, tags, selectedRequestUids] = args as [
+    const [folder, collection, environment, _runtimeVariables, recursive, delay, tags, selectedRequestUids] = args as [
       Record<string, unknown> | null,
       Record<string, unknown>,
       Record<string, unknown> | null,

@@ -79,7 +79,7 @@ interface PreparedWsRequest {
   headers: Record<string, string>;
   processEnvVars: Record<string, string>;
   envVars: Record<string, unknown>;
-  runtimeVariables: Record<string, string>;
+  runtimeVariables: Record<string, unknown>;
   body?: WsBody;
   vars?: unknown;
   collectionVariables?: Record<string, unknown>;
@@ -95,7 +95,7 @@ const prepareWsRequest = async (
   item: WsRequestItem,
   collection: Collection,
   environment: Environment | null,
-  runtimeVariables: Record<string, string>,
+  runtimeVariables: Record<string, unknown>,
   _certsAndProxyConfig: Record<string, unknown> = {}
 ): Promise<PreparedWsRequest> => {
   const request = item.draft ? item.draft.request : item.request;
@@ -203,7 +203,7 @@ const registerWsEventHandlers = (): void => {
     }];
 
     const { request, collection, environment, settings, options = {} } = params;
-    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);
@@ -293,7 +293,7 @@ const registerWsEventHandlers = (): void => {
     }];
 
     const { item, collection, environment, messageContent } = params;
-    const runtimeVariables = getRuntimeVariables(collection.uid) as Record<string, string>;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const itemCopy = cloneDeep(item);
