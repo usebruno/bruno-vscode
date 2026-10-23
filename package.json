@@ -44,6 +44,16 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Bruno",
+      "properties": {
+        "bruno.autoOpenWorkspaceCollections": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open every collection found in the workspace folders in the Bruno sidebar on startup. These collections are not added to the recently opened collections. Takes effect after reloading the window."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {

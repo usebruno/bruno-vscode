@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "Workspace Bru Collection",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

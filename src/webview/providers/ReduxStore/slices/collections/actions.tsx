@@ -2616,14 +2616,15 @@ export const updateBrunoConfig = (brunoConfig: any, collectionUid: any) => (disp
   });
 };
 
-export const openCollectionEvent = (uid: any, pathname: any, brunoConfig: any, shouldPersist = true) => (dispatch: any, getState: any) => {
+export const openCollectionEvent = (uid: any, pathname: any, brunoConfig: any, shouldPersist = true, sessionOnly = false) => (dispatch: any, getState: any) => {
   const { ipcRenderer } = window;
 
   return new Promise<void>((resolve, reject) => {
     // In sidebar mode, skip auto-opened collections (shouldPersist=false)
-    // Sidebar should only show manually opened/created collections
+    // Sidebar should only show manually opened/created collections, plus workspace folder
+    // collections opened for this session (sessionOnly=true) when that setting is enabled
     const isSidebar = (window as any).BRUNO_WEBVIEW_MODE === 'sidebar';
-    if (isSidebar && !shouldPersist) {
+    if (isSidebar && !shouldPersist && !sessionOnly) {
       resolve();
       return;
     }

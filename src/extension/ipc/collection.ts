@@ -54,6 +54,7 @@ import {
 import { prepareWorkspaceConfigForClient } from './workspace';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, parseBruFileMeta, hydrateRequestWithUuid, transformRequestToSaveToFilesystem } from '../utils/collection';
 import { getProcessEnvVars } from '../store/process-env';
+import { findWorkspaceCollections } from '../utils/workspace-collections';
 import collectionWatcher from '../app/collection-watcher';
 import { transformBrunoConfigBeforeSave } from '../utils/transformBrunoConfig';
 import { REQUEST_TYPES } from '../utils/constants';
@@ -2120,6 +2121,8 @@ get {
   });
 
   let collectionsInitialized = false;
+  // Workspace folder collections opened without being persisted, so replays don't persist them either.
+  const sessionOnlyCollectionPaths = new Set<string>();
 
   registerEventListener('main:renderer-ready', async () => {
     // Fast path: every new panel (Create Collection, New Request,
@@ -2138,9 +2141,12 @@ get {
       const watchedPaths = collectionWatcher.getWatchedCollectionPaths();
       const sidebarWebview = sidebarWebviewGetter?.();
       const isSidebar = sidebarWebview && currentWebview === sidebarWebview;
+      // A session-only collection the user has since opened manually is persisted, so treat it normally.
+      const persistedPaths = new Set(lastOpenedCollections.getAll());
       for (const collectionPath of watchedPaths) {
         try {
-          const collectionUid = await loadCollectionMetadata(collectionPath, panelSender, isSidebar);
+          const sessionOnly = sessionOnlyCollectionPaths.has(collectionPath) && !persistedPaths.has(collectionPath);
+          const collectionUid = await loadCollectionMetadata(collectionPath, panelSender, isSidebar && !sessionOnly, sessionOnly);
           if (isSidebar && collectionUid) {
             await collectionWatcher.loadFullCollection(collectionPath, collectionUid, panelSender);
           }
@@ -2171,6 +2177,23 @@ get {
       }
     } catch (error) {
       console.error('[Collection IPC] Error loading last opened collections:', error);
+    }
+
+    if (vscode.workspace.getConfiguration('bruno').get<boolean>('autoOpenWorkspaceCollections', false)) {
+      try {
+        const persistedPaths = new Set(lastOpenedCollections.getAll());
+        const workspacePaths = findWorkspaceCollections()
+          .map((collection) => collection.path)
+          .filter((collectionPath) => !persistedPaths.has(collectionPath));
+
+        workspacePaths.forEach((collectionPath) => sessionOnlyCollectionPaths.add(collectionPath));
+        await openCollectionsByPathname(watcher as Parameters<typeof openCollectionsByPathname>[0], workspacePaths, {
+          dontSendDisplayErrors: true,
+          persist: false
+        });
+      } catch (error) {
+        console.error('[Collection IPC] Error opening workspace folder collections:', error);
+      }
     }
   });
 

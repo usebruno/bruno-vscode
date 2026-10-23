@@ -38,6 +38,9 @@ interface BrunoConfig {
 
 interface OpenCollectionOptions {
   dontSendDisplayErrors?: boolean;
+  // When false, the collection is opened for this session only: it isn't added to the
+  // last-opened collections or the default workspace. Defaults to true.
+  persist?: boolean;
 }
 
 // Schema for bruno.json validation
@@ -181,10 +184,14 @@ export const openCollection = async (
 
     brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionPath) as unknown as BrunoConfig;
 
-    const lastOpenedStore = new LastOpenedCollections();
-    lastOpenedStore.add(collectionPath);
+    const persist = options.persist !== false;
 
-    const workspacePath = defaultWorkspaceManager.getDefaultWorkspacePath();
+    if (persist) {
+      const lastOpenedStore = new LastOpenedCollections();
+      lastOpenedStore.add(collectionPath);
+    }
+
+    const workspacePath = persist ? defaultWorkspaceManager.getDefaultWorkspacePath() : null;
     if (workspacePath) {
       try {
         await addToWorkspaceYml(workspacePath, { name: brunoConfig.name, path: collectionPath });
@@ -201,7 +208,7 @@ export const openCollection = async (
     }
 
     if (messageSender) {
-      messageSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, true);
+      messageSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, persist, !persist);
     }
 
     // Emit internal event for collection opened
@@ -318,7 +325,8 @@ export const openCollectionForSingleRequest = async (
 export const loadCollectionMetadata = async (
   collectionPath: string,
   targetSender: MessageSender,
-  shouldPersist = false
+  shouldPersist = false,
+  sessionOnly = false
 ): Promise<string | null> => {
   try {
     let brunoConfig = await getCollectionConfigFile(collectionPath);
@@ -330,7 +338,7 @@ export const loadCollectionMetadata = async (
 
     brunoConfig = await transformBrunoConfigAfterRead(brunoConfig, collectionPath) as unknown as BrunoConfig;
 
-    targetSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, shouldPersist);
+    targetSender('main:collection-opened', posixifyPath(collectionPath), uid, brunoConfig, shouldPersist, sessionOnly);
 
     return uid;
   } catch (err) {
