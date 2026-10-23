@@ -2,7 +2,8 @@
 import { ScriptRuntime, VarsRuntime, TestRuntime, AssertRuntime, ScriptResult, TestResult, VarsResult, formatErrorWithContextV2 } from '@usebruno/js';
 import get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
-import { sendToWebview } from '../ipc/handlers';
+import { sendToWebview, broadcastToAllWebviews } from '../ipc/handlers';
+import { setRuntimeVariables } from '../store/runtime-variables';
 import logsStore, { LogLevel } from '../store/logs';
 import type { ScriptErrorContext } from '@bruno-types';
 
@@ -98,12 +99,21 @@ const emitScriptVariableUpdates = (
   context: ScriptContext,
   envVarsBefore?: Record<string, unknown>
 ): void => {
-  sendToWebview('main:script-environment-update', {
+  broadcastToAllWebviews('main:script-environment-update', {
     envVariables: result.envVariables,
     runtimeVariables: result.runtimeVariables,
     requestUid: context.requestUid,
     collectionUid: context.collectionUid
   });
+
+  if (result.runtimeVariables && typeof result.runtimeVariables === 'object') {
+    const runtimeVariables = result.runtimeVariables as Record<string, unknown>;
+    setRuntimeVariables(context.collectionUid, runtimeVariables);
+    broadcastToAllWebviews('main:runtime-variables-update', {
+      collectionUid: context.collectionUid,
+      runtimeVariables
+    });
+  }
 
   if (result.envVariables && !isEqual(result.envVariables, envVarsBefore)) {
     sendToWebview('main:persistent-env-variables-update', {
@@ -113,14 +123,14 @@ const emitScriptVariableUpdates = (
   }
 
   if (result.collectionVariables) {
-    sendToWebview('main:collection-variables-update', {
+    broadcastToAllWebviews('main:collection-variables-update', {
       collectionVariables: result.collectionVariables,
       collectionUid: context.collectionUid
     });
   }
 
   if (result.globalEnvironmentVariables) {
-    sendToWebview('main:global-environment-variables-update', {
+    broadcastToAllWebviews('main:global-environment-variables-update', {
       globalEnvironmentVariables: result.globalEnvironmentVariables
     });
   }
