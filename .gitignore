@@ -32,4 +32,6 @@ npm-debug.log*
 
 # Test
 test-results/
+playwright-report/
+e2e-screenshots/
 tests/e2e/ssl/client-certificate/server/certs/
