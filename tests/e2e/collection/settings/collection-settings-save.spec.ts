@@ -48,7 +48,7 @@ test.describe('Collection settings save', () => {
     const settings = await stageSettingsEdits(page, tmpDir, 'Yml Settings', 'yml');
 
     await recordIpcCalls(settings);
-    await saveCollectionSettings(settings);
+    await saveCollectionSettings(settings, 'headers');
 
     const configFile = path.join(findCollectionDir(tmpDir, 'opencollection.yml'), 'opencollection.yml');
     const read = () => fs.readFileSync(configFile, 'utf8');
@@ -69,7 +69,7 @@ test.describe('Collection settings save', () => {
       await expect(settings.locator('#request-url')).toHaveValue(PRESET_URL);
 
       await openRequestPaneTab(settings, 'Headers');
-      const headersTable = settings.getByTestId('editable-table');
+      const headersTable = settings.getByTestId('collection-headers');
       await expect(headersTable).toContainText(HEADER_NAME);
       await expect(headersTable).toContainText(HEADER_VALUE);
     });
@@ -79,7 +79,7 @@ test.describe('Collection settings save', () => {
     const settings = await stageSettingsEdits(page, tmpDir, 'Bru Settings', 'bru');
 
     await recordIpcCalls(settings);
-    await saveCollectionSettings(settings);
+    await saveCollectionSettings(settings, 'headers');
 
     const collectionDir = findCollectionDir(tmpDir, 'bruno.json');
     const brunoJson = path.join(collectionDir, 'bruno.json');

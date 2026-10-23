@@ -160,6 +160,7 @@ const QueryParams = ({
       <div className="flex-1">
         <div className="mb-3 title text-xs">Query</div>
         <EditableTable
+          testId="query-params"
           columns={queryColumns}
           rows={queryParams || []}
           onChange={handleQueryParamsChange}

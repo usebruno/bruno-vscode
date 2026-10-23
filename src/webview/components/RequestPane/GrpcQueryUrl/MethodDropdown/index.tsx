@@ -201,7 +201,7 @@ const MethodDropdown = ({
                         } ${isFocused ? 'method-dropdown-method-item--focused' : ''}`}
                         onClick={() => handleGrpcMethodSelect(method)}
                         data-index={globalMethodIndex}
-                        data-testid="grpc-method-item"
+                        data-testid={`grpc-method-item-${method.methodName}`}
                       >
                         <div className="method-dropdown-method-content">
                           <div className="method-dropdown-method-icon">

@@ -409,7 +409,7 @@ const EnvironmentVariables = ({
               const isLastEmptyRow = isLastRow && isEmptyRow;
 
               return (
-                <tr key={variable.uid} data-testid={`env-var-row-${variable.name}`}>
+                <tr key={variable.uid} data-testid={isLastEmptyRow ? 'env-var-row-new' : `env-var-row-${variable.name}`}>
                   <td className="text-center">
                     {!isLastEmptyRow && (
                       <input

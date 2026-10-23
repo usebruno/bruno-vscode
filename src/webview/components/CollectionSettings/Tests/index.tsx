@@ -51,7 +51,7 @@ const Tests = ({
       </div>
 
       <div className="mt-6 shrink-0">
-        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-save">
+        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-tests-save">
           Save
         </Button>
       </div>

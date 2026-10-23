@@ -92,6 +92,7 @@ const RequestHeaders = ({
   return (
     <StyledWrapper className="w-full">
       <EditableTable
+        testId="request-headers"
         columns={columns}
         rows={headers || []}
         onChange={handleHeadersChange}

@@ -33,7 +33,7 @@ const Timeline = ({
               data-testid={`timeline-chip-${chip.id}`}
             >
               {chip.label}
-              <span className="timeline-chip-count" data-testid="timeline-chip-count">{counts[chip.id] ?? 0}</span>
+              <span className="timeline-chip-count" data-testid={`timeline-chip-count-${chip.id}`}>{counts[chip.id] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -53,7 +53,7 @@ const Timeline = ({
 
             if (isGrpcRequest) {
               return (
-                <div key={key} className="timeline-event" data-testid="timeline-item">
+                <div key={key} className="timeline-event" data-testid={`timeline-event-${key}`}>
                   <GrpcTimelineItem
                     timestamp={eventTimestamp}
                     request={request}
@@ -68,7 +68,7 @@ const Timeline = ({
             }
 
             return (
-              <div key={key} className="timeline-event" data-testid="timeline-item">
+              <div key={key} className="timeline-event" data-testid={`timeline-event-${key}`}>
                 <TimelineItem
                   timestamp={timestamp}
                   request={request}
@@ -82,7 +82,7 @@ const Timeline = ({
 
           if (entry.type === 'oauth2' && entry._oauth2Child) {
             return (
-              <div key={key} className="timeline-event" data-testid="timeline-item">
+              <div key={key} className="timeline-event" data-testid={`timeline-event-${key}`}>
                 <TimelineItem
                   timestamp={entry.timestamp}
                   request={entry._oauth2Child.request}

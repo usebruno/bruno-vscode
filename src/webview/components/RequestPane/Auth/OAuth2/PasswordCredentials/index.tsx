@@ -134,9 +134,9 @@ const OAuth2PasswordCredentials = ({
           </div>
         );
       })}
-      <div className="flex items-center gap-4 w-full" key="input-credentials-placement" data-testid="oauth2-field-credentialsPlacement">
+      <div className="flex items-center gap-4 w-full" key="input-credentials-placement" data-testid="oauth2-field-password-credentialsPlacement">
         <label className="block min-w-[140px]">Add Credentials to</label>
-        <div className="inline-flex items-center cursor-pointer token-placement-selector" data-testid="oauth2-credentials-placement-selector">
+        <div className="inline-flex items-center cursor-pointer token-placement-selector" data-testid="oauth2-password-credentials-placement-selector">
           <Dropdown onCreate={onDropdownCreate} icon={<CredentialsPlacementIcon />} placement="bottom-end">
             <div
               className="dropdown-item"

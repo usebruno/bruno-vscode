@@ -87,6 +87,7 @@ const AuthMode = ({
     <StyledWrapper>
       <div className="inline-flex items-center cursor-pointer auth-mode-selector" data-testid="oauth2-auth-mode-selector">
         <MenuDropdown
+          data-testid="request-auth-mode"
           items={menuItems}
           placement="bottom-end"
           selectedItemId={authMode}

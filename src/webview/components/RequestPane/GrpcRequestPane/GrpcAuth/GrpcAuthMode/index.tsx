@@ -72,6 +72,7 @@ const GrpcAuthMode = ({
     <StyledWrapper>
       <div className="inline-flex items-center cursor-pointer auth-mode-selector">
         <MenuDropdown
+          data-testid="grpc-auth-mode"
           items={menuItems}
           placement="bottom-end"
           selectedItemId={authMode}

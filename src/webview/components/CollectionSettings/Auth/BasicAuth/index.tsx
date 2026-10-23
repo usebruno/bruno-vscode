@@ -55,7 +55,7 @@ const BasicAuth = ({
   return (
     <StyledWrapper className="mt-2 w-full">
       <label className="block mb-1">Username</label>
-      <div className="single-line-editor-wrapper mb-3" data-testid="auth-basic-username">
+      <div className="single-line-editor-wrapper mb-3" data-testid="collection-auth-basic-username">
         <SingleLineEditor
           value={basicAuth.username || ''}
           theme={storedTheme}
@@ -67,7 +67,7 @@ const BasicAuth = ({
       </div>
 
       <label className="block mb-1">Password</label>
-      <div className="single-line-editor-wrapper flex items-center" data-testid="auth-basic-password">
+      <div className="single-line-editor-wrapper flex items-center" data-testid="collection-auth-basic-password">
         <SingleLineEditor
           value={basicAuth.password || ''}
           theme={storedTheme}

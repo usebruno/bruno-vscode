@@ -446,7 +446,7 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
         onKeyDown={handleKeyDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        data-testid="sidebar-collection-row"
+        data-testid={`sidebar-collection-row-${collection.name}`}
       >
         <div
           className="flex flex-grow items-center overflow-hidden"
@@ -476,9 +476,9 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
             placement="bottom-start"
             appendTo={dropdownContainerRef?.current || document.body}
             popperOptions={{ strategy: 'fixed' }}
-            data-testid="collection-new-request"
+            data-testid={`collection-new-request-${collection.name}`}
           >
-            <ActionIcon className="collection-actions" data-testid="collection-new-request-btn">
+            <ActionIcon className="collection-actions">
               <IconPlus size={16} strokeWidth={2} />
             </ActionIcon>
           </MenuDropdown>
@@ -489,7 +489,7 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
               placement="bottom-start"
               appendTo={dropdownContainerRef?.current || document.body}
               popperOptions={{ strategy: 'fixed' }}
-              data-testid="collection-actions"
+              data-testid={`collection-actions-${collection.name}`}
             >
               <ActionIcon className="collection-actions">
                 <IconDots size={18} />

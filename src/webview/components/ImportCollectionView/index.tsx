@@ -591,7 +591,7 @@ const ImportCollectionView: React.FC = () => {
   const GroupingDropdownIcon = forwardRef<HTMLDivElement>((props, ref) => {
     const selectedOption = groupingOptions.find((o) => o.value === groupingType);
     return (
-      <div ref={ref} className="current-group" data-testid="grouping-dropdown">
+      <div ref={ref} className="current-group" data-testid="import-collection-group-by">
         <span className="font-medium">{selectedOption?.label}</span>
         <IconCaretDown size={14} fill="currentColor" />
       </div>

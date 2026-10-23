@@ -43,8 +43,8 @@ test.describe('Collection removal', () => {
       });
 
       await test.step('Count total collections', async () => {
-        const ourCollections = sidebarLocators.sidebar.collectionName(/Collection [AB]/);
-        await expect(ourCollections).toHaveCount(1);
+        await expect(rowA).toHaveCount(0);
+        await expect(rowB).toHaveCount(1);
       });
     }
   );

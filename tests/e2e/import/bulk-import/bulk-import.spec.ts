@@ -55,12 +55,12 @@ test.describe('Bulk import', () => {
       await test.step('searching narrows the rows without changing the selection', async () => {
         await importPanel.search().fill('Inventory');
         await expect(rows).toHaveCount(1);
-        await expect(rows.first()).toContainText('Inventory Service');
+        await expect(importPanel.row('Inventory Service')).toBeVisible();
         await expect(selectedCount).toHaveText('2 of 2 selected');
       });
 
       await test.step('deselecting a filtered row drops it from the selection', async () => {
-        await buildCommonLocators(rows.first()).importCollection.rowCheckbox().uncheck();
+        await importPanel.rowCheckbox('Inventory Service').uncheck();
         await expect(selectedCount).toHaveText('1 of 2 selected');
 
         await importPanel.search().fill('');

@@ -178,8 +178,9 @@ const GraphQLRequestPane = ({
   ) : null;
 
   return (
-    <div className="flex flex-col h-full relative" data-testid="request-pane">
+    <div className="flex flex-col h-full relative" data-testid="graphql-request-pane">
       <ResponsiveTabs
+        testId="request-pane-tabs"
         tabs={allTabs}
         activeTab={requestPaneTab}
         onTabSelect={selectTab}

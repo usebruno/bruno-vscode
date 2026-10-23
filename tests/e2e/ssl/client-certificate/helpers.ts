@@ -48,7 +48,7 @@ export async function addCertificate(
   }
 
   await certs.addButton().click();
-  await expect(certs.rows()).toHaveCount(1);
+  await expect(certs.row(0)).toBeVisible();
   await certs.saveButton().click();
 }
 

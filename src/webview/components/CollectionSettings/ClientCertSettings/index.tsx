@@ -166,7 +166,7 @@ const ClientCertSettings = ({
         {!clientCertConfig.length
           ? 'No client certificates added'
           : clientCertConfig.map((clientCert: any, index: any) => (
-              <li key={`client-cert-${index}`} data-testid="client-cert-row" className="flex items-center available-certificates p-2 rounded-lg mb-2">
+              <li key={`client-cert-${index}`} data-testid={`client-cert-row-${index}`} className="flex items-center available-certificates p-2 rounded-lg mb-2">
                 <div className="flex items-center w-full justify-between">
                   <div className="flex w-full items-center">
                     <IconWorld className="mr-2" size={18} strokeWidth={1.5} />
@@ -404,7 +404,7 @@ const ClientCertSettings = ({
             Add
           </Button>
           <div className="h-4 border-l border-gray-600"></div>
-          <Button type="button" size="sm" onClick={handleSave} data-testid="collection-settings-save">
+          <Button type="button" size="sm" onClick={handleSave} data-testid="collection-settings-client-certs-save">
             Save
           </Button>
         </div>

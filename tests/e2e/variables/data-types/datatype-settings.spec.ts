@@ -112,9 +112,9 @@ test.describe('Data types in collection & environment variables', () => {
     ].join('\n'), 'utf8');
 
     // Open folder settings via the folder row's context menu.
-    const folderRow = sidebar.locator('[data-testid="sidebar-collection-item-row"]').filter({ hasText: 'sub' });
+    const folderRow = buildCommonLocators(sidebar).sidebar.collectionItem('sub');
     await folderRow.hover();
-    await folderRow.locator('[data-testid="collection-item-menu"]').click();
+    await buildCommonLocators(sidebar).sidebar.itemMenu('sub').click();
     await sidebar.locator('[role="menuitem"]').filter({ hasText: 'Settings' }).click();
 
     const settings = await frameWith(page, '[data-testid="folder-settings"]');

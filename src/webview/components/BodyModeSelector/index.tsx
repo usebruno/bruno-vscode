@@ -64,6 +64,7 @@ const BodyModeSelector = ({
     <StyledWrapper className={wrapperClassName}>
       <div className={`inline-flex items-center body-mode-selector ${disabled ? 'cursor-default' : 'cursor-pointer'}`}>
         <MenuDropdown
+          data-testid="body-mode-selector"
           items={menuItems}
           placement={placement}
           disabled={disabled}

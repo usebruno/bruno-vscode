@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '../../utils/fixtures';
+import { buildCommonLocators } from '../../utils/page/locators';
 import {
   openBrunoSidebar,
   createCollection,
@@ -50,17 +51,15 @@ test.describe('Cross-format paste', () => {
     // A crash unmounts the tree, so surviving rows prove the sidebar is alive.
     await expect(sidebar.locator('.sidebar-header')).toBeVisible();
     await expect(
-      sidebar.locator('[data-testid="sidebar-collection-row"]').filter({ hasText: sourceCollection })
+      buildCommonLocators(sidebar).sidebar.collectionName(sourceCollection)
     ).toBeVisible();
     await expect(
-      sidebar.locator('[data-testid="sidebar-collection-row"]').filter({ hasText: targetCollection })
+      buildCommonLocators(sidebar).sidebar.collectionName(targetCollection)
     ).toBeVisible();
 
     await expandCollection(sidebar, targetCollection);
     await expect(
-      sidebar
-        .locator('[data-testid="sidebar-collection-item-row"]')
-        .filter({ hasText: requestName })
+      buildCommonLocators(sidebar).sidebar.collectionItem(requestName)
     ).toBeVisible({ timeout: 15_000 });
 
     const ocConfig = walkFiles(tmpDir).find((f) => path.basename(f) === 'opencollection.yml');

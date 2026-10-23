@@ -584,7 +584,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         onFocus={handleFocus}
         onBlur={handleBlur}
         onContextMenu={handleContextMenu}
-        data-testid="sidebar-collection-item-row"
+        data-testid={`sidebar-collection-item-row-${item.name}`}
       >
         <div className="flex items-center h-full w-full">
           {indents && indents.length
@@ -615,7 +615,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
                   style={{  }}
                   onClick={handleFolderCollapse}
                   onDoubleClick={handleFolderDoubleClick}
-                  data-testid="folder-chevron"
+                  data-testid={`folder-chevron-${item.name}`}
                 />
               </ActionIcon>
             ) : null}
@@ -632,7 +632,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
               ref={menuDropdownRef}
               items={menuItems}
               placement="bottom-start"
-              data-testid="collection-item-menu"
+              data-testid={`collection-item-menu-${item.name}`}
               popperOptions={{ strategy: 'fixed' }}
               appendTo={dropdownContainerRef?.current || document.body}
             >

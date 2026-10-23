@@ -166,7 +166,7 @@ const CollectionsSection = () => {
       </ActionIcon>
 
       <MenuDropdown
-        data-testid="collections-header-add-menu"
+        data-testid="add-new-collection-menu"
         items={addDropdownItems}
         placement="bottom-end"
       >
@@ -178,7 +178,7 @@ const CollectionsSection = () => {
       </MenuDropdown>
 
       <MenuDropdown
-        data-testid="collections-header-actions-menu"
+        data-testid="more-collection-actions-menu"
         items={actionsDropdownItems}
         placement="bottom-end"
       >

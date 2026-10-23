@@ -394,6 +394,7 @@ const NewRequest: React.FC<NewRequestProps> = ({ collectionUid, itemUid, onClose
                           method={formik.values.requestMethod}
                           onMethodSelect={(val: string) => formik.setFieldValue('requestMethod', val)}
                           showCaret
+                          dropdownTestId="sidebar-new-request-method"
                         />
                       </div>
                     )}

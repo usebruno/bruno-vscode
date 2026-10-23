@@ -83,6 +83,7 @@ const Headers = ({
         Add request headers that will be sent with every request in this collection.
       </div>
       <EditableTable
+        testId="collection-headers"
         columns={columns}
         rows={headers}
         onChange={handleHeadersChange}
@@ -95,7 +96,7 @@ const Headers = ({
         </button>
       </div>
       <div className="mt-6">
-        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-save">
+        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-headers-save">
           Save
         </Button>
       </div>

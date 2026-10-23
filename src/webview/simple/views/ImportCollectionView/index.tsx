@@ -492,7 +492,7 @@ const ImportCollectionView: React.FC = () => {
   const GroupingDropdownIcon = forwardRef<HTMLDivElement>((props, ref) => {
     const selectedOption = groupingOptions.find((o) => o.value === groupingType);
     return (
-      <div ref={ref} className="current-group" data-testid="grouping-dropdown">
+      <div ref={ref} className="current-group" data-testid="import-collections-group-by">
         <span className="font-medium">{selectedOption?.label}</span>
         <IconCaretDown size={14} fill="currentColor" />
       </div>
@@ -619,7 +619,7 @@ const ImportCollectionView: React.FC = () => {
                 {selectedFiles.map((entry) => {
                   const status = importStatus[entry.uid];
                   return (
-                    <div className="collection-row" key={entry.uid} data-testid="import-collection-row" data-status={status}>
+                    <div className="collection-row" key={entry.uid} data-testid={`import-collection-row-${entry.name}`} data-status={status}>
                       <span className={`status-icon ${status}`}>
                         {status === 'success' && <IconCheck size={16} strokeWidth={2} />}
                         {status === 'error' && <IconX size={16} strokeWidth={2} />}
@@ -706,10 +706,10 @@ const ImportCollectionView: React.FC = () => {
 
                 <div className="collection-list">
                   {visibleFiles.map((entry) => (
-                    <label className="collection-row" key={entry.uid} data-testid="import-collection-row">
+                    <label className="collection-row" key={entry.uid} data-testid={`import-collection-row-${entry.name}`}>
                       <input
                         type="checkbox"
-                        data-testid="import-collection-checkbox"
+                        data-testid={`import-collection-checkbox-${entry.name}`}
                         checked={selectedUids.includes(entry.uid)}
                         onChange={() => toggleCollection(entry.uid)}
                         disabled={isImporting}

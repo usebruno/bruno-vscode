@@ -17,7 +17,7 @@ async function openNetworkTab(editor: Frame): Promise<void> {
 // neither while the pane re-measures. Each step is bounded so a stale attempt can't eat the retries.
 async function openTimelineTab(editor: Frame): Promise<void> {
   const responseTabs = editor.locator('[data-testid="response-pane-tabs"]');
-  const tab = responseTabs.locator('[data-testid="responsive-tab-timeline"]');
+  const tab = responseTabs.getByTestId('response-pane-tabs-timeline');
 
   await expect(async () => {
     if (await tab.count() > 0) {
@@ -92,7 +92,7 @@ test.describe('Response timeline', () => {
     await sendRequest(editor, 200);
     await openTimelineTab(editor);
 
-    const entries = editor.locator('[data-testid="timeline-item"]');
+    const entries = editor.getByTestId(/^timeline-event-/);
     const url = editor.locator('[data-testid="timeline-url"]').first();
     const header = editor.locator('[data-testid="timeline-item-header"]').first();
     const detail = editor.locator('[data-testid="timeline-detail"]').first();
@@ -187,7 +187,7 @@ test.describe('Response timeline', () => {
     await clearResponse(editor);
 
     await openTimelineTab(editor);
-    await expect(editor.locator('[data-testid="timeline-item"]')).toHaveCount(1, { timeout: 10_000 });
+    await expect(editor.getByTestId(/^timeline-event-/)).toHaveCount(1, { timeout: 10_000 });
   });
 
   test('a failed request shows the axios error code as its status', async ({ page, tmpDir }) => {
@@ -204,7 +204,7 @@ test.describe('Response timeline', () => {
     await openTimelineTab(editor);
 
     // Desktop shows the error code here, not the raw axios message.
-    await expect(editor.locator('[data-testid="timeline-item"]').first())
+    await expect(editor.getByTestId(/^timeline-event-/).first())
       .toContainText('ERR_BAD_REQUEST', { timeout: 15_000 });
   });
 

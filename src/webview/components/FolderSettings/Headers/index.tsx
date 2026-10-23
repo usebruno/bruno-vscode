@@ -88,6 +88,7 @@ const Headers = ({
         Request headers that will be sent with every request inside this folder.
       </div>
       <EditableTable
+        testId="folder-headers"
         columns={columns}
         rows={headers}
         onChange={handleHeadersChange}

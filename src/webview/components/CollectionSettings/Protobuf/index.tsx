@@ -140,7 +140,7 @@ const ProtobufSettings = ({
                       <td>
                         <div className="flex items-center">
                           <IconFile size={16} className="file-icon mr-2" />
-                          <span className="file-name" data-testid="protobuf-proto-file-name">
+                          <span className="file-name" data-testid={`protobuf-proto-file-name-${index}`}>
                             {getBasename(collection.pathname, file.path)}
                           </span>
                           {!isValid && <IconAlertCircle size={12} className="invalid-indicator ml-2" />}
@@ -168,7 +168,7 @@ const ProtobufSettings = ({
                             onClick={() => handleRemoveProtoFile(index)}
                             className="action-button remove-button"
                             title="Remove file"
-                            data-testid="protobuf-remove-file-button"
+                            data-testid={`protobuf-remove-file-button-${index}`}
                           >
                             <IconTrash size={14} />
                           </button>
@@ -252,7 +252,7 @@ const ProtobufSettings = ({
                           onChange={() => handleToggleImportPath(index)}
                           className="h-4 w-4"
                           title={importPath.enabled ? 'Disable this import path' : 'Enable this import path'}
-                          data-testid="protobuf-import-path-checkbox"
+                          data-testid={`protobuf-import-path-checkbox-${index}`}
                         />
                       </td>
                       <td>
@@ -286,7 +286,7 @@ const ProtobufSettings = ({
                             onClick={() => handleRemoveImportPath(index)}
                             className="action-button remove-button"
                             title="Remove import path"
-                            data-testid="protobuf-remove-import-path-button"
+                            data-testid={`protobuf-remove-import-path-button-${index}`}
                           >
                             <IconTrash size={14} />
                           </button>
@@ -305,7 +305,7 @@ const ProtobufSettings = ({
       </div>
 
       <div className="mt-6">
-        <Button type="button" size="sm" onClick={handleSave} data-testid="collection-settings-save">
+        <Button type="button" size="sm" onClick={handleSave} data-testid="collection-settings-protobuf-save">
           Save
         </Button>
       </div>

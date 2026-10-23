@@ -287,6 +287,7 @@ const ResponsePane = ({
     <StyledWrapper className="flex flex-col h-full relative">
       <div className="px-4" data-testid="response-pane-tabs">
         <ResponsiveTabs
+          testId="response-pane-tabs"
           tabs={allTabs}
           activeTab={focusedTab.responsePaneTab}
           onTabSelect={selectTab}

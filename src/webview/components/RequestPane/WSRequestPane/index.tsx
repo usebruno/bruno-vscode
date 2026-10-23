@@ -99,25 +99,25 @@ const WSRequestPane = ({
   const activeHeadersLength = headers.filter((header: any) => header.enabled).length;
 
   return (
-    <StyledWrapper className="flex flex-col h-full relative" data-testid="request-pane">
+    <StyledWrapper className="flex flex-col h-full relative" data-testid="ws-request-pane">
       <div className="flex flex-wrap items-center tabs" role="tablist">
-        <div className={getTabClassname('body')} role="tab" data-testid="request-tab-body" onClick={() => selectTab('body')}>
+        <div className={getTabClassname('body')} role="tab" data-testid="ws-request-tab-body" onClick={() => selectTab('body')}>
           Message
         </div>
-        <div className={getTabClassname('headers')} role="tab" data-testid="request-tab-headers" onClick={() => selectTab('headers')}>
+        <div className={getTabClassname('headers')} role="tab" data-testid="ws-request-tab-headers" onClick={() => selectTab('headers')}>
           Headers
           {activeHeadersLength > 0 && <sup className="ml-[.125rem] font-medium">{activeHeadersLength}</sup>}
         </div>
-        <div className={getTabClassname('auth')} role="tab" data-testid="request-tab-auth" onClick={() => selectTab('auth')}>
+        <div className={getTabClassname('auth')} role="tab" data-testid="ws-request-tab-auth" onClick={() => selectTab('auth')}>
           Auth
           {hasAuth && <StatusDot type="default" dataTestId="auth" />}
         </div>
-        <div className={getTabClassname('settings')} role="tab" data-testid="request-tab-settings" onClick={() => selectTab('settings')}>
+        <div className={getTabClassname('settings')} role="tab" data-testid="ws-request-tab-settings" onClick={() => selectTab('settings')}>
           Settings
         </div>
-        <div className={getTabClassname('docs')} role="tab" data-testid="request-tab-docs" onClick={() => selectTab('docs')}>
+        <div className={getTabClassname('docs')} role="tab" data-testid="ws-request-tab-docs" onClick={() => selectTab('docs')}>
           Docs
-          {docs && docs.length > 0 && <StatusDot type="default" />}
+          {docs && docs.length > 0 && <StatusDot type="default" dataTestId="docs" />}
         </div>
       </div>
       <section

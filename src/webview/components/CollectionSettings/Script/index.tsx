@@ -127,7 +127,7 @@ const Script = ({
       </Tabs>
 
       <div className="mt-12">
-        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-save">
+        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-script-save">
           Save
         </Button>
       </div>

@@ -16,7 +16,7 @@ const CodeSnippet = ({ lines }: CodeSnippetProps) => {
           <div
             key={line.lineNumber}
             className={`code-line ${line.isError ? 'highlighted-error' : ''}`}
-            data-testid={line.isError ? 'code-line-error' : 'code-line'}
+            data-testid={`${line.isError ? 'code-line-error' : 'code-line'}-${line.lineNumber}`}
           >
             <span className="code-line-number">{line.lineNumber}</span>
             <span className="code-line-content">

@@ -108,15 +108,15 @@ const HttpRequestPane = ({
 
     return {
       params: activeCounts.params > 0 ? <sup className="font-medium">{activeCounts.params}</sup> : null,
-      body: body.mode !== 'none' ? <StatusDot /> : null,
+      body: body.mode !== 'none' ? <StatusDot dataTestId="body" /> : null,
       headers: activeCounts.headers > 0 ? <sup className="font-medium">{activeCounts.headers}</sup> : null,
       auth: hasAuth ? <StatusDot dataTestId="auth" /> : null,
       vars: activeCounts.vars > 0 ? <sup className="font-medium">{activeCounts.vars}</sup> : null,
-      script: (script.req || script.res) ? (hasScriptError ? <StatusDot type="error" /> : <StatusDot />) : null,
+      script: (script.req || script.res) ? (hasScriptError ? <StatusDot type="error" dataTestId="script" /> : <StatusDot dataTestId="script" />) : null,
       assert: activeCounts.assertions > 0 ? <sup className="font-medium">{activeCounts.assertions}</sup> : null,
-      tests: tests?.length > 0 ? (hasTestError ? <StatusDot type="error" /> : <StatusDot />) : null,
-      docs: docs?.length > 0 ? <StatusDot /> : null,
-      settings: tags?.length > 0 ? <StatusDot /> : null
+      tests: tests?.length > 0 ? (hasTestError ? <StatusDot type="error" dataTestId="tests" /> : <StatusDot dataTestId="tests" />) : null,
+      docs: docs?.length > 0 ? <StatusDot dataTestId="docs" /> : null,
+      settings: tags?.length > 0 ? <StatusDot dataTestId="settings" /> : null
     };
   }, [activeCounts, body.mode, hasAuth, script, item.preRequestScriptErrorMessage, item.postResponseScriptErrorMessage, item.testScriptErrorMessage, tests, docs, tags]);
 
@@ -147,8 +147,9 @@ const HttpRequestPane = ({
   ) : null;
 
   return (
-    <div className="flex flex-col h-full relative" data-testid="request-pane">
+    <div className="flex flex-col h-full relative" data-testid="http-request-pane">
       <ResponsiveTabs
+        testId="request-pane-tabs"
         tabs={allTabs}
         activeTab={requestPaneTab}
         onTabSelect={selectTab}

@@ -45,7 +45,7 @@ const DotEnvTableView = ({
             const isLastEmptyRow = isLastRow && isEmptyRow;
 
             return (
-              <tr key={variable.uid} data-testid={`dotenv-var-row-${variable.name}`}>
+              <tr key={variable.uid} data-testid={isLastEmptyRow ? 'dotenv-var-row-new' : `dotenv-var-row-${variable.name}`}>
                 <td className="align-middle px-[10px] py-[2px]">
                   <div className="flex items-center">
                     <input

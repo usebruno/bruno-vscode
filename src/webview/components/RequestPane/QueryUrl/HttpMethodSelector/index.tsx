@@ -8,7 +8,7 @@ interface HttpMethodSelectorProps {
   method?: string;
   showCaret?: boolean;
   onMethodSelect: (method: string) => void;
-  dropdownTestId?: string;
+  dropdownTestId: string;
 }
 
 interface TriggerButtonProps {
@@ -193,7 +193,7 @@ const HttpMethodSelector = ({
           items={menuItems}
           placement="bottom-start"
           selectedItemId={selectedItemId}
-          {...(dropdownTestId ? { 'data-testid': dropdownTestId } : {})}
+          data-testid={dropdownTestId}
         >
           <TriggerButton method={method} showCaret={showCaret} methodSpanRef={methodSpanRef} />
         </MenuDropdown>

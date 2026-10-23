@@ -35,8 +35,8 @@ test.describe('Effective auth mode resolution', () => {
       await sidebarLocators.sidebar.collectionName(collectionName).click();
       await locators.paneTabs.collectionSettingsTab('auth').click();
       await selectAuthMode(page, 'Basic Auth');
-      await setCodeMirrorValue(page, locators.auth.basicUsernameEditor(), 'bruno');
-      await setCodeMirrorValue(page, locators.auth.basicPasswordEditor(), 'della');
+      await setCodeMirrorValue(page, locators.auth.basicUsernameEditor('collection'), 'bruno');
+      await setCodeMirrorValue(page, locators.auth.basicPasswordEditor('collection'), 'della');
       await locators.saveButton().click();
     });
 

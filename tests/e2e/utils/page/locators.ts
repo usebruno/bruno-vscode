@@ -12,28 +12,24 @@ export type FrameLike = Frame | Page | Locator | FrameLocator;
 export const buildCommonLocators = (frame: FrameLike) => ({
   saveButton: () => frame.getByRole('button', { name: 'Save' }),
   sidebar: {
-    collectionName: (name: string | RegExp) =>
-      frame.getByTestId('sidebar-collection-row').filter({ hasText: name }),
+    collectionName: (name: string) => frame.getByTestId(`sidebar-collection-row-${name}`),
     collectionById: (name: string) =>
       frame
         .locator(`#collection-${name.replace(/\s+/g, '-').toLowerCase()}`)
-        .getByTestId('sidebar-collection-row'),
-    collectionItem: (name: string) =>
-      frame.getByTestId('sidebar-collection-item-row').filter({ hasText: name }),
-    folder: (name: string) => frame.getByTestId('sidebar-collection-item-row').filter({ hasText: name }).first(),
-    folderChevron: () => frame.getByTestId('folder-chevron'),
+        .getByTestId(`sidebar-collection-row-${name}`),
+    collectionItem: (name: string) => frame.getByTestId(`sidebar-collection-item-row-${name}`),
+    folder: (name: string) => frame.getByTestId(`sidebar-collection-item-row-${name}`),
+    folderChevron: (name: string) => frame.getByTestId(`folder-chevron-${name}`),
     addMenu: () => frame.getByTestId('collections-header-add-menu'),
     addMenuCreate: () => frame.getByTestId('collections-header-add-menu-create'),
     openCollectionButton: () => frame.getByTestId('collections-header-add-menu-open'),
     addMenuImport: () => frame.getByTestId('collections-header-add-menu-import'),
-    actionsMenu: () => frame.getByTestId('collection-actions'),
-    actionMenuButton: (id: string) => frame.getByTestId(`collection-actions-${id}`),
-    collectionMenuOptions: (name: string) =>
-      frame.getByTestId('sidebar-collection-row').filter({ hasText: name }).getByTestId('collection-actions'),
-    runCollectionButton: () => frame.getByTestId('collection-actions-run'),
-    actionsItem: (id: string) => frame.getByTestId(`collection-actions-${id}`),
-    itemMenu: () => frame.getByTestId('collection-item-menu'),
-    itemMenuAction: (id: string) => frame.getByTestId(`collection-item-menu-${id}`)
+    actionsMenu: (collectionName: string) => frame.getByTestId(`collection-actions-${collectionName}`),
+    actionMenuButton: (collectionName: string, id: string) => frame.getByTestId(`collection-actions-${collectionName}-${id}`),
+    runCollectionButton: (collectionName: string) => frame.getByTestId(`collection-actions-${collectionName}-run`),
+    actionsItem: (collectionName: string, id: string) => frame.getByTestId(`collection-actions-${collectionName}-${id}`),
+    itemMenu: (name: string) => frame.getByTestId(`collection-item-menu-${name}`),
+    itemMenuAction: (name: string, id: string) => frame.getByTestId(`collection-item-menu-${name}-${id}`)
   },
   importCollection: {
     container: () => frame.getByTestId('import-collection-container'),
@@ -41,8 +37,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     search: () => frame.getByTestId('import-search'),
     selectAll: () => frame.getByTestId('import-select-all'),
     selectedCount: () => frame.getByTestId('import-selected-count'),
-    rows: () => frame.getByTestId('import-collection-row'),
-    rowCheckbox: () => frame.getByTestId('import-collection-checkbox'),
+    rows: () => frame.getByTestId(/^import-collection-row-/),
+    row: (name: string) => frame.getByTestId(`import-collection-row-${name}`),
+    rowCheckbox: (name: string) => frame.getByTestId(`import-collection-checkbox-${name}`),
     location: () => frame.getByTestId('import-collection-location'),
     browse: () => frame.getByTestId('import-browse-button'),
     submit: () => frame.getByTestId('import-submit'),
@@ -61,7 +58,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     // Overview → Requests line, e.g. "2 requests in collection".
     requestsInfo: () => frame.getByTestId('collection-requests-count'),
     requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded'),
-    saveButton: () => frame.getByTestId('collection-settings-save')
+    saveButton: (tab: string) => frame.getByTestId(`collection-settings-${tab}-save`)
   },
   environments: {
     // Environment picker in the collection toolbar.
@@ -70,20 +67,16 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     activeName: () => frame.getByTestId('active-collection-environment'),
     activeGlobalName: () => frame.getByTestId('active-global-environment'),
     inactiveLabel: () => frame.getByTestId('no-active-environment'),
-    dropdownItem: (name: string) =>
-      frame.getByTestId('environment-dropdown-item').filter({ hasText: name }),
-    dropdownItems: () => frame.getByTestId('environment-dropdown-item'),
+    dropdownItem: (name: string) => frame.getByTestId(`environment-dropdown-item-${name}`),
     noEnvironmentOption: () => frame.getByTestId('environment-list-no-environment'),
     emptyState: () => frame.getByTestId('environment-list-empty-state'),
     configureButton: () => frame.getByTestId('environment-configure-button'),
     settingsList: () => frame.getByTestId('environments-list'),
-    settingsItem: (name: string) =>
-      frame.getByTestId('environment-item').filter({ hasText: name }),
-    activeCheckmark: (name: string) =>
-      frame.getByTestId('environment-item').filter({ hasText: name }).getByTestId('environment-active-checkmark'),
+    settingsItem: (name: string) => frame.getByTestId(`environment-item-${name}`),
+    activeCheckmark: (name: string) => frame.getByTestId(`environment-item-${name}`).getByTestId('environment-active-checkmark'),
     scopeTab: (scope: 'collection' | 'global') => frame.getByTestId(`env-tab-${scope}`),
-    createEnvironment: () => frame.getByTestId('create-environment'),
-    nameInput: () => frame.getByTestId('environment-name'),
+    createEnvironment: () => frame.getByTestId('create-global-environment'),
+    nameInput: () => frame.getByTestId('create-global-environment-name'),
     confirmCreate: () => frame.getByTestId('modal-confirm-button'),
     newVarNameInput: () => frame.getByTestId('env-var-name-new'),
     varValueEditor: (name: string) => frame.getByTestId(`env-var-row-${name}`).locator('.CodeMirror'),
@@ -126,19 +119,15 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     pathValueCell: () =>
       frame
         .getByTestId('path-params-table')
-        .getByTestId('column-value')
+        .getByTestId('column-value-0')
         .locator('.CodeMirror-line')
         .first()
   },
   // The "+" transient-request menu on a collection row.
   newRequestMenu: {
-    addButton: (collectionName: string) =>
-      frame
-        .getByTestId('sidebar-collection-row')
-        .filter({ hasText: collectionName })
-        .getByTestId('collection-new-request'),
+    addButton: (collectionName: string) => frame.getByTestId(`collection-new-request-${collectionName}`),
     // Menu option by request type: http | graphql | grpc | ws.
-    option: (type: string) => frame.getByTestId(`collection-new-request-new-${type}`)
+    option: (collectionName: string, type: string) => frame.getByTestId(`collection-new-request-${collectionName}-new-${type}`)
   },
   // VS Code workbench UI (not a webview) — pass the page to the factory.
   workbench: {
@@ -165,21 +154,22 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   tabs: {
     // Request-pane tab; the response pane reuses keys like `headers`.
     byKey: (key: string) => {
-      const pane = frame.getByTestId('request-pane');
-      return pane.getByTestId(`responsive-tab-${key}`).or(pane.getByTestId(`request-tab-${key}`));
+      return frame
+        .getByTestId(`request-pane-tabs-${key}`)
+        .or(frame.getByTestId(`grpc-request-tab-${key}`))
+        .or(frame.getByTestId(`ws-request-tab-${key}`));
     },
     byText: (text: string) => frame.locator('div[role="tab"]').filter({ hasText: text }),
     more: () => frame.locator('.more-tabs')
   },
-  // Key/value EditableTable (headers, params, vars). Cell lookups are meant to be
-  // scoped to a row, i.e. buildCommonLocators(row).editableTable.columnValueEditor().
+  // Key/value EditableTable (headers, params, vars). Cell lookups take the row index
+  // and are meant to be scoped to a table, e.g. buildCommonLocators(table).editableTable.
   editableTable: {
-    rows: () => frame.getByTestId('editable-table').locator('tbody tr'),
-    firstTableRows: () => frame.getByTestId('editable-table').first().locator('tbody tr'),
-    columnNameEditor: () => frame.getByTestId('column-name').locator('.CodeMirror'),
-    columnNameInput: () => frame.getByTestId('column-name').locator('input'),
-    columnValueEditor: () => frame.getByTestId('column-value').locator('.CodeMirror'),
-    columnCheckbox: () => frame.getByTestId('column-checkbox')
+    rows: (tableId: string) => frame.getByTestId(tableId).locator('tbody tr'),
+    columnNameEditor: (rowIndex: number) => frame.getByTestId(`column-name-${rowIndex}`).locator('.CodeMirror'),
+    columnNameInput: (rowIndex: number) => frame.getByTestId(`column-name-${rowIndex}`).locator('input'),
+    columnValueEditor: (rowIndex: number) => frame.getByTestId(`column-value-${rowIndex}`).locator('.CodeMirror'),
+    columnCheckbox: (rowIndex: number) => frame.getByTestId(`column-checkbox-${rowIndex}`)
   },
   varsTable: {
     rows: (scope: 'request' | 'collection' | 'folder', kind: 'req' | 'res' = 'req') =>
@@ -188,9 +178,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   auth: {
     modeSelector: () => frame.locator('.auth-mode-selector'),
     inheritedMode: () => frame.locator('.inherit-mode-text'),
-    bearerTokenEditor: () => frame.getByTestId('auth-bearer-token').locator('.CodeMirror'),
-    basicUsernameEditor: () => frame.getByTestId('auth-basic-username').locator('.CodeMirror'),
-    basicPasswordEditor: () => frame.getByTestId('auth-basic-password').locator('.CodeMirror'),
+    bearerTokenEditor: (level: 'collection' | 'request') => frame.getByTestId(`${level}-auth-bearer-token`).locator('.CodeMirror'),
+    basicUsernameEditor: (level: 'collection' | 'request') => frame.getByTestId(`${level}-auth-basic-username`).locator('.CodeMirror'),
+    basicPasswordEditor: (level: 'collection' | 'request') => frame.getByTestId(`${level}-auth-basic-password`).locator('.CodeMirror'),
     awsAccessKeyIdEditor: () => frame.getByTestId('auth-awsv4-access-key-id').locator('.CodeMirror'),
     awsSecretAccessKeyEditor: () => frame.getByTestId('auth-awsv4-secret-access-key').locator('.CodeMirror'),
     awsServiceEditor: () => frame.getByTestId('auth-awsv4-service').locator('.CodeMirror'),
@@ -223,7 +213,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   oauth2: {
     authModeSelector: () => frame.getByTestId('oauth2-auth-mode-selector'),
     grantTypeSelector: () => frame.getByTestId('oauth2-grant-type-selector'),
-    credentialsPlacementSelector: () => frame.getByTestId('oauth2-credentials-placement-selector'),
+    credentialsPlacementSelector: () => frame.getByTestId('oauth2-client-credentials-placement-selector'),
     field: (key: string) => frame.getByTestId(`oauth2-field-${key}`),
     getTokenBtn: () => frame.getByTestId('oauth2-get-token-btn'),
     tokenTitle: () => frame.getByTestId('oauth2-token-title')
@@ -240,8 +230,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     methodDropdownTrigger: () => frame.getByTestId('grpc-method-dropdown-trigger'),
     methodsList: () => frame.getByTestId('grpc-methods-list'),
     methodsSearchInput: () => frame.getByTestId('grpc-methods-search-input'),
-    methodItems: () => frame.getByTestId('grpc-method-item'),
-    methodItem: (text: string) => frame.getByTestId('grpc-method-item').filter({ hasText: text }),
+    methodItems: () => frame.getByTestId(/^grpc-method-item-/),
+    methodItem: (methodName: string) => frame.getByTestId(`grpc-method-item-${methodName}`),
     methodsEmptyState: () => frame.getByTestId('grpc-methods-empty-state'),
     selectedMethodName: () => frame.getByTestId('selected-grpc-method-name'),
     messageEditor: () => frame.getByTestId('grpc-messages-container').locator('.CodeMirror-wrap').first(),
@@ -257,7 +247,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     modal: () => frame.getByTestId('prompt-variables-modal-content'),
     input: (index: number) => frame.getByTestId(`prompt-variable-input-${index}`),
     // One container per unique prompt — used to assert how many prompts were asked.
-    inputContainers: () => frame.getByTestId('prompt-variable-input-container'),
+    inputContainers: () => frame.getByTestId(/^prompt-variable-input-container-/),
     continueButton: () => frame.locator('.submit').filter({ hasText: 'Continue' })
   },
   response: {
@@ -269,14 +259,14 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   },
   clientCerts: {
     emptyMessage: () => frame.getByText('No client certificates added'),
-    rows: () => frame.getByTestId('client-cert-row'),
+    row: (index: number) => frame.getByTestId(`client-cert-row-${index}`),
     domainInput: () => frame.getByTestId('client-cert-domain'),
     pfxRadio: () => frame.getByTestId('client-cert-type-pfx'),
     filePicker: (field: string) => frame.getByTestId(`client-cert-file-${field}`),
     pickedFile: (field: string) => frame.getByTestId(`client-cert-file-name-${field}`),
     passphraseEditor: () => frame.getByTestId('client-cert-passphrase').locator('.CodeMirror'),
     addButton: () => frame.getByTestId('add-client-cert'),
-    saveButton: () => frame.getByTestId('collection-settings-save')
+    saveButton: () => frame.getByTestId('collection-settings-client-certs-save')
   },
   modal: {
     confirm: () => frame.getByTestId('modal-confirm-button'),

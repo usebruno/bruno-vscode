@@ -357,7 +357,7 @@ const QueryUrl = ({
   return (
     <StyledWrapper className="flex items-center w-full">
       <div className="flex items-center h-full min-w-fit">
-        <HttpMethodSelector method={method} onMethodSelect={onMethodSelect} />
+        <HttpMethodSelector method={method} onMethodSelect={onMethodSelect} dropdownTestId="request-method" />
       </div>
       <div
         id="request-url"

@@ -222,6 +222,7 @@ const MultipartFormParams = ({
   return (
     <StyledWrapper className="w-full">
       <EditableTable
+        testId="multipart-form-params"
         columns={columns}
         rows={params || []}
         onChange={handleParamsChange}

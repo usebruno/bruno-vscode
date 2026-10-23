@@ -28,6 +28,7 @@ const areTabArraysEqual = (a: any, b: any) => {
 };
 
 const ResponsiveTabs = ({
+  testId,
   tabs,
   activeTab,
   onTabSelect,
@@ -202,7 +203,7 @@ const ResponsiveTabs = ({
         key={tab.key}
         role="tab"
         aria-selected={isActive}
-        data-testid={`responsive-tab-${tab.key}`}
+        data-testid={`${testId}-${tab.key}`}
         className={classnames('tab select-none', tab.key, { active: isActive })}
         onClick={() => handleTabSelect(tab.key)}
       >
@@ -258,6 +259,7 @@ const ResponsiveTabs = ({
             items={overflowMenuItems}
             placement="bottom-start"
             selectedItemId={activeTab}
+            data-testid={`${testId}-menu`}
           >
             <div className="more-tabs select-none flex items-center cursor-pointer gap-1">
               <IconChevronsRight size={18} strokeWidth={2} />

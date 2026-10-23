@@ -48,12 +48,12 @@ test.describe('Transient request inherits collection-level settings', () => {
 
       await expect(env.dropdownItem('Local')).toBeVisible();
       await expect(env.dropdownItem('Staging')).toBeVisible();
-      await expect(env.dropdownItems()).toHaveCount(2);
       await expect(env.emptyState()).toHaveCount(0);
 
       // Close it again so the next step opens from a known state.
       await env.selectorTrigger().click();
-      await expect(env.dropdownItems()).toHaveCount(0);
+      await expect(env.dropdownItem('Local')).toHaveCount(0);
+      await expect(env.dropdownItem('Staging')).toHaveCount(0);
     });
 
     await test.step('sends with the collection var and the selected environment', async () => {

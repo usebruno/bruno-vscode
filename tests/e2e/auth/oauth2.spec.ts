@@ -77,8 +77,8 @@ async function fillClientCredentialsAndFetchToken(
     await fillOAuth2Field(page, editor, 'scope', scope);
   }
 
-  await expect(editor.locator('[data-testid="oauth2-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
-  await selectDropdownItem(editor, '[data-testid="oauth2-credentials-placement-selector"]', credentialsPlacement);
+  await expect(editor.locator('[data-testid="oauth2-client-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
+  await selectDropdownItem(editor, '[data-testid="oauth2-client-credentials-placement-selector"]', credentialsPlacement);
 
   const getTokenBtn = editor.locator('[data-testid="oauth2-get-token-btn"]');
   await expect(getTokenBtn).toBeEnabled({ timeout: 5_000 });
@@ -138,8 +138,8 @@ test.describe('OAuth2 Authentication', () => {
     await fillOAuth2Field(page, editor, 'clientId', 'test-client');
     await fillOAuth2Field(page, editor, 'clientSecret', 'test-secret');
 
-    await expect(editor.locator('[data-testid="oauth2-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
-    await selectDropdownItem(editor, '[data-testid="oauth2-credentials-placement-selector"]', 'Request Body');
+    await expect(editor.locator('[data-testid="oauth2-password-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
+    await selectDropdownItem(editor, '[data-testid="oauth2-password-credentials-placement-selector"]', 'Request Body');
 
     const getTokenBtn = editor.locator('[data-testid="oauth2-get-token-btn"]');
     await expect(getTokenBtn).toBeEnabled({ timeout: 5_000 });
@@ -161,8 +161,8 @@ test.describe('OAuth2 Authentication', () => {
     await fillOAuth2Field(page, editor, 'clientId', 'test-client');
     await fillOAuth2Field(page, editor, 'clientSecret', 'test-secret');
 
-    await expect(editor.locator('[data-testid="oauth2-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
-    await selectDropdownItem(editor, '[data-testid="oauth2-credentials-placement-selector"]', 'Basic Auth Header');
+    await expect(editor.locator('[data-testid="oauth2-password-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
+    await selectDropdownItem(editor, '[data-testid="oauth2-password-credentials-placement-selector"]', 'Basic Auth Header');
 
     const getTokenBtn = editor.locator('[data-testid="oauth2-get-token-btn"]');
     await expect(getTokenBtn).toBeEnabled({ timeout: 5_000 });
@@ -194,8 +194,8 @@ test.describe('OAuth2 Authentication', () => {
     await fillOAuth2Field(page, editor, 'clientId', 'test-client');
     await fillOAuth2Field(page, editor, 'clientSecret', 'test-secret');
 
-    await expect(editor.locator('[data-testid="oauth2-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
-    await selectDropdownItem(editor, '[data-testid="oauth2-credentials-placement-selector"]', 'Request Body');
+    await expect(editor.locator('[data-testid="oauth2-client-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
+    await selectDropdownItem(editor, '[data-testid="oauth2-client-credentials-placement-selector"]', 'Request Body');
 
     // Change token placement to URL
     await selectDropdownItem(editor, '[data-testid="oauth2-token-placement-selector"]', 'URL');
@@ -239,8 +239,8 @@ test.describe('OAuth2 Authentication', () => {
     await fillOAuth2Field(page, editor, 'clientSecret', 'test-secret');
     await fillOAuth2Field(page, editor, 'refreshTokenUrl', `${TEST_SERVER}/api/auth/oauth2/refresh`);
 
-    await expect(editor.locator('[data-testid="oauth2-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
-    await selectDropdownItem(editor, '[data-testid="oauth2-credentials-placement-selector"]', 'Request Body');
+    await expect(editor.locator('[data-testid="oauth2-client-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
+    await selectDropdownItem(editor, '[data-testid="oauth2-client-credentials-placement-selector"]', 'Request Body');
 
     const getTokenBtn = editor.locator('[data-testid="oauth2-get-token-btn"]');
     await expect(getTokenBtn).toBeEnabled({ timeout: 5_000 });
@@ -343,8 +343,8 @@ test.describe('OAuth2 Authentication', () => {
 
     await fillOAuth2Field(page, editor, 'accessTokenUrl', `${TEST_SERVER}/api/auth/oauth2/client_credentials/token`);
 
-    await expect(editor.locator('[data-testid="oauth2-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
-    await selectDropdownItem(editor, '[data-testid="oauth2-credentials-placement-selector"]', 'Request Body');
+    await expect(editor.locator('[data-testid="oauth2-client-credentials-placement-selector"]')).toBeVisible({ timeout: 5_000 });
+    await selectDropdownItem(editor, '[data-testid="oauth2-client-credentials-placement-selector"]', 'Request Body');
 
     const getTokenBtn = editor.locator('[data-testid="oauth2-get-token-btn"]');
     await expect(getTokenBtn).toBeEnabled({ timeout: 5_000 });

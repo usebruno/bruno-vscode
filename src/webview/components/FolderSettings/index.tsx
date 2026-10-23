@@ -95,11 +95,11 @@ const FolderSettings = ({
           </div>
           <div className={getTabClassname('script')} role="tab" onClick={() => setTab('script')}>
             Script
-            {hasScripts && <StatusDot />}
+            {hasScripts && <StatusDot dataTestId="script" />}
           </div>
           <div className={getTabClassname('test')} role="tab" onClick={() => setTab('test')}>
             Test
-            {hasTests && <StatusDot />}
+            {hasTests && <StatusDot dataTestId="tests" />}
           </div>
           <div className={getTabClassname('vars')} role="tab" onClick={() => setTab('vars')}>
             Vars

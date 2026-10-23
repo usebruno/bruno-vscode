@@ -660,7 +660,7 @@ const EnvironmentList = ({
                   className={`environment-item ${activeView === 'environment' && selectedEnvironment?.uid === env.uid ? 'active' : ''} ${renamingEnvUid === env.uid ? 'renaming' : ''} ${activeEnvironmentUid === env.uid ? 'activated' : ''}`}
                   onClick={() => renamingEnvUid !== env.uid && handleEnvironmentClick(env)}
                   onDoubleClick={() => handleEnvironmentDoubleClick(env)}
-                  data-testid="environment-item"
+                  data-testid={`environment-item-${env.name}`}
                 >
                   {renamingEnvUid === env.uid ? (
                     <div className="rename-container" ref={renameContainerRef}>
