@@ -2371,8 +2371,8 @@ const registerNetworkIpc = (): void => {
 
         deleteCancelToken(cancelTokenUid);
         setRuntimeVariables(collectionUid, runnerRuntimeVariables);
-      broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
-      sendToWebview('main:run-folder-event', {
+        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
+        sendToWebview('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,
           folderUid,
