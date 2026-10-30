@@ -3,13 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { generateUidBasedOnHash } from '../utils/common';
 import { getCollectionFormat } from '../utils/filesystem';
-
-interface BrunoConfig {
-  name: string;
-  version?: string;
-  type?: string;
-  ignore?: string[];
-}
+import { findWorkspaceCollections } from '../utils/workspace-collections';
 
 interface TreeItemData {
   uid: string;
@@ -135,57 +129,15 @@ export class WorkspaceCollectionsProvider implements vscode.TreeDataProvider<Bru
       return;
     }
 
-    for (const folder of workspaceFolders) {
-      this.scanForCollections(folder.uri.fsPath, 0);
-    }
+    this.collections = findWorkspaceCollections().map((collection) => ({
+      uid: generateUidBasedOnHash(collection.path),
+      name: collection.name,
+      type: 'collection',
+      path: collection.path,
+      collectionPath: collection.path
+    }));
 
     this.setupWatchers();
-  }
-
-  private scanForCollections(dirPath: string, depth: number): void {
-    if (depth > 5) return;
-
-    try {
-      const brunoJsonPath = path.join(dirPath, 'bruno.json');
-      const ocYmlPath = path.join(dirPath, 'opencollection.yml');
-
-      if (fs.existsSync(brunoJsonPath)) {
-        try {
-          const configContent = fs.readFileSync(brunoJsonPath, 'utf8');
-          const config: BrunoConfig = JSON.parse(configContent);
-
-          this.collections.push({
-            uid: generateUidBasedOnHash(dirPath),
-            name: config.name || path.basename(dirPath),
-            type: 'collection',
-            path: dirPath,
-            collectionPath: dirPath
-          });
-
-          return;
-        } catch {
-        }
-      } else if (fs.existsSync(ocYmlPath)) {
-        // OpenCollection YML format
-        this.collections.push({
-          uid: generateUidBasedOnHash(dirPath),
-          name: path.basename(dirPath),
-          type: 'collection',
-          path: dirPath,
-          collectionPath: dirPath
-        });
-
-        return;
-      }
-
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-          this.scanForCollections(path.join(dirPath, entry.name), depth + 1);
-        }
-      }
-    } catch {
-    }
   }
 
   private async scanDirectory(dirPath: string, collectionPath: string): Promise<TreeItemData[]> {

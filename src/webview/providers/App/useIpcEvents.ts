@@ -219,8 +219,8 @@ const useIpcEvents = () => {
     // IMPORTANT: Register main:collection-opened and main:workspace-opened listeners FIRST
     // because queued events are replayed in listener registration order.
     // The collection must exist before tree-updated events can populate it.
-    const removeOpenCollectionListener = ipcRenderer.on('main:collection-opened', (pathname: unknown, uid: unknown, brunoConfig: unknown, shouldPersist: unknown = true) => {
-      dispatch(openCollectionEvent(uid as string, pathname as string, brunoConfig, shouldPersist === true));
+    const removeOpenCollectionListener = ipcRenderer.on('main:collection-opened', (pathname: unknown, uid: unknown, brunoConfig: unknown, shouldPersist: unknown = true, sessionOnly: unknown = false) => {
+      dispatch(openCollectionEvent(uid as string, pathname as string, brunoConfig, shouldPersist === true, sessionOnly === true));
     });
 
     const removeOpenWorkspaceListener = ipcRenderer.on('main:workspace-opened', (workspacePath, workspaceUid, workspaceConfig) => {

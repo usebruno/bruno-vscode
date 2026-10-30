@@ -23,6 +23,8 @@ export interface VSCodeFixture {
 
 export interface VSCodeOptions {
   vscodeSettings: Record<string, unknown>;
+  /** A folder whose contents are copied into the workspace folder before VS Code starts */
+  workspaceFixture: string | null;
 }
 
 async function getFreePort(): Promise<number> {
@@ -155,13 +157,17 @@ async function waitForWorkbench(page: Page): Promise<void> {
 
 export const test = base.extend<VSCodeFixture & VSCodeOptions>({
   vscodeSettings: [{}, { option: true }],
+  workspaceFixture: [null, { option: true }],
 
-  page: async ({ vscodeSettings }, use) => {
+  page: async ({ vscodeSettings, workspaceFixture }, use) => {
     const debugPort = await getFreePort();
     const userDataDir = makeTempDir('bruno-vscode-test-');
 
     // Create a temp workspace folder so the extension host has a workspace to run against
     const workspacePath = makeTempDir('bruno-workspace-');
+    if (workspaceFixture) {
+      fs.cpSync(workspaceFixture, workspacePath, { recursive: true });
+    }
 
     writeVSCodeSettings(userDataDir, vscodeSettings);
 
