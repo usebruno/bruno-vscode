@@ -968,6 +968,10 @@ class CollectionWatcher {
     const format = getCollectionFormat(collectionPath);
     if (hasRequestExtension(pathname, format)) {
       await this.handleRequestFile(pathname, collectionUid, collectionPath);
+      // A create event also fires when an existing file is replaced (atomic saves, git checkout).
+      // handleRequestFile sends metadata only, which a request already parsed in an open tab keeps
+      // ignoring, so also send the full content: the change handler updates it and keeps any draft.
+      await this.handleRequestFileChange(pathname, collectionUid, collectionPath);
     }
   }
 
