@@ -63,5 +63,12 @@ export default defineConfig({
     chunkSplit: {
       strategy: 'split-by-experience'
     }
+  },
+  tools: {
+    rspack: (_config, { addRules }) => {
+      // The webview CSP has no `blob:`/`data:` in connect-src, so a wasm module cannot be fetched at
+      // runtime — inline it as a data URI and instantiate from bytes instead.
+      addRules([{ test: /\.wasm$/, type: 'asset/inline' }]);
+    }
   }
 });
