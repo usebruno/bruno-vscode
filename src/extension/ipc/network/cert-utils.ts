@@ -53,7 +53,7 @@ interface CertsAndProxyConfigParams {
   collection: Collection;
   request: Request;
   envVars: Record<string, unknown>;
-  runtimeVariables: Record<string, string>;
+  runtimeVariables: Record<string, unknown>;
   processEnvVars: Record<string, string>;
   collectionPath: string;
   globalEnvironmentVariables: Record<string, unknown>;

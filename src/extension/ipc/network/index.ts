@@ -1,7 +1,7 @@
 
 import { AxiosResponse, AxiosError } from 'axios';
 import decomment from 'decomment';
-import { registerHandler, sendToWebview } from '../handlers';
+import { registerHandler, sendToWebview, broadcastToAllWebviews } from '../handlers';
 import { prepareRequest, BrunoRequest as PrepareRequestType } from './prepare-request';
 import { interpolateVars } from './interpolate-vars';
 import { createAxiosInstance, axiosOptionsFromCertsAndProxyConfig, AxiosInstanceOptions } from './axios-instance';
@@ -14,6 +14,7 @@ import { readFileBody, getSelectedFileBodyEntry, DEFAULT_FILE_BODY_CONTENT_TYPE 
 import { safeStringifyJSON } from '../../utils/common';
 import { getPreferences, preferencesUtil } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
+import { getRuntimeVariables, setRuntimeVariables } from '../../store/runtime-variables';
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, hydrateRequestWithUuid, Item } from '../../utils/collection';
 import { getCollectionFormat } from '../../utils/filesystem';
@@ -36,6 +37,16 @@ import qs from 'qs';
 const brunoUtils = brunoUtilsRaw as {
   buildFormUrlEncodedPayload: (fields: Array<{ name: string; value: string; enabled?: boolean }>) => string;
   encodeUrl: (url: string) => string;
+};
+
+const broadcastRuntimeVariables = (
+  collectionUid: string,
+  runtimeVariables: Record<string, unknown>
+): void => {
+  broadcastToAllWebviews('main:runtime-variables-update', {
+    collectionUid,
+    runtimeVariables
+  });
 };
 
 const getJsSandboxRuntime = (collection: Record<string, unknown>): string => {
@@ -865,7 +876,7 @@ const notifyScriptExecution = (
 const registerNetworkIpc = (): void => {
   // Main HTTP request handler - called by webview
   registerHandler('send-http-request', async (args) => {
-    const [item, collection, environment, runtimeVariables] = args as [unknown, unknown, unknown, Record<string, string>];
+    const [item, collection, environment] = args as [unknown, unknown, unknown, Record<string, string>];
 
     const _collection = collection as Record<string, unknown>;
     const _item = item as Record<string, unknown>;
@@ -876,8 +887,7 @@ const registerNetworkIpc = (): void => {
     const requestUid = (_item.requestUid as string) || itemUid;
     const cancelTokenUid = uuidv4();
 
-    // Mutable copy of runtime variables for script execution
-    const mutableRuntimeVariables: Record<string, unknown> = { ...(runtimeVariables || {}) };
+    const mutableRuntimeVariables: Record<string, unknown> = { ...getRuntimeVariables(collectionUid) };
 
     try {
       const envVars = getEnvVars(environment as never);
@@ -1282,6 +1292,9 @@ const registerNetworkIpc = (): void => {
       } catch (testError) {
         console.error('Tests error:', testError);
       }
+
+      setRuntimeVariables(collectionUid, mutableRuntimeVariables);
+      broadcastRuntimeVariables(collectionUid, mutableRuntimeVariables);
 
       return {
         status: result.status,
@@ -1739,7 +1752,7 @@ const registerNetworkIpc = (): void => {
   // Run collection folder - executes all requests in a folder sequentially
   // Based on bruno-electron's implementation
   registerHandler('renderer:run-collection-folder', async (args) => {
-    const [folder, collection, environment, runtimeVariables, recursive, delay, tags, selectedRequestUids] = args as [
+    const [folder, collection, environment, _runtimeVariables, recursive, delay, tags, selectedRequestUids] = args as [
       Record<string, unknown> | null,
       Record<string, unknown>,
       Record<string, unknown> | null,
@@ -1757,8 +1770,7 @@ const registerNetworkIpc = (): void => {
 
     const envVars = getEnvVars(environment as never);
 
-    // Make a mutable copy of runtime variables for script execution
-    const runnerRuntimeVariables: Record<string, unknown> = { ...(runtimeVariables || {}) };
+    const runnerRuntimeVariables: Record<string, unknown> = { ...getRuntimeVariables(collectionUid) };
 
     const abortController = new AbortController();
     saveCancelToken(cancelTokenUid, abortController);
@@ -2358,6 +2370,8 @@ const registerNetworkIpc = (): void => {
         }
 
         deleteCancelToken(cancelTokenUid);
+        setRuntimeVariables(collectionUid, runnerRuntimeVariables);
+        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
         sendToWebview('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,
@@ -2367,6 +2381,8 @@ const registerNetworkIpc = (): void => {
 
       } catch (error) {
         deleteCancelToken(cancelTokenUid);
+        setRuntimeVariables(collectionUid, runnerRuntimeVariables);
+        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
         sendToWebview('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,
