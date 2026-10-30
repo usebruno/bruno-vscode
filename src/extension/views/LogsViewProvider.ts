@@ -24,18 +24,18 @@ export class LogsViewProvider implements vscode.WebviewViewProvider {
     webviewView.title = 'Bruno Logs';
 
     webviewView.webview.onDidReceiveMessage((message) => {
-      if (message.command === 'clearLogs') {
+      if (message.command === 'ready') {
+        // The webview's document is recreated every time the view is shown again, so it
+        // asks for the logs on each load instead of relying on a one-time push.
+        this._sendLogs();
+      } else if (message.command === 'clearLogs') {
         vscode.commands.executeCommand('bruno.clearLogs');
       }
     });
 
-    // Push initial logs once webview is ready, then listen for changes
     this._disposables.push(
       logsStore.onLogsChanged(() => this._sendLogs())
     );
-
-    // Slight delay to ensure the webview JS is ready
-    setTimeout(() => this._sendLogs(), 300);
   }
 
   private _sendLogs(): void {
@@ -304,6 +304,8 @@ export class LogsViewProvider implements vscode.WebviewViewProvider {
         renderLogs();
       }
     });
+
+    vscode.postMessage({ command: 'ready' });
   </script>
 </body>
 </html>`;
