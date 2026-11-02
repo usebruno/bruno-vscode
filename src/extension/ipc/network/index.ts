@@ -1752,11 +1752,10 @@ const registerNetworkIpc = (): void => {
   // Run collection folder - executes all requests in a folder sequentially
   // Based on bruno-electron's implementation
   registerHandler('renderer:run-collection-folder', async (args) => {
-    const [folder, collection, environment, _runtimeVariables, recursive, delay, tags, selectedRequestUids] = args as [
+    const [folder, collection, environment, recursive, delay, tags, selectedRequestUids] = args as [
       Record<string, unknown> | null,
       Record<string, unknown>,
       Record<string, unknown> | null,
-      Record<string, string>,
       boolean,
       number,
       { include?: string[]; exclude?: string[] } | null,
@@ -2369,9 +2368,6 @@ const registerNetworkIpc = (): void => {
           currentRequestIndex++;
         }
 
-        deleteCancelToken(cancelTokenUid);
-        setRuntimeVariables(collectionUid, runnerRuntimeVariables);
-        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
         sendToWebview('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,
@@ -2380,9 +2376,6 @@ const registerNetworkIpc = (): void => {
         });
 
       } catch (error) {
-        deleteCancelToken(cancelTokenUid);
-        setRuntimeVariables(collectionUid, runnerRuntimeVariables);
-        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
         sendToWebview('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,
@@ -2390,6 +2383,10 @@ const registerNetworkIpc = (): void => {
           runCompletionTime: new Date().toISOString(),
           error: error && !(error as { isCancel?: boolean }).isCancel ? error : null
         });
+      } finally {
+        deleteCancelToken(cancelTokenUid);
+        setRuntimeVariables(collectionUid, runnerRuntimeVariables);
+        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
       }
     };
 

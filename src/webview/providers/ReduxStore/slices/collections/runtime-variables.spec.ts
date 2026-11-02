@@ -19,7 +19,7 @@ function makeState(runtimeVariables: Record<string, unknown> = {}) {
       }
     ],
     collectionSortOrder: 'default',
-    activeConnections: {}
+    activeConnections: []
   } as any;
 }
 
@@ -36,15 +36,6 @@ describe('runtimeVariablesUpdateEvent', () => {
     );
 
     expect(result.collections[0].runtimeVariables).toEqual({ newKey: 'fresh' });
-  });
-
-  test('coerces missing payload to empty object', () => {
-    const state = makeState({ a: '1' });
-    const result = collectionsReducer(
-      state,
-      runtimeVariablesUpdateEvent({ collectionUid: 'col-1', runtimeVariables: null } as any)
-    );
-    expect(result.collections[0].runtimeVariables).toEqual({});
   });
 
   test('ignores updates for unknown collections', () => {

@@ -55,7 +55,7 @@ interface TestRunResult {
 interface ScriptError extends Error {
   partialResults?: {
     envVariables?: Record<string, unknown>;
-    runtimeVariables?: unknown;
+    runtimeVariables?: Record<string, unknown>;
     collectionVariables?: unknown;
     globalEnvironmentVariables?: unknown;
     results?: TestRunResult['results'];
@@ -92,7 +92,7 @@ const emitScriptTestResults = (
 const emitScriptVariableUpdates = (
   result: {
     envVariables?: Record<string, unknown>;
-    runtimeVariables?: unknown;
+    runtimeVariables?: Record<string, unknown>;
     collectionVariables?: unknown;
     globalEnvironmentVariables?: unknown;
   },
@@ -106,12 +106,11 @@ const emitScriptVariableUpdates = (
     collectionUid: context.collectionUid
   });
 
-  if (result.runtimeVariables && typeof result.runtimeVariables === 'object') {
-    const runtimeVariables = result.runtimeVariables as Record<string, unknown>;
-    setRuntimeVariables(context.collectionUid, runtimeVariables);
+  if (result.runtimeVariables) {
+    setRuntimeVariables(context.collectionUid, result.runtimeVariables);
     broadcastToAllWebviews('main:runtime-variables-update', {
       collectionUid: context.collectionUid,
-      runtimeVariables
+      runtimeVariables: result.runtimeVariables
     });
   }
 

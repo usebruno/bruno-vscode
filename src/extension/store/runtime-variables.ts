@@ -17,15 +17,14 @@ export const setRuntimeVariables = (
   collectionUid: string,
   runtimeVariables: RuntimeVariables
 ): void => {
-  runtimeVariablesByCollection[collectionUid] = { ...(runtimeVariables || {}) };
+  runtimeVariablesByCollection[collectionUid] = { ...runtimeVariables };
 };
 
 export const mergeRuntimeVariables = (
   collectionUid: string,
   runtimeVariables: RuntimeVariables
 ): RuntimeVariables => {
-  const current = runtimeVariablesByCollection[collectionUid] || {};
-  const next = { ...current, ...(runtimeVariables || {}) };
+  const next = { ...runtimeVariablesByCollection[collectionUid], ...runtimeVariables };
   runtimeVariablesByCollection[collectionUid] = next;
   return next;
 };

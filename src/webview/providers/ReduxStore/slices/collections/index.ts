@@ -2174,7 +2174,7 @@ export const collectionsSlice = createSlice({
       const { collectionUid, runtimeVariables } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (collection) {
-        collection.runtimeVariables = runtimeVariables || {};
+        collection.runtimeVariables = runtimeVariables;
       }
     },
 
