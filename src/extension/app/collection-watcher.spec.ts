@@ -1,7 +1,8 @@
 import { describe, test, expect, vi, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { CollectionWatcher, setMessageSender } from './collection-watcher';
 
 type Listener = (uri: { fsPath: string }) => void;
 
@@ -25,8 +26,6 @@ vi.mock('vscode', async (importOriginal) => {
     }
   };
 });
-
-import { CollectionWatcher, setMessageSender } from './collection-watcher';
 
 const request = (marker: string) => `meta {
   name: sign in
