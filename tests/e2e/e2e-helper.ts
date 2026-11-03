@@ -11,11 +11,8 @@ import {
   sendRequest
 } from "./utils/page/actions";
 
-/** A var/header/param value; `{ current, new }` is added as `current`, then edited to `new`. */
-export type SettingValue = string | number | boolean | { current: string, new: string };
-
-export type KeyValue = {
-  [k: string]: SettingValue,
+export type KeyValue<T = string | number | boolean> = {
+  [k: string]: T,
 }
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -27,7 +24,6 @@ type RequestConfig<EnvName extends string = string> = {
   url: string;
   params?: KeyValue[],
   headers?: KeyValue[],
-  // GraphQL query.
   payload?: string;
   type: RequestType,
   method: RequestMethod
@@ -58,18 +54,16 @@ type Config<EnvName extends string = string, FolderName extends string = string>
   envs?: EnvConfig<EnvName>[]
 }
 
-export async function performE2E<const EnvName extends string = never, const FolderName extends string = never>(config: Config<EnvName, FolderName>, page: Page) {
+export async function createSetup<const EnvName extends string = never, const FolderName extends string = never>(config: Config<EnvName, FolderName>, page: Page) {
   const collections = config.collections;
   const sidebar = await openBrunoSidebar(page);
-  // One entry per collection, in config order; undefined for fixture paths until import is supported.
-  const contexts: (Context | undefined)[] = [];
+  let ctx: Context | undefined;
 
   for (const [index, collection] of collections.entries()) {
     if (typeof collection === 'string') {
       // import collection
-      contexts.push(undefined);
     } else {
-      const ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
+      ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
 
       const hasSettings = Boolean(collection.vars || collection.headers || collection.presets);
       if (hasSettings) {
@@ -82,7 +76,7 @@ export async function performE2E<const EnvName extends string = never, const Fol
 
       for (const request of collection.requests) {
         const requestWebview = await createRequestV2(page, sidebar, ctx, collection.name, request.type, request.method)
-        await fillRequestDetails(requestWebview, ctx, request.url, request.payload, request.params, request.headers, request.type)
+        await fillRequestDetails(requestWebview, ctx, request.type, request.url, request.payload, request.params, request.headers)
 
         if (request.run) {
           await sendRequest(requestWebview, 200)
@@ -90,10 +84,8 @@ export async function performE2E<const EnvName extends string = never, const Fol
 
         await saveRequestV2(page, requestWebview, ctx, request.name, true)
       }
-
-      contexts.push(ctx);
     }
   }
 
-  return { sidebar, contexts };
+  return { sidebar, ctx };
 }
