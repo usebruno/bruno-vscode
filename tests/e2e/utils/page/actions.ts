@@ -1229,9 +1229,12 @@ export async function selectRequestPaneTab(page: Page, tabName: string): Promise
   await selectPaneTab(page, '.request-pane', tabName);
 }
 
+export async function saveFileByKeyboard(page: Page): Promise<void> {
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s');
+}
+
 export async function saveRequest(page: Page): Promise<void> {
-  const saveShortcut = process.platform === 'darwin' ? 'Meta+s' : 'Control+s';
-  await page.keyboard.press(saveShortcut);
+  await saveFileByKeyboard(page);
   await expect(activeEditor(page).getByText('Request saved successfully').last()).toBeVisible({ timeout: 3000 });
   await page.waitForTimeout(200);
 }

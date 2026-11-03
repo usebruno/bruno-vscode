@@ -12,6 +12,7 @@ import { openCollection, loadCollectionMetadata, setMessageSender as setCollecti
 import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
 import UiStateSnapshot from '../store/ui-state-snapshot';
+import { getRuntimeVariables } from '../store/runtime-variables';
 import { posixifyPath } from '../utils/filesystem';
 
 interface IpcMessage {
@@ -151,6 +152,14 @@ export async function openRunnerPanel(
       }
 
       stateManager.sendTo(panel.webview, 'main:set-view', viewData);
+
+      const runtimeVariables = getRuntimeVariables(collectionUid);
+      if (Object.keys(runtimeVariables).length > 0) {
+        stateManager.sendTo(panel.webview, 'main:runtime-variables-update', {
+          collectionUid,
+          runtimeVariables
+        });
+      }
     } catch (error) {
       console.error('RunnerPanel: Error loading collection metadata:', error);
     }

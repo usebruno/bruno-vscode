@@ -139,6 +139,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     editorTab: (title: string) => frame.locator('.tabs-container .tab').filter({ hasText: title }),
     editorTabClose: (title: string) =>
       frame.locator('.tabs-container .tab').filter({ hasText: title }).locator('.tab-actions .action-label'),
+    quickInput: () => frame.locator('.quick-input-widget'),
+    getQuickInputByLabel: (label: string) => frame.locator('.quick-input-list .monaco-list-row', { hasText: label }),
     quickInputBox: () => frame.locator('.quick-input-widget .quick-input-box input'),
     notificationToasts: () => frame.locator('.notifications-toasts .notification-toast'),
     getNotificationToastByText: (text: string) =>

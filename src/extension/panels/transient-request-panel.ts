@@ -12,8 +12,11 @@ import * as path from 'path';
 import { WebviewHelper } from '../webview/helper';
 import { showSaveRequestPicker } from '../utils/folder-picker';
 import { posixifyPath } from '../utils/filesystem';
+import { parseRequest } from '../utils/parse';
+import { hydrateRequestWithUuid } from '../utils/collection';
 import { stateManager } from '../webview/state-manager';
 import {
+  broadcastToAllWebviews,
   setCurrentWebview,
   clearCurrentWebview,
   handleInvoke,
@@ -248,7 +251,7 @@ export async function openTransientRequestPanel(
         }
         // Handle save transient request — args[0] is the serialized item data
         if (channel === 'transient:save-request' && args?.[0]) {
-          await saveTransientRequest(panel, itemUid, collectionPath, args[0] as Record<string, unknown>);
+          await saveTransientRequest(panel, itemUid, collectionUid, collectionPath, args[0] as Record<string, unknown>);
         }
         if (channel === 'transient:item-updated' && args?.[0]) {
           const { itemUid: updatedUid, item } = args[0] as { itemUid: string; item: Record<string, unknown> };
@@ -271,7 +274,6 @@ export async function openTransientRequestPanel(
       }
     }
   });
-  
 }
 
 export function closeTransientPanel(itemUid: string): void {
@@ -290,6 +292,7 @@ export function closeTransientPanel(itemUid: string): void {
 async function saveTransientRequest(
   panel: vscode.WebviewPanel,
   itemUid: string,
+  collectionUid: string,
   collectionPath: string,
   itemData: Record<string, unknown>
 ): Promise<void> {
@@ -323,6 +326,17 @@ async function saveTransientRequest(
     const { stringifyRequestViaWorker } = require('@usebruno/filestore');
     const content = await stringifyRequestViaWorker({ ...itemData, name, filename }, { format });
     fs.writeFileSync(fullPath, content, 'utf-8');
+
+    const requestData = await parseRequest(content, { format });
+    hydrateRequestWithUuid(requestData, fullPath);
+    broadcastToAllWebviews('main:collection-tree-updated', 'addFile', {
+      meta: {
+        collectionUid,
+        pathname: posixifyPath(fullPath),
+        name: filename
+      },
+      data: requestData
+    });
 
     savedPanels.add(itemUid);
 

@@ -23,10 +23,11 @@ export interface SaveLocation {
  * Returns the selected folder path and request name, or undefined if cancelled.
  */
 export async function showSaveRequestPicker(
-  rootPath: string,
+  collectionPath: string,
   defaultName?: string,
   options?: { title?: string }
 ): Promise<SaveLocation | undefined> {
+  const rootPath = path.normalize(collectionPath);
   const rootName = path.basename(rootPath);
 
   // Step 1: Pick folder
