@@ -8,11 +8,8 @@ import {
   sendRequest, setAuth, takeScreenshot,
 } from "./utils/page/actions";
 
-/** A var/header/param value; `{ current, new }` is added as `current`, then edited to `new`. */
-export type SettingValue = string | number | boolean | { current: string, new: string };
-
-export type KeyValue = {
-  [k: string]: SettingValue,
+export type KeyValue<T = string | number | boolean> = {
+  [k: string]: T,
 }
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -31,7 +28,6 @@ type RequestConfig<EnvName extends string = string> = {
   url: string;
   params?: KeyValue[],
   headers?: KeyValue[],
-  // GraphQL query.
   payload?: string;
   type: RequestType,
   method: RequestMethod
@@ -102,7 +98,7 @@ async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: 
     await expect(rows.collectionItem(request.name).locator('.indent-block')).toHaveCount(folderDepth + 1)
   } else {
     const requestWebview = await createRequestV2(page, sidebar, ctx, collection, request.type, request.method)
-    await fillRequestDetails(requestWebview, ctx, request.url, request.payload, request.params, request.headers, request.type)
+    await fillRequestDetails(requestWebview, ctx, request.type, request.url, request.payload, request.params, request.headers)
 
     if (request.run) {
       await sendRequest(requestWebview, 200)
@@ -116,24 +112,23 @@ async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: 
   }
 }
 
-export type E2EResult = {
+export type SetupResult = {
   sidebar: Frame,
-  // One entry per collection, in config order; undefined for fixture paths until import is supported.
-  contexts: (Context | undefined)[],
+  // Context of the last collection created
+  ctx: Context | undefined,
   // Names of the collections it created
   collections: string[],
 }
 
 // Builds the workspace
-export async function performE2E<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<E2EResult> {
+export async function createSetup<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<SetupResult> {
   const sidebar = await openBrunoSidebar(page);
-  const contexts: (Context | undefined)[] = [];
+  let ctx: Context | undefined;
   const collections: string[] = [];
 
   for (const [index, collection] of config.collections.entries()) {
     if (typeof collection === 'string') {
       // import collection
-      contexts.push(undefined);
     } else {
       const folders = flattenFolders(collection.folders)
       const requests: RequestEntry[] = [
@@ -141,8 +136,7 @@ export async function performE2E<const EnvName extends string = never>(config: C
         ...folders.flatMap(({ folder }) => (folder.requests ?? []).map((request) => ({ request, folder: folder.name }))),
       ]
 
-      const ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
-      contexts.push(ctx)
+      ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
       collections.push(collection.name)
 
       if (collection.vars || collection.headers || collection.presets) {
@@ -186,10 +180,10 @@ export async function performE2E<const EnvName extends string = never>(config: C
     }
   }
 
-  return { sidebar, contexts, collections }
+  return { sidebar, ctx, collections }
 }
 
-export type Workspace = Parameters<typeof performE2E>[0];
+export type Workspace = Parameters<typeof createSetup>[0];
 
 type LifecycleSuite = {
   desc: string;
@@ -208,7 +202,7 @@ export function runSuites<const S extends LifecycleSuite[]>(title: string, suite
         setup?.(test);
 
         test.beforeEach(async ({ workbench }) => {
-          ({ collections } = await performE2E(workspace, workbench));
+          ({ collections } = await createSetup(workspace, workbench));
         });
 
         test.afterEach(async ({ workbench }) => {

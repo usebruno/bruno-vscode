@@ -63,7 +63,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     requestsInfo: () => frame.getByTestId('collection-requests-count'),
     requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded'),
     saveButton: (tab: string) => frame.getByTestId(`collection-settings-${tab}-save`),
-    varsReqTable: () => frame.getByTestId('collection-vars-req'),
+    preRequestVarsTable: () => frame.getByTestId('collection-vars-req'),
     headersTable: () => frame.getByTestId('collection-headers')
   },
   environments: {

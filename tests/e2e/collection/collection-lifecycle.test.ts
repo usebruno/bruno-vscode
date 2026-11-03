@@ -1,5 +1,5 @@
 import { expect, test } from '../utils/fixtures';
-import { performE2E, type CollectionSettingsConfig } from '../e2e-helper';
+import { createSetup, type CollectionSettingsConfig } from '../e2e-helper';
 import {
   cloneRequest,
   deleteRequest,
@@ -23,16 +23,21 @@ const GRAPHQL_QUERY = '{ ping }';
 const settings: CollectionSettingsConfig = {
   vars: {
     host: TEST_SERVER,
-    apiVersion: { current: 'version-initial', new: 'version-updated' },
+    apiVersion: 'version-initial',
   },
   headers: {
-    'x-lifecycle': { current: 'header-initial', new: 'header-updated' },
+    'x-lifecycle': 'header-initial',
   },
   presets: { requestUrl: TEST_SERVER },
 };
 
+const updatedSettings: CollectionSettingsConfig = {
+  vars: { apiVersion: 'version-updated' },
+  headers: { 'x-lifecycle': 'header-updated' },
+};
+
 test('Collection lifecycle: settings, vars, headers, run request, clone, delete, move, run collection, export', async ({ page }) => {
-  const { sidebar, contexts: [ctx] } = await performE2E({
+  const { sidebar, ctx } = await createSetup({
     collections: [
       {
         name: 'collection-1',
@@ -42,14 +47,6 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
         requests: [
           {
             name: 'request-1',
-            url: '{{host}}/ping',
-            type: 'HTTP',
-            method: 'GET',
-            run: true,
-            env: 'prod',
-          },
-          {
-            name: 'request-2',
             url: '{{host}}/ping',
             type: 'HTTP',
             method: 'GET',
@@ -82,7 +79,7 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
   }, page)
 
   // What should be left after the clone, delete and move below.
-  const remainingPaths = ['folder-1/request-1', 'request-1-clone', 'graphql-1', 'graphql-1-clone'];
+  const remainingPaths = ['folder-1/request-1', 'request-1-clone', 'graphql-1'];
 
   await test.step('Clone request-1', async () => {
     await cloneRequest(page, sidebar, ctx!, 'request-1', 'yml')
@@ -92,8 +89,8 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
     await cloneRequest(page, sidebar, ctx!, 'graphql-1', 'yml')
   });
 
-  await test.step('Delete request-2', async () => {
-    await deleteRequest(page, sidebar, ctx!, 'request-2', 'yml')
+  await test.step('Delete graphql-1-clone', async () => {
+    await deleteRequest(page, sidebar, ctx!, 'graphql-1-clone', 'yml')
   });
 
   await test.step('Move request-1 into folder-1', async () => {
@@ -101,7 +98,7 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
   });
 
   await test.step('Edit collection settings', async () => {
-    await editCollectionSettings(page, sidebar, ctx!, settings, remainingPaths.length, 'yml');
+    await editCollectionSettings(page, sidebar, ctx!, updatedSettings, remainingPaths.length, 'yml');
   });
 
   await test.step('Run collection', async () => {

@@ -7,8 +7,7 @@ import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
 import { Context } from '../../context';
 import { VSCodeFixture, VSCodeOptions } from '../fixtures';
-import type { AuthFields, AuthMode, ResponsePaneTab } from '../../e2e-helper';
-import type { CollectionSettingsConfig, KeyValue, SettingValue } from '../../e2e-helper';
+import type { AuthFields, AuthMode, CollectionSettingsConfig, KeyValue, ResponsePaneTab } from '../../e2e-helper';
 
 // The editor pane currently in focus (request, folder settings or collection settings).
 export const activeEditor = (page: Page): FrameLocator =>
@@ -1588,8 +1587,7 @@ export async function createRequestV2(page: Page, _sidebar: Frame, ctx: Context,
   return webview;
 }
 
-// Only the URL and a GraphQL query (`payload`) are filled for now
-export async function fillRequestDetails(webview: FrameLocator, ctx: Context, url: string, payload?: string, params?: KeyValue[], headers?: KeyValue[], type: RequestType = 'HTTP') {
+export async function fillRequestDetails(webview: FrameLocator, ctx: Context, type: RequestType, url: string, payload?: string, params?: KeyValue[], headers?: KeyValue[]) {
   // Ideally target it via a test-id. Classes are usually flaky
   const urlInput = webview.locator('.CodeMirror-lines').first();
   await urlInput.click()
@@ -1996,19 +1994,24 @@ export async function addCollectionVar(page: Page, settings: Frame, name: string
   const rows = locators.varsTable.rows('collection', 'req');
   await expect(rows.first()).toBeVisible();
   const emptyRowIdx = (await rows.count()) - 1;
-  const table = buildCommonLocators(locators.collectionSettings.varsReqTable()).editableTable;
+  const table = buildCommonLocators(locators.collectionSettings.preRequestVarsTable()).editableTable;
 
   await table.columnNameInput(emptyRowIdx).fill(name);
   await setCodeMirrorValue(page, table.columnValueEditor(emptyRowIdx), value);
 }
 
-/** Replace the value of the `index`th pre-request var or header on the collection settings Vars/Headers tab. */
-async function editCollectionValue(page: Page, settings: Frame, tab: 'Vars' | 'Headers', index: number, value: string): Promise<void> {
+async function editCollectionValue(page: Page, settings: Frame, tab: 'Vars' | 'Headers', name: string, value: string): Promise<void> {
   await openRequestPaneTab(settings, tab);
   const { collectionSettings } = buildCommonLocators(settings);
-  const container = tab === 'Vars' ? collectionSettings.varsReqTable() : collectionSettings.headersTable();
+  const container = tab === 'Vars' ? collectionSettings.preRequestVarsTable() : collectionSettings.headersTable();
   const table = buildCommonLocators(container).editableTable;
-  await setCodeMirrorValue(page, table.columnValueEditor(index), value);
+
+  const names = await container.locator('[data-testid^="column-name-"]').evaluateAll((cells) => cells.map((cell) =>
+    cell.querySelector('input')?.value ?? cell.querySelector('.CodeMirror-line')?.textContent ?? ''));
+  const row = names.findIndex((rowName) => rowName.trim() === name);
+  expect(row, `collection ${tab.toLowerCase()} should have a row named ${name}`).toBeGreaterThanOrEqual(0);
+
+  await setCodeMirrorValue(page, table.columnValueEditor(row), value);
 }
 
 type SavedCollectionSettings = { vars: Record<string, string>, headers: Record<string, string>, requestUrl?: string };
@@ -2044,55 +2047,51 @@ export async function readCollectionSettings(ctx: Context, fileFormat: FileForma
 }
 
 // Settings are typed into text fields, so numbers and booleans go in as their string form.
-const currentValue = (value: SettingValue) => typeof value === 'object' ? value.current : String(value);
+const stringifySettingValues = (entries: KeyValue = {}) =>
+  Object.fromEntries(Object.entries(entries).map(([name, value]) => [name, String(value)]));
 
 export async function addCollectionSettings(page: Page, sidebar: Frame, ctx: Context, collection: CollectionSettingsConfig, fileFormat: FileFormat = 'yml') {
   const settings = await openCollectionSettings(page, sidebar, ctx.collectionName);
 
-  for (const [name, value] of Object.entries(collection.vars ?? {})) {
-    await addCollectionVar(page, settings, name, currentValue(value));
+  for (const [name, value] of Object.entries(stringifySettingValues(collection.vars))) {
+    await addCollectionVar(page, settings, name, value);
   }
-  for (const [name, value] of Object.entries(collection.headers ?? {})) {
-    await addCollectionHeader(page, settings, name, currentValue(value));
+  for (const [name, value] of Object.entries(stringifySettingValues(collection.headers))) {
+    await addCollectionHeader(page, settings, name, value);
   }
   if (collection.presets) {
     await setPresetBaseUrl(settings, collection.presets.requestUrl);
   }
   await saveCollectionSettings(settings, collection.presets ? 'presets' : collection.headers ? 'headers' : 'vars');
 
-  const currentValues = (entries: KeyValue = {}) =>
-    Object.fromEntries(Object.entries(entries).map(([name, value]) => [name, currentValue(value)]));
   await expect.poll(() => readCollectionSettings(ctx, fileFormat), { message: 'collection settings should be saved to disk' }).toMatchObject({
-    vars: currentValues(collection.vars),
-    headers: currentValues(collection.headers),
+    vars: stringifySettingValues(collection.vars),
+    headers: stringifySettingValues(collection.headers),
     ...(collection.presets && { requestUrl: collection.presets.requestUrl })
   });
 }
 
-export async function editCollectionSettings(page: Page, sidebar: Frame, ctx: Context, collection: CollectionSettingsConfig, expectedRequestCount: number, fileFormat: FileFormat = 'yml') {
+export async function editCollectionSettings(page: Page, sidebar: Frame, ctx: Context, updates: CollectionSettingsConfig, expectedRequestCount: number, fileFormat: FileFormat = 'yml') {
   const settings = await openCollectionSettings(page, sidebar, ctx.collectionName);
 
   await openRequestPaneTab(settings, 'Overview');
   await expect(buildCommonLocators(settings).collectionSettings.requestsInfo()).toHaveText(`${expectedRequestCount} requests in collection`);
 
-  // Rows sit in the order they were added, so an entry's position in `vars`/`headers` is its row.
-  const editsFor = (tab: 'Vars' | 'Headers', entries: KeyValue = {}) => Object.entries(entries)
-    .flatMap(([name, value], row) => typeof value === 'object' ? [{ tab, row, name, value }] : []);
-  const edits = [...editsFor('Vars', collection.vars), ...editsFor('Headers', collection.headers)];
+  const expected: SavedCollectionSettings = { vars: stringifySettingValues(updates.vars), headers: stringifySettingValues(updates.headers) };
+  const edits = [
+    ...Object.entries(expected.vars).map(([name, value]) => ({ tab: 'Vars' as const, name, value })),
+    ...Object.entries(expected.headers).map(([name, value]) => ({ tab: 'Headers' as const, name, value }))
+  ];
   if (!edits.length) {
     return;
   }
 
-  for (const { tab, row, value } of edits) {
-    await editCollectionValue(page, settings, tab, row, value.new);
+  for (const { tab, name, value } of edits) {
+    await editCollectionValue(page, settings, tab, name, value);
   }
   await saveCollectionSettings(settings, edits[edits.length - 1].tab.toLowerCase());
 
   // verify the edits replace the old values on disk
-  const expected: SavedCollectionSettings = { vars: {}, headers: {} };
-  for (const { tab, name, value } of edits) {
-    expected[tab === 'Vars' ? 'vars' : 'headers'][name] = value.new;
-  }
   await expect.poll(() => readCollectionSettings(ctx, fileFormat), { message: 'collection setting edits should be saved to disk' }).toMatchObject(expected);
 }
 
