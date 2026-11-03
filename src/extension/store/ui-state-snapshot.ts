@@ -40,8 +40,6 @@ class UiStateSnapshotStore {
   }
 
   getCollections(): CollectionSnapshot[] {
-    // Collapse legacy duplicates of the same collection; entries are appended on
-    // write, so the last one is the most recent and wins.
     const byPathname = new Map<string, CollectionSnapshot>();
     for (const c of this.getFromStorage<CollectionSnapshot[]>('ui-state-snapshot.collections', [])) {
       if (!c?.pathname) continue;
@@ -57,17 +55,17 @@ class UiStateSnapshotStore {
   }
 
   findByPathname(pathname: string): CollectionSnapshot | undefined {
-    const normalized = normalizeSnapshotPath(pathname);
-    return this.getCollections().find((c) => c.pathname === normalized);
+    const normalizedPathname = normalizeSnapshotPath(pathname);
+    return this.getCollections().find((c) => c.pathname === normalizedPathname);
   }
 
   getCollectionByPathname({ pathname }: { pathname: string }): CollectionSnapshot {
-    const normalized = normalizeSnapshotPath(pathname);
+    const normalizedPathname = normalizeSnapshotPath(pathname);
     const collections = this.getCollections();
 
-    let collection = collections.find((c) => c.pathname === normalized);
+    let collection = collections.find((c) => c.pathname === normalizedPathname);
     if (!collection) {
-      collection = { pathname: normalized };
+      collection = { pathname: normalizedPathname };
       collections.push(collection);
       this.saveCollections(collections);
     }
@@ -76,12 +74,12 @@ class UiStateSnapshotStore {
   }
 
   setCollectionByPathname({ collection }: { collection: CollectionSnapshot }): CollectionSnapshot {
-    const normalized = { ...collection, pathname: normalizeSnapshotPath(collection.pathname) };
-    const collections = this.getCollections().filter((c) => c.pathname !== normalized.pathname);
-    collections.push(normalized);
+    const normalizedCollection = { ...collection, pathname: normalizeSnapshotPath(collection.pathname) };
+    const collections = this.getCollections().filter((c) => c.pathname !== normalizedCollection.pathname);
+    collections.push(normalizedCollection);
     this.saveCollections(collections);
 
-    return normalized;
+    return normalizedCollection;
   }
 
   updateCollectionEnvironment({ collectionPath, environmentName }: { collectionPath: string; environmentName: string }): void {
