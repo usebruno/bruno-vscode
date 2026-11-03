@@ -62,7 +62,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     // Overview → Requests line, e.g. "2 requests in collection".
     requestsInfo: () => frame.getByTestId('collection-requests-count'),
     requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded'),
-    saveButton: (tab: string) => frame.getByTestId(`collection-settings-${tab}-save`)
+    saveButton: (tab: string) => frame.getByTestId(`collection-settings-${tab}-save`),
+    varsReqTable: () => frame.getByTestId('collection-vars-req'),
+    headersTable: () => frame.getByTestId('collection-headers')
   },
   environments: {
     // Environment picker in the collection toolbar.
@@ -319,6 +321,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     requestCountText: () => frame.getByText(/requests in this collection/),
     // Result block has no test id; the name and status sit together in this display.
     resultDisplay: (name: string) => frame.locator('.item-path').filter({ hasText: name }),
+    resultByPath: (requestPath: string) => frame.getByTestId(`runner-result-${requestPath}`),
     filterButton: (label: 'All' | 'Passed' | 'Failed' | 'Skipped') =>
       frame.getByRole('button', { name: label })
   },

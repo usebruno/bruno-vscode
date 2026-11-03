@@ -3,13 +3,16 @@ import { test } from "./utils/fixtures";
 import type { Context } from "./context";
 import { buildCommonLocators } from "./utils/page/locators";
 import {
-  createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2, deleteRequestV2, exportCollectionV2,
-  openBrunoSidebar, removeCollection, runCommand, saveRequestV2,
-  sendRequest, setAuth, setCodeMirrorValue, takeScreenshot,
+  addCollectionSettings, createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2,
+  deleteRequest, exportCollection, fillRequestDetails, openBrunoSidebar, removeCollection, runCommand, saveRequestV2,
+  sendRequest, setAuth, takeScreenshot,
 } from "./utils/page/actions";
 
-type KeyValue<T = string | number | boolean> = {
-  [k: string]: T,
+/** A var/header/param value; `{ current, new }` is added as `current`, then edited to `new`. */
+export type SettingValue = string | number | boolean | { current: string, new: string };
+
+export type KeyValue = {
+  [k: string]: SettingValue,
 }
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -28,6 +31,7 @@ type RequestConfig<EnvName extends string = string> = {
   url: string;
   params?: KeyValue[],
   headers?: KeyValue[],
+  // GraphQL query.
   payload?: string;
   type: RequestType,
   method: RequestMethod
@@ -62,12 +66,17 @@ type EnvConfig<EnvName extends string = string> = {
 type CollectionConfig<EnvName extends string = string> = {
   format: FileFormat,
   name: string,
-  vars?: KeyValue[],
+  vars?: KeyValue,
+  headers?: KeyValue,
+  presets?: { requestUrl: string },
   folders?: FolderConfig<EnvName>[],
   requests?: RequestConfig<EnvName>[]
   export?: boolean
   auth?: AuthMode
 } | string /* fixture path */
+
+// Just the settings-panel part of a collection, for the add/edit collection settings actions.
+export type CollectionSettingsConfig = Pick<Exclude<CollectionConfig, string>, 'vars' | 'headers' | 'presets'>;
 
 type Config<EnvName extends string = string> = {
   collections: CollectionConfig<EnvName>[];
@@ -93,7 +102,7 @@ async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: 
     await expect(rows.collectionItem(request.name).locator('.indent-block')).toHaveCount(folderDepth + 1)
   } else {
     const requestWebview = await createRequestV2(page, sidebar, ctx, collection, request.type, request.method)
-    await setCodeMirrorValue(page, requestWebview.locator('.CodeMirror').first(), request.url)
+    await fillRequestDetails(requestWebview, ctx, request.url, request.payload, request.params, request.headers, request.type)
 
     if (request.run) {
       await sendRequest(requestWebview, 200)
@@ -107,14 +116,24 @@ async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: 
   }
 }
 
-// Builds the workspace and returns the names of the collections it created
-export async function performE2E<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<string[]> {
+export type E2EResult = {
+  sidebar: Frame,
+  // One entry per collection, in config order; undefined for fixture paths until import is supported.
+  contexts: (Context | undefined)[],
+  // Names of the collections it created
+  collections: string[],
+}
+
+// Builds the workspace
+export async function performE2E<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<E2EResult> {
   const sidebar = await openBrunoSidebar(page);
+  const contexts: (Context | undefined)[] = [];
   const collections: string[] = [];
 
   for (const [index, collection] of config.collections.entries()) {
     if (typeof collection === 'string') {
       // import collection
+      contexts.push(undefined);
     } else {
       const folders = flattenFolders(collection.folders)
       const requests: RequestEntry[] = [
@@ -123,7 +142,13 @@ export async function performE2E<const EnvName extends string = never>(config: C
       ]
 
       const ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
+      contexts.push(ctx)
       collections.push(collection.name)
+
+      if (collection.vars || collection.headers || collection.presets) {
+        await addCollectionSettings(page, sidebar, ctx, collection, collection.format);
+      }
+
       await expandCollection(sidebar, collection.name)
 
       for (const { folder, parent } of folders) {
@@ -147,11 +172,11 @@ export async function performE2E<const EnvName extends string = never>(config: C
       // Delete only after every request is saved, so deletes don't shift the "Untitled N" titles.
       const toDelete = requests.filter(({ request }) => request.delete)
       for (const { request } of toDelete) {
-        await deleteRequestV2(page, sidebar, ctx, request.name, collection.format)
+        await deleteRequest(page, sidebar, ctx, request.name, collection.format)
       }
 
       if (collection.export) {
-        const exportedFiles = await exportCollectionV2(page, sidebar, ctx)
+        const exportedFiles = await exportCollection(page, sidebar, ctx)
 
         // verify the export reflects the deletes
         for (const request of collection.requests) {
@@ -161,7 +186,7 @@ export async function performE2E<const EnvName extends string = never>(config: C
     }
   }
 
-  return collections
+  return { sidebar, contexts, collections }
 }
 
 export type Workspace = Parameters<typeof performE2E>[0];
@@ -183,7 +208,7 @@ export function runSuites<const S extends LifecycleSuite[]>(title: string, suite
         setup?.(test);
 
         test.beforeEach(async ({ workbench }) => {
-          collections = await performE2E(workspace, workbench);
+          ({ collections } = await performE2E(workspace, workbench));
         });
 
         test.afterEach(async ({ workbench }) => {
