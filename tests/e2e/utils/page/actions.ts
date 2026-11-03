@@ -1,10 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Page, Frame, FrameLocator, Locator, expect, TestType, PlaywrightTestOptions, PlaywrightTestArgs, PlaywrightWorkerArgs, PlaywrightWorkerOptions } from '@playwright/test';
+import { parseCollection, parseRequest } from '@usebruno/filestore';
 import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
 import { Context } from '../../context';
 import { VSCodeFixture, VSCodeOptions } from '../fixtures';
+import type { CollectionSettingsConfig, KeyValue, SettingValue } from '../../e2e-helper';
 
 // The editor pane currently in focus (request, folder settings or collection settings).
 export const activeEditor = (page: Page): FrameLocator =>
@@ -1461,9 +1463,6 @@ export async function addRequestTag(
   await locators.savedToastText().waitFor({ state: 'visible', timeout: 10_000 });
 }
 
-type KeyValue<T = string | number | boolean> = {
-  [k: string]: T,
-}
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 type RequestType = 'HTTP' | 'GraphQL' | 'gRPC' | `WebSocket`;
@@ -1548,12 +1547,23 @@ export async function createRequestV2(page: Page, _sidebar: Frame, ctx: Context,
   return webview;
 }
 
-// Only configuring for json for now
-export async function fillRequestDetails(webview: FrameLocator, ctx: Context, url: string, payload?: string, params?: KeyValue[], headers?: KeyValue[]) {
+// Only the URL and a GraphQL query (`payload`) are filled for now
+export async function fillRequestDetails(webview: FrameLocator, ctx: Context, url: string, payload?: string, params?: KeyValue[], headers?: KeyValue[], type: RequestType = 'HTTP') {
   // Ideally target it via a test-id. Classes are usually flaky
   const urlInput = webview.locator('.CodeMirror-lines').first();
   await urlInput.click()
+  await urlInput.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+  await urlInput.press('Backspace');
   await urlInput.pressSequentially(url);
+
+  if (type === 'GraphQL' && payload) {
+    // A new GraphQL request opens on the Query tab. Not setCodeMirrorValue: its trailing Tab lands in the query.
+    const queryEditor = buildCommonLocators(webview).graphql.queryEditor();
+    await queryEditor.click();
+    await queryEditor.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+    await queryEditor.press('Backspace');
+    await queryEditor.page().keyboard.insertText(payload);
+  }
 }
 
 export async function saveRequestV2(page: Page, webview: FrameLocator, ctx: Context, name: string, newRequest = true) {
@@ -1605,7 +1615,7 @@ export async function takeScreenshot(page: Page, test: Test) {
  * Delete a saved request from the sidebar through the real UI: row "⋯" menu → Delete → modal confirm.
  * Needs `window.dialogStyle: 'custom'` so the modal renders in the workbench DOM instead of as a native OS dialog.
  */
-export async function deleteRequestV2(page: Page, sidebar: Frame, ctx: Context, name: string, fileFormat: FileFormat = 'yml') {
+export async function deleteRequest(page: Page, sidebar: Frame, ctx: Context, name: string, fileFormat: FileFormat = 'yml') {
   await expandCollection(sidebar, ctx.collectionName);
 
   const requestRow = buildCommonLocators(sidebar).sidebar.collectionItem(name);
@@ -1629,7 +1639,7 @@ export async function deleteRequestV2(page: Page, sidebar: Frame, ctx: Context, 
  * Export a collection in Bruno JSON format through the real UI: collection "⋯" menu → Export → Bruno Collection → save dialog.
  * Needs `files.simpleDialog.enable` so the save dialog renders as a quick input. The file is saved next to the collection folder.
  */
-export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Context) {
+export async function exportCollection(page: Page, sidebar: Frame, ctx: Context) {
   const sidebarElements = buildCommonLocators(sidebar).sidebar;
   // The "⋯" actions button only becomes visible while the collection row is hovered.
   await sidebarElements.collectionName(ctx.collectionName).hover();
@@ -1647,8 +1657,10 @@ export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Contex
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
   await expect(saveInput).toBeVisible();
   await saveInput.fill(exportPath);
-  await page.keyboard.press('Enter');
-  await expect(saveInput).toBeHidden();
+  await expect(async () => {
+    await page.keyboard.press('Enter');
+    await expect(saveInput).toBeHidden();
+  }).toPass();
 
   // On success the panel shows a toast and closes itself straight away, so the toast can't be asserted.
   // Wait for the panel to go instead — on failure it stays open with "Failed to export collection".
@@ -1657,4 +1669,175 @@ export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Contex
   // verify the exported file on disk
   await expect.poll(() => fs.existsSync(exportPath), { message: `${exportPath} should be exported` }).toBe(true);
   return JSON.parse(fs.readFileSync(exportPath, 'utf8'));
+}
+
+/** Type into the open VS Code input box (showInputBox) and submit it. */
+async function submitInputBox(page: Page, value: string) {
+  const input = buildCommonLocators(page).workbench.quickInputBox();
+  await expect(input).toBeVisible();
+  await input.fill(value);
+  await page.keyboard.press('Enter');
+  await expect(input).toBeHidden();
+}
+
+export async function createFolderV2(page: Page, sidebar: Frame, ctx: Context, folderName: string) {
+  const sidebarElements = buildCommonLocators(sidebar).sidebar;
+  await sidebarElements.collectionName(ctx.collectionName).hover();
+  await sidebarElements.collectionMenuOptions(ctx.collectionName).click();
+  await sidebar.getByRole('menuitem', { name: 'New Folder' }).click();
+
+  await submitInputBox(page, folderName);
+
+  await expandCollection(sidebar, ctx.collectionName);
+  await expect(sidebarElements.collectionItem(folderName)).toBeVisible();
+  const folderDir = path.join(ctx.collectionLocation, ctx.collectionName, folderName);
+  await expect.poll(() => fs.existsSync(folderDir), { message: `${folderDir} should be created` }).toBe(true);
+}
+
+export async function cloneRequest(page: Page, sidebar: Frame, ctx: Context, name: string, fileFormat: FileFormat = 'yml') {
+  const cloneName = `${name}-clone`;
+  await expandCollection(sidebar, ctx.collectionName);
+
+  const sidebarElements = buildCommonLocators(sidebar).sidebar;
+  const requestRow = sidebarElements.collectionItem(name);
+  await requestRow.hover();
+  await sidebarElements.itemMenu(name).click();
+  await sidebar.getByRole('menuitem', { name: 'Clone' }).click();
+
+  await expect(buildCommonLocators(page).workbench.quickInputBox()).toHaveValue(`${name} copy`);
+  await submitInputBox(page, cloneName);
+
+  await expect(sidebarElements.collectionItem(cloneName)).toBeVisible();
+  const cloneFile = path.join(ctx.collectionLocation, ctx.collectionName, `${cloneName}.${fileFormat}`);
+  await expect.poll(() => fs.existsSync(cloneFile), { message: `${cloneFile} should be created` }).toBe(true);
+}
+
+export async function moveRequest(sidebar: Frame, ctx: Context, name: string, folderName: string, fileFormat: FileFormat = 'yml') {
+  await expandCollection(sidebar, ctx.collectionName);
+  await dragItemIntoFolder(sidebar, name, folderName);
+
+  await expandFolder(sidebar, folderName);
+  const sidebarElements = buildCommonLocators(sidebar).sidebar;
+  const folderRow = sidebarElements.collectionItem(folderName);
+  await expect(folderRow.locator('..').locator(sidebarElements.collectionItem(name))).toBeVisible();
+
+  const collectionDir = path.join(ctx.collectionLocation, ctx.collectionName);
+  const oldFile = path.join(collectionDir, `${name}.${fileFormat}`);
+  const newFile = path.join(collectionDir, folderName, `${name}.${fileFormat}`);
+  await expect.poll(() => fs.existsSync(newFile), { message: `${newFile} should exist` }).toBe(true);
+  expect(fs.existsSync(oldFile), `${oldFile} should be moved`).toBe(false);
+}
+
+export async function addCollectionVar(page: Page, settings: Frame, name: string, value: string): Promise<void> {
+  const locators = buildCommonLocators(settings);
+  await openRequestPaneTab(settings, 'Vars');
+
+  const rows = locators.varsTable.rows('collection', 'req');
+  await expect(rows.first()).toBeVisible();
+  const emptyRowIdx = (await rows.count()) - 1;
+  const table = buildCommonLocators(locators.collectionSettings.varsReqTable()).editableTable;
+
+  await table.columnNameInput(emptyRowIdx).fill(name);
+  await setCodeMirrorValue(page, table.columnValueEditor(emptyRowIdx), value);
+}
+
+/** Replace the value of the `index`th pre-request var or header on the collection settings Vars/Headers tab. */
+async function editCollectionValue(page: Page, settings: Frame, tab: 'Vars' | 'Headers', index: number, value: string): Promise<void> {
+  await openRequestPaneTab(settings, tab);
+  const { collectionSettings } = buildCommonLocators(settings);
+  const container = tab === 'Vars' ? collectionSettings.varsReqTable() : collectionSettings.headersTable();
+  const table = buildCommonLocators(container).editableTable;
+  await setCodeMirrorValue(page, table.columnValueEditor(index), value);
+}
+
+type SavedCollectionSettings = { vars: Record<string, string>, headers: Record<string, string>, requestUrl?: string };
+
+/**
+ * Parse the collection-level vars, headers and preset URL saved on disk:
+ * opencollection.yml for yml; collection.bru (vars/headers) and bruno.json (presets) for bru.
+ */
+export async function readCollectionSettings(ctx: Context, fileFormat: FileFormat): Promise<SavedCollectionSettings> {
+  const collectionDir = path.join(ctx.collectionLocation, ctx.collectionName);
+  const read = (file: string) => {
+    const filePath = path.join(collectionDir, file);
+    return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+  };
+
+  // filestore's parsers return `any`; these are just the fields read below.
+  type NameValue = { name: string, value: string };
+  let root: { request?: { vars?: { req?: NameValue[] }, headers?: NameValue[] } } | undefined;
+  let brunoConfig: { presets?: { requestUrl?: string } } | undefined;
+  if (fileFormat === 'yml') {
+    ({ collectionRoot: root, brunoConfig } = await parseCollection(read('opencollection.yml'), { format: 'yml' }));
+  } else {
+    root = await parseCollection(read('collection.bru'), { format: 'bru' });
+    brunoConfig = JSON.parse(read('bruno.json') || '{}');
+  }
+
+  const byName = (entries: NameValue[] = []) => Object.fromEntries(entries.map(({ name, value }) => [name, value]));
+  return {
+    vars: byName(root?.request?.vars?.req),
+    headers: byName(root?.request?.headers),
+    requestUrl: brunoConfig?.presets?.requestUrl
+  };
+}
+
+// Settings are typed into text fields, so numbers and booleans go in as their string form.
+const currentValue = (value: SettingValue) => typeof value === 'object' ? value.current : String(value);
+
+export async function addCollectionSettings(page: Page, sidebar: Frame, ctx: Context, collection: CollectionSettingsConfig, fileFormat: FileFormat = 'yml') {
+  const settings = await openCollectionSettings(page, sidebar, ctx.collectionName);
+
+  for (const [name, value] of Object.entries(collection.vars ?? {})) {
+    await addCollectionVar(page, settings, name, currentValue(value));
+  }
+  for (const [name, value] of Object.entries(collection.headers ?? {})) {
+    await addCollectionHeader(page, settings, name, currentValue(value));
+  }
+  if (collection.presets) {
+    await setPresetBaseUrl(settings, collection.presets.requestUrl);
+  }
+  await saveCollectionSettings(settings, collection.presets ? 'presets' : collection.headers ? 'headers' : 'vars');
+
+  const currentValues = (entries: KeyValue = {}) =>
+    Object.fromEntries(Object.entries(entries).map(([name, value]) => [name, currentValue(value)]));
+  await expect.poll(() => readCollectionSettings(ctx, fileFormat), { message: 'collection settings should be saved to disk' }).toMatchObject({
+    vars: currentValues(collection.vars),
+    headers: currentValues(collection.headers),
+    ...(collection.presets && { requestUrl: collection.presets.requestUrl })
+  });
+}
+
+export async function editCollectionSettings(page: Page, sidebar: Frame, ctx: Context, collection: CollectionSettingsConfig, expectedRequestCount: number, fileFormat: FileFormat = 'yml') {
+  const settings = await openCollectionSettings(page, sidebar, ctx.collectionName);
+
+  await openRequestPaneTab(settings, 'Overview');
+  await expect(buildCommonLocators(settings).collectionSettings.requestsInfo()).toHaveText(`${expectedRequestCount} requests in collection`);
+
+  // Rows sit in the order they were added, so an entry's position in `vars`/`headers` is its row.
+  const editsFor = (tab: 'Vars' | 'Headers', entries: KeyValue = {}) => Object.entries(entries)
+    .flatMap(([name, value], row) => typeof value === 'object' ? [{ tab, row, name, value }] : []);
+  const edits = [...editsFor('Vars', collection.vars), ...editsFor('Headers', collection.headers)];
+  if (!edits.length) {
+    return;
+  }
+
+  for (const { tab, row, value } of edits) {
+    await editCollectionValue(page, settings, tab, row, value.new);
+  }
+  await saveCollectionSettings(settings, edits[edits.length - 1].tab.toLowerCase());
+
+  // verify the edits replace the old values on disk
+  const expected: SavedCollectionSettings = { vars: {}, headers: {} };
+  for (const { tab, name, value } of edits) {
+    expected[tab === 'Vars' ? 'vars' : 'headers'][name] = value.new;
+  }
+  await expect.poll(() => readCollectionSettings(ctx, fileFormat), { message: 'collection setting edits should be saved to disk' }).toMatchObject(expected);
+}
+
+/** Request paths ("folder/name") in an exported collection's item tree. */
+export function exportedRequestPaths(items: { name: string, items?: unknown[] }[] = [], prefix = ''): string[] {
+  return items.flatMap((item) => item.items
+    ? exportedRequestPaths(item.items as typeof items, `${prefix}${item.name}/`)
+    : [`${prefix}${item.name}`]);
 }
