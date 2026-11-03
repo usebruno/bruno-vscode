@@ -3,7 +3,6 @@ import { WebviewHelper } from '../webview/helper';
 import { stateManager } from '../webview/state-manager';
 import { getCollectionName } from '../utils/path';
 import { generateUidBasedOnHash } from '../utils/common';
-import { posixifyPath } from '../utils/filesystem';
 import { transformBrunoConfigAfterRead } from '../utils/transformBrunoConfig';
 import {
   setCurrentWebview,
@@ -134,11 +133,7 @@ export async function openEnvironmentSettingsPanel(
 
   const hydrateUiStateSnapshot = () => {
     try {
-      const collectionsSnapshotState = new UiStateSnapshot().getCollections();
-      const posixCollectionRoot = posixifyPath(collectionRoot);
-      const collectionSnapshotState = collectionsSnapshotState?.find(
-        (c: { pathname?: string }) => c?.pathname === collectionRoot || c?.pathname === posixCollectionRoot
-      );
+      const collectionSnapshotState = new UiStateSnapshot().findByPathname(collectionRoot);
       if (collectionSnapshotState) {
         stateManager.sendTo(panel.webview, 'main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
       }

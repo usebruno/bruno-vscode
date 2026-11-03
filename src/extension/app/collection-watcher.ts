@@ -838,12 +838,7 @@ class CollectionWatcher {
       }
       flushPending();
 
-      const uiStateSnapshotStore = new UiStateSnapshot();
-      const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
-      const posixWatchPath = posixifyPath(watchPath);
-      const collectionSnapshotState = collectionsSnapshotState?.find(
-        (c: { pathname?: string }) => c?.pathname === watchPath || c?.pathname === posixWatchPath
-      );
+      const collectionSnapshotState = new UiStateSnapshot().findByPathname(watchPath);
 
       if (messageSender && collectionSnapshotState) {
         messageSender('main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
@@ -1444,12 +1439,7 @@ class CollectionWatcher {
     this.completeCollectionDiscoveryWithSender(collectionUid, sender);
 
     // Hydrate UI state snapshot (restore selected environment, etc.)
-    const uiStateSnapshotStore = new UiStateSnapshot();
-    const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
-    const posixCollectionPath = posixifyPath(collectionPath);
-    const collectionSnapshotState = collectionsSnapshotState?.find(
-      (c: { pathname?: string }) => c?.pathname === collectionPath || c?.pathname === posixCollectionPath
-    );
+    const collectionSnapshotState = new UiStateSnapshot().findByPathname(collectionPath);
 
     if (sender && collectionSnapshotState) {
       sender('main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
@@ -1614,12 +1604,7 @@ class CollectionWatcher {
       flushPending();
 
       // Hydrate UI state snapshot
-      const uiStateSnapshotStore = new UiStateSnapshot();
-      const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
-      const posixPath = posixifyPath(collectionPath);
-      const collectionSnapshotState = collectionsSnapshotState?.find(
-        (c: { pathname?: string }) => c?.pathname === collectionPath || c?.pathname === posixPath
-      );
+      const collectionSnapshotState = new UiStateSnapshot().findByPathname(collectionPath);
 
       if (sender && collectionSnapshotState) {
         sender('main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);

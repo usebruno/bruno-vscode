@@ -172,7 +172,8 @@ const getAbsoluteFilePath = (basePath: string, relativePath: string): string => 
 
 const normalizePath = (p: string | null | undefined): string => {
   if (!p) return '';
-  return p.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalized = p.replace(/\\/g, '/').replace(/\/+$/, '');
+  return /^[a-zA-Z]:/.test(normalized) ? normalized[0].toLowerCase() + normalized.slice(1) : normalized;
 };
 
 export default brunoPath;
