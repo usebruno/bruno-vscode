@@ -1550,6 +1550,10 @@ export async function createRequestV2(page: Page, _sidebar: Frame, ctx: Context,
   const webview = await getWebviewByTitle(page, 'Untitled 1');
   expect(webview).toBeTruthy();
 
+  if (type === 'gRPC' || type === 'WebSocket') {
+    return webview;
+  }
+
   const requestTypeDropdown = webview.getByTestId('request-method');
   if ((await requestTypeDropdown.getAttribute('aria-expanded')) === 'false') {
     await requestTypeDropdown.click()

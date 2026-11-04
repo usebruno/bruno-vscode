@@ -302,6 +302,7 @@ test.describe('OAuth2 Authentication', () => {
     await sendRequest(currentEditor, 200);
   });
 
+  // TODO: Check if this is still required. If yes, move it to tests/e2e/auth2/suites/oauth2.ts; if not, remove it.
   test('Interpolation: OAuth2 additional parameters with {{variables}} resolve correctly', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const fixturePath = path.resolve(__dirname, 'fixtures/oauth2-additional-params-collection.json');
