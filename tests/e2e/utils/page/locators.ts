@@ -180,16 +180,21 @@ export const buildCommonLocators = (frame: FrameLike) => ({
       frame.getByTestId(`${scope}-vars-${kind}`).locator('tbody tr')
   },
   auth: {
-    modeSelector: () => frame.locator('.auth-mode-selector'),
+    modeSelector: () => frame.locator('[data-testid$="-auth-mode"]'),
     inheritedMode: () => frame.locator('.inherit-mode-text'),
-    bearerTokenEditor: (level: 'collection' | 'request') => frame.getByTestId(`${level}-auth-bearer-token`).locator('.CodeMirror'),
-    basicUsernameEditor: (level: 'collection' | 'request') => frame.getByTestId(`${level}-auth-basic-username`).locator('.CodeMirror'),
-    basicPasswordEditor: (level: 'collection' | 'request') => frame.getByTestId(`${level}-auth-basic-password`).locator('.CodeMirror'),
+    bearerTokenEditor: (itemType: 'collection' | 'folder' | 'request') => frame.getByTestId(`${itemType}-auth-bearer-token`).locator('.CodeMirror'),
+    basicUsernameEditor: (itemType: 'collection' | 'folder' | 'request') => frame.getByTestId(`${itemType}-auth-basic-username`).locator('.CodeMirror'),
+    basicPasswordEditor: (itemType: 'collection' | 'folder' | 'request') => frame.getByTestId(`${itemType}-auth-basic-password`).locator('.CodeMirror'),
     awsAccessKeyIdEditor: () => frame.getByTestId('auth-awsv4-access-key-id').locator('.CodeMirror'),
     awsSecretAccessKeyEditor: () => frame.getByTestId('auth-awsv4-secret-access-key').locator('.CodeMirror'),
     awsServiceEditor: () => frame.getByTestId('auth-awsv4-service').locator('.CodeMirror'),
-    awsRegionEditor: () => frame.getByTestId('auth-awsv4-region').locator('.CodeMirror')
+    awsRegionEditor: () => frame.getByTestId('auth-awsv4-region').locator('.CodeMirror'),
+    editorByLabel: (label: string) => frame.locator(`label:text-is("${label}") + .single-line-editor-wrapper .CodeMirror`),
+    apiKeyAddToPlacementSelector: () => frame.getByTestId('auth-apikey-add-to-placement-selector')
   },
+  requestPane: () => frame.getByTestId('request-pane'),
+  itemPane: () => frame.locator('[data-testid="request-pane"], [data-testid="collection-settings"], [data-testid="folder-settings"]'),
+  responsePane: () => frame.getByTestId('response-pane'),
   paneTabs: {
     collectionSettingsTab: (key: string) => frame.getByTestId('collection-settings').locator(`[role="tab"].${key}`),
     folderSettingsTab: (key: string) => frame.getByTestId('folder-settings').locator(`[role="tab"].${key}`)
@@ -199,7 +204,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     itemHeader: (item: Locator) => item.getByTestId('timeline-item-header'),
     requestPanel: (item: Locator) => item.getByTestId('timeline-panel-request'),
     networkTab: (item: Locator) => item.getByRole('button', { name: 'Network', exact: true }),
-    networkPanel: (item: Locator) => item.getByTestId('timeline-panel-network')
+    networkPanel: (item: Locator) => item.getByTestId('timeline-panel-network'),
+    tab: (item: Locator, label: string) => item.getByTestId(`timeline-tab-${label}`),
+    panel: (item: Locator, label: string) => item.getByTestId(`timeline-panel-${label.toLowerCase()}`)
   },
   body: {
     modeSelector: () => frame.locator('.body-mode-selector'),
@@ -218,6 +225,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     authModeSelector: () => frame.getByTestId('oauth2-auth-mode-selector'),
     grantTypeSelector: () => frame.getByTestId('oauth2-grant-type-selector'),
     credentialsPlacementSelector: () => frame.getByTestId('oauth2-client-credentials-placement-selector'),
+    passwordCredentialsPlacementSelector: () => frame.getByTestId('oauth2-password-credentials-placement-selector'),
+    tokenPlacementSelector: () => frame.getByTestId('oauth2-token-placement-selector'),
     field: (key: string) => frame.getByTestId(`oauth2-field-${key}`),
     getTokenBtn: () => frame.getByTestId('oauth2-get-token-btn'),
     tokenTitle: () => frame.getByTestId('oauth2-token-title')

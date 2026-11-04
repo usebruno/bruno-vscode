@@ -465,7 +465,7 @@ const ViewContainer: React.FC<ViewContainerProps> = ({ viewData }) => {
             ref={mainSectionRef}
             className={`main flex ${isVerticalLayout ? 'flex-col' : ''} flex-grow pb-4 relative overflow-auto`}
           >
-            <section className="request-pane">
+            <section className="request-pane" data-testid="request-pane">
               <div className="px-4 h-full" style={requestPaneStyle}>
                 {renderRequestPane()}
               </div>
@@ -482,7 +482,7 @@ const ViewContainer: React.FC<ViewContainerProps> = ({ viewData }) => {
               <div className="dragbar-handle" />
             </div>
 
-            <section className="response-pane">{renderResponsePane()}</section>
+            <section className="response-pane" data-testid="response-pane">{renderResponsePane()}</section>
           </section>
 
           {item.type === 'graphql-request' ? (

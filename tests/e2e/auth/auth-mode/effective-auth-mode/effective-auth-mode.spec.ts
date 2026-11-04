@@ -18,6 +18,7 @@ import { buildCommonLocators } from '../../../utils/page/locators';
 test.use({ vscodeSettings: { 'files.simpleDialog.enable': true } });
 
 test.describe('Effective auth mode resolution', () => {
+  // @deprecated Moved to tests/e2e/auth2/suites/inheritance.ts (verifyInheritanceChain, verifyCollectionAuthApplied)
   test('Inherit resolves to the nearest parent, stops at a No Auth folder, and sends no Authorization header', async ({ pageWithCollections: page }) => {
     const collectionName = 'effective-auth-mode-collection';
     const sidebar = await openBrunoSidebar(page);

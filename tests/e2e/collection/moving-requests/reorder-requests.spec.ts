@@ -14,6 +14,7 @@ import {
 import { buildCommonLocators } from '../../utils/page/locators';
 
 test.describe('Reorder requests by drag and drop', () => {
+  // @deprecated Moved to tests/e2e/sidebar2/suites/reorder.ts (reorderRequests)
   test('Dropping a request above another and below the last row saves the new order', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Reorder Collection';
@@ -47,6 +48,7 @@ test.describe('Reorder requests by drag and drop', () => {
     });
   });
 
+  // @deprecated Moved to tests/e2e/sidebar2/suites/reorder.ts (reorderFolders)
   test('Dropping a folder above another and below the last row saves the new order', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Reorder Folders Collection';

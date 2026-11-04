@@ -5,6 +5,7 @@ import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
 import { Context } from '../../context';
 import { VSCodeFixture, VSCodeOptions } from '../fixtures';
+import type { AuthFields, AuthMode, LifecycleCtx, RequestPaneCheck, TextCheck } from '../../e2e-helper';
 
 // The editor pane currently in focus (request, folder settings or collection settings).
 export const activeEditor = (page: Page): FrameLocator =>
@@ -639,7 +640,6 @@ export async function setBearerToken(page: Page, editor: Frame, token: string): 
   await openRequestTab(editor, 'auth');
   const locators = buildCommonLocators(editor);
 
-  // `.auth-mode-selector` works for HTTP/GraphQL and WebSocket (WS lacks the oauth2 testid).
   await locators.auth.modeSelector().click();
   const bearerItem = locators.dropdownItem('Bearer Token');
   await expect(bearerItem).toBeVisible({ timeout: 5_000 });
@@ -1056,7 +1056,7 @@ export async function sendRequest(
   const statusCode = editor.locator('[data-testid="response-status-code"]');
   await expect(statusCode).toBeVisible({ timeout });
 
-  if (expectedStatus !== undefined) {
+  if (expectedStatus) {
     await expect(statusCode).toContainText(String(expectedStatus), { timeout: 5_000 });
   }
 }
@@ -1184,21 +1184,29 @@ export async function createFolder(
   ).toBeVisible({ timeout: 15_000 });
 }
 
+export async function pickDropdownItem(page: Page, trigger: Locator | string, label: string): Promise<void> {
+  const editor = activeEditor(page);
+  const item = editor.locator('.dropdown-item').filter({ hasText: label });
+  await (typeof trigger === 'string' ? editor.locator(trigger) : trigger).click();
+  await expect(item).toBeVisible();
+  await item.click();
+  await expect(item).not.toBeVisible();
+}
+
 /** Pick an auth mode by its dropdown label, e.g. 'Bearer Token', in the auth pane that is open. */
 export async function selectAuthMode(page: Page, modeLabel: string): Promise<void> {
-  const editor = activeEditor(page);
-  await editor.locator('.auth-mode-label').click();
-  await editor.locator('.dropdown-item').filter({ hasText: modeLabel }).click();
+  await pickDropdownItem(page, buildCommonLocators(activeEditor(page)).auth.modeSelector(), modeLabel);
 }
 
 async function selectPaneTab(page: Page, paneSelector: string, tabName: string): Promise<void> {
   const editor = activeEditor(page);
   const pane = editor.locator(paneSelector);
   await expect(pane).toBeVisible();
-  await expect(pane.locator('.tabs')).toBeVisible();
+  const tabs = pane.locator('.tabs').first();
+  await expect(tabs).toBeVisible();
 
-  const visibleTab = pane.locator('.tabs').getByRole('tab', { name: tabName });
-  const overflowButton = pane.locator('.tabs .more-tabs');
+  const visibleTab = tabs.getByRole('tab', { name: tabName });
+  const overflowButton = tabs.locator('.more-tabs');
 
   await expect(async () => {
     if (await visibleTab.isVisible()) {
@@ -1654,4 +1662,318 @@ export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Contex
   // verify the exported file on disk
   await expect.poll(() => fs.existsSync(exportPath), { message: `${exportPath} should be exported` }).toBe(true);
   return JSON.parse(fs.readFileSync(exportPath, 'utf8'));
+}
+
+export const authModeLabels: Record<AuthMode, string> = {
+  inherit: 'Inherit',
+  none: 'No Auth',
+  basic: 'Basic Auth',
+  bearer: 'Bearer Token',
+  digest: 'Digest Auth',
+  ntlm: 'NTLM Auth',
+  wsse: 'WSSE Auth',
+  apikey: 'API Key',
+  awsv4: 'AWS Sig v4',
+  oauth2: 'OAuth 2.0'
+};
+
+// The collection the running suite acts on
+let currentCollection: LifecycleCtx;
+export let page: Page;
+export let sidebar: Frame;
+export let collectionName = '';
+export let collectionPath = '';
+
+export function useCollection(ctx: LifecycleCtx): void {
+  currentCollection = ctx;
+  page = ctx.page;
+  sidebar = ctx.sidebar;
+  collectionName = ctx.collection;
+  collectionPath = ctx.collectionPath;
+}
+
+// Checks the text of a response pane tab of a request. Timeline checks a view (Request, Response or Network) of the latest entry, other tabs the whole pane.
+export async function expectResponsePane(request: string, tabName: string, check: TextCheck, section: 'Request' | 'Response' | 'Network' = 'Request'): Promise<void> {
+  const ctx = currentCollection;
+  const page = ctx.page;
+  const locators = buildCommonLocators(activeEditor(page));
+  await expandCollection(ctx.sidebar, ctx.collection);
+  await openRequestEditor(ctx, request);
+  await selectResponsePaneTab(page, tabName);
+
+  let panel: Locator;
+  if (tabName === 'Timeline') {
+    const timelineItem = locators.timeline.lastItem();
+    await locators.timeline.itemHeader(timelineItem).click();
+    await locators.timeline.tab(timelineItem, section).click();
+    panel = locators.timeline.panel(timelineItem, section);
+  } else {
+    panel = locators.responsePane();
+  }
+  await expect(panel).toBeVisible();
+
+  for (const text of check.contains ?? []) {
+    await expect(panel).toContainText(text);
+  }
+  for (const text of check.notContains ?? []) {
+    await expect(panel).not.toContainText(text);
+  }
+}
+
+async function openRequestEditor({ page, sidebar, collection }: Pick<LifecycleCtx, 'page' | 'sidebar' | 'collection'>, request: string) {
+  await expect(async () => {
+    await openRequest(page, sidebar, collection, request);
+    try {
+      await expect(buildCommonLocators(activeEditor(page)).requestPane()).toBeVisible({ timeout: 3000 });
+    } catch (error) {
+      await runCommand(page, 'View: Close All Editors');
+      throw error;
+    }
+  }).toPass({ timeout: 25_000 });
+}
+
+// What a target name refers to. Names are unique across the collection, its folders and its requests.
+function itemTypeOf({ collection, folders, requests }: LifecycleCtx, target: string): 'collection' | 'folder' | 'request' {
+  if (target === collection) return 'collection';
+  if (folders.includes(target)) return 'folder';
+  if (requests.includes(target)) return 'request';
+  throw new Error(`"${target}" is not the collection, a folder or a request of this suite`);
+}
+
+async function openRequestPane(ctx: LifecycleCtx, target: string, tab: string) {
+  const { page, sidebar } = ctx;
+  const rows = buildCommonLocators(sidebar).sidebar;
+  const itemType = itemTypeOf(ctx, target);
+
+  if (itemType === 'collection') {
+    await rows.collectionName(target).click();
+    await selectPaneTab(page, '[data-testid="collection-settings"]', tab);
+  } else if (itemType === 'request') {
+    await openRequestEditor(ctx, target);
+    await selectPaneTab(page, '[data-testid="request-pane"]', tab);
+  } else {
+    await rows.folder(target).click();
+    await selectPaneTab(page, '[data-testid="folder-settings"]', tab);
+  }
+}
+
+async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
+  if (itemType === 'request') {
+    await saveRequest(page);
+  } else {
+    await buildCommonLocators(activeEditor(page)).saveButton().click();
+    await expect(activeEditor(page).getByText(/Settings saved successfully/).last()).toBeVisible({ timeout: 5000 });
+  }
+}
+
+// Picks the grant type, then fills the OAuth 2.0 fields (found by their test-ids) and the placement dropdowns.
+async function setOAuth2Fields(page: Page, fields: AuthFields) {
+  const editor = activeEditor(page);
+  const oauth2 = buildCommonLocators(editor).oauth2;
+  const field = (key: string) => oauth2.field(key).locator('.CodeMirror');
+
+  if (fields.grantType) {
+    const grantTypeLabels = {
+      passwordCredentials: 'Password Credentials',
+      authorizationCode: 'Authorization Code',
+      implicit: 'Implicit',
+      clientCredentials: 'Client Credentials'
+    };
+    await pickDropdownItem(page, oauth2.grantTypeSelector(), grantTypeLabels[fields.grantType]);
+  }
+
+  const values: Record<string, string | undefined> = {
+    accessTokenUrl: fields.accessTokenUrl, refreshTokenUrl: fields.refreshTokenUrl, username: fields.username,
+    password: fields.password, clientId: fields.clientId, clientSecret: fields.clientSecret, scope: fields.scope
+  };
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) await setCodeMirrorValue(page, field(key), value);
+  }
+
+  if (fields.addCredentialsTo) {
+    const addCredentialsToSelector = fields.grantType === 'passwordCredentials' ? oauth2.passwordCredentialsPlacementSelector() : oauth2.credentialsPlacementSelector();
+    await pickDropdownItem(page, addCredentialsToSelector, fields.addCredentialsTo === 'requestBody' ? 'Request Body' : 'Basic Auth Header');
+  }
+  if (fields.addTokenTo) {
+    await pickDropdownItem(page, oauth2.tokenPlacementSelector(), fields.addTokenTo === 'url' ? 'URL' : 'Header');
+    await expect(oauth2.field(fields.addTokenTo === 'url' ? 'tokenQueryKey' : 'tokenHeaderPrefix')).toBeVisible();
+  }
+}
+
+const authFieldLabels: Partial<Record<keyof AuthFields, string>> = {
+  username: 'Username', password: 'Password', domain: 'Domain', token: 'Token', key: 'Key', value: 'Value',
+  accessKeyId: 'Access Key ID', secretAccessKey: 'Secret Access Key', service: 'Service', region: 'Region'
+};
+
+async function fillAuthFields(page: Page, fields: AuthFields) {
+  const { auth } = buildCommonLocators(activeEditor(page));
+  for (const [field, value] of Object.entries(fields)) {
+    const label = authFieldLabels[field as keyof AuthFields];
+    if (label && value) {
+      await setCodeMirrorValue(page, auth.editorByLabel(label), String(value));
+    }
+  }
+}
+
+export async function setAuth(target: string, mode: AuthMode, fields: AuthFields = {}): Promise<void> {
+  const ctx = currentCollection;
+  const { page, collection } = ctx;
+
+  await expandCollection(ctx.sidebar, collection);
+  await openRequestPane(ctx, target, 'Auth');
+  await selectAuthMode(page, authModeLabels[mode]);
+
+  if (mode === 'oauth2') {
+    await setOAuth2Fields(page, fields);
+  } else {
+    await fillAuthFields(page, fields);
+  }
+
+  if (mode === 'apikey' && fields.addTo) {
+    await pickDropdownItem(page, buildCommonLocators(activeEditor(page)).auth.apiKeyAddToPlacementSelector(), fields.addTo === 'queryParams' ? 'Query Param' : 'Header');
+  }
+
+  await saveItem(page, itemTypeOf(ctx, target));
+}
+
+async function openOAuth2Tab(request: string) {
+  const ctx = currentCollection;
+  await expandCollection(ctx.sidebar, ctx.collection);
+  await openRequestPane(ctx, request, 'Auth');
+  return activeEditor(ctx.page);
+}
+
+export async function getOAuth2AccessToken(request: string, { expectToken = true } = {}): Promise<void> {
+  const editor = await openOAuth2Tab(request);
+  const getToken = editor.getByTestId('oauth2-get-token-btn');
+  await expect(getToken).toBeEnabled();
+  await getToken.click();
+  if (expectToken) await expect(editor.getByTestId('oauth2-token-title').first()).toBeVisible({ timeout: 15_000 });
+  await expect(getToken).toBeEnabled({ timeout: 15_000 });
+}
+
+// Runs right after getOAuth2AccessToken, in the same open Auth tab.
+export async function refreshOAuth2Token(): Promise<void> {
+  const editor = activeEditor(currentCollection.page);
+  const refresh = editor.getByTestId('oauth2-refresh-token-btn');
+  await expect(refresh).toBeVisible();
+  await refresh.click();
+  await expect(refresh).toBeEnabled({ timeout: 15_000 });
+}
+
+export async function clearOAuth2Cache(request: string): Promise<void> {
+  const editor = await openOAuth2Tab(request);
+  const clear = editor.getByTestId('oauth2-clear-cache-btn');
+  if (await clear.isVisible()) {
+    await clear.scrollIntoViewIfNeeded();
+    await clear.click();
+    await expect(editor.getByTestId('oauth2-token-title')).toHaveCount(0);
+  }
+}
+
+// Checks a tab of a collection, folder or request: table rows or text.
+// e.g. expectRequestPane('request-1', 'Params', { rows: [{ name: 'page', value: '1' }] }) // rows is not implemented yet
+// e.g. expectRequestPane('request-1', 'Body', { contains: ['"name": "bruno"'], notContains: ['password'] })
+export async function expectRequestPane(target: string, tab: string, check: RequestPaneCheck): Promise<void> {
+  const ctx = currentCollection;
+
+  await expandCollection(ctx.sidebar, ctx.collection);
+  await openRequestPane(ctx, target, tab);
+
+  if (check.rows) {
+    await expectTableRows(ctx.page, tab, check.rows);
+  }
+
+  const panel = buildCommonLocators(activeEditor(ctx.page)).itemPane();
+  for (const text of check.contains ?? []) {
+    await expect(panel).toContainText(text);
+  }
+  for (const text of check.notContains ?? []) {
+    await expect(panel).not.toContainText(text);
+  }
+}
+
+export async function sendRequestAndExpect(request: string, status?: 200 | 201 | 400 | 401 | 404): Promise<void> {
+  const ctx = currentCollection;
+
+  await expandCollection(ctx.sidebar, ctx.collection);
+  await openRequestEditor(ctx, request);
+  // Send through the active editor: the frame openRequest returns can be a hidden one.
+  await sendRequest(activeEditor(ctx.page), status);
+}
+
+export async function setBody(request: string, json: string): Promise<void> {
+  const ctx = currentCollection;
+  const locators = buildCommonLocators(activeEditor(ctx.page));
+  await expandCollection(ctx.sidebar, ctx.collection);
+  await openRequestPane(ctx, request, 'Body');
+  await locators.requestBody.modeSelector().click();
+  await locators.requestBody.modeOption('json').click();
+  await setCodeMirrorValue(ctx.page, locators.body.editor(), json);
+  await saveRequest(ctx.page);
+}
+
+// Not implemented yet. Key/value tables: Headers and Params of a request.
+// e.g. expectTableRows(page, 'request-headers', [{ name: 'x-api-key', value: '123' }])
+async function expectTableRows(page: Page, tableId: string, rows: { name: string; value: string; description?: string }[]) {
+  console.warn('expectTableRows is not implemented');
+}
+
+// e.g. setHeaders('request-1', [{ name: 'x-api-key', value: '123' }])
+export async function setHeaders(target: string, rows: { name: string; value: string; description?: string }[]): Promise<void> {
+  console.warn('setHeaders is not implemented');
+}
+
+// e.g. setParams('request-1', [{ name: 'page', value: '2' }])
+export async function setParams(request: string, rows: { name: string; value: string; description?: string }[]): Promise<void> {
+  console.warn('setParams is not implemented');
+}
+
+// e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
+export async function setVars(target: string, rows: { name: string; value: string; description?: string }[], hook: 'preRequest' | 'postResponse' = 'preRequest'): Promise<void> {
+  const ctx = currentCollection;
+  const editor = activeEditor(ctx.page);
+  const itemType = itemTypeOf(ctx, target);
+  const suffix = hook === 'preRequest' ? 'req' : 'res';
+  const tableId = `${itemType}-vars-${suffix}`;
+
+  await expandCollection(ctx.sidebar, ctx.collection);
+  await openRequestPane(ctx, target, 'Vars');
+
+  const tableRows = buildCommonLocators(editor).varsTable.rows(itemType, suffix);
+  const table = buildCommonLocators(editor.getByTestId(tableId)).editableTable;
+  await expect(tableRows.first()).toBeVisible({ timeout: 10_000 });
+
+  for (const { name, value } of rows) {
+    const emptyRow = (await tableRows.count()) - 1;
+    await table.columnNameInput(emptyRow).fill(name);
+    await setCodeMirrorValue(ctx.page, table.columnValueEditor(emptyRow), value);
+  }
+
+  await saveItem(ctx.page, itemType);
+}
+
+// e.g. setScript('request-1', { preRequest: "bru.setVar('a', 1)", postResponse: "bru.setVar('b', res.status)" })
+export async function setScript(target: string, scripts: { preRequest?: string; postResponse?: string }): Promise<void> {
+  console.warn('setScript is not implemented');
+}
+
+// e.g. addAsserts('request-1', [{ expression: 'res.status', operator: 'eq', value: '200' }])
+export async function addAsserts(request: string, rows: { expression: string; operator: string; value: string }[]): Promise<void> {
+  console.warn('addAsserts is not implemented');
+}
+
+// e.g. setTests('request-1', "test('ok', () => expect(res.status).to.equal(200))")
+export async function setTests(target: string, script: string): Promise<void> {
+  console.warn('setTests is not implemented');
+}
+
+// e.g. setDocs('request-1', '# What this request does')
+export async function setDocs(target: string, markdown: string): Promise<void> {
+  console.warn('setDocs is not implemented');
+}
+
+// e.g. setSettings('request-1', { followRedirects: false })
+export async function setSettings(request: string, settings: Record<string, string | boolean>): Promise<void> {
+  console.warn('setSettings is not implemented');
 }

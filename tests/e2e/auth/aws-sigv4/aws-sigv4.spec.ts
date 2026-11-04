@@ -17,6 +17,7 @@ import { buildCommonLocators } from '../../utils/page/locators';
 import { TEST_SERVER_LOCAL_URL } from '../../utils/urls';
 
 test.describe('AWS Signature V4 auth', () => {
+  // @deprecated Moved to tests/e2e/auth2/suites/auth-modes.ts (testAwsV4Auth)
   test('Signs the request and shows the authentication in the timeline', async ({ page, tmpDir }) => {
     const collectionName = 'aws-sigv4-collection';
     const requestName = 'signed-request';

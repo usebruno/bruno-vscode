@@ -153,10 +153,18 @@ async function waitForWorkbench(page: Page): Promise<void> {
   await new Promise(r => setTimeout(r, 2_000));
 }
 
-export const test = base.extend<VSCodeFixture & VSCodeOptions>({
+export interface SuiteWorkerFixtures {
+  sharedPage: Page;
+}
+
+const SUITE_SETTINGS = { 'files.simpleDialog.enable': true, 'window.dialogStyle': 'custom' };
+
+let launchWorkbench: (args: { vscodeSettings: Record<string, unknown> }, use: (page: Page) => Promise<void>) => Promise<void>;
+
+export const test = base.extend<VSCodeFixture & VSCodeOptions, SuiteWorkerFixtures>({
   vscodeSettings: [{}, { option: true }],
 
-  page: async ({ vscodeSettings }, use) => {
+  page: launchWorkbench = async ({ vscodeSettings }, use) => {
     const debugPort = await getFreePort();
     const userDataDir = makeTempDir('bruno-vscode-test-');
 
@@ -213,6 +221,10 @@ export const test = base.extend<VSCodeFixture & VSCodeOptions>({
       fs.rmSync(workspacePath, { recursive: true, force: true });
     }
   },
+
+  sharedPage: [async ({}, use) => {
+    await launchWorkbench({ vscodeSettings: SUITE_SETTINGS }, use);
+  }, { scope: 'worker', timeout: 120_000 }],
 
   context: async ({ page }, use) => {
     await use(page.context());
