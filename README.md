@@ -41,6 +41,48 @@ The extension provides a comprehensive set of features for API development and t
 3. Use **Create Collection** or **Open Collection** to get started
 4. Right-click folders and requests in the sidebar for context menu actions
 
+### Windows: OpenSSL required for E2E tests
+
+The E2E test server uses OpenSSL to generate certificates for client certificate tests. If OpenSSL is not available in your `PATH`, the server will fail to start with:
+
+```text
+Error: spawnSync openssl ENOENT
+```
+
+If Git for Windows is installed, check whether its OpenSSL executable is available:
+
+```powershell
+Test-Path "C:\Program Files\Git\usr\bin\openssl.exe"
+```
+
+If the command returns `True`, add the folder to your current PowerShell session:
+
+```powershell
+$env:Path = "C:\Program Files\Git\usr\bin;$env:Path"
+```
+
+Verify OpenSSL and run the tests:
+
+```powershell
+openssl version
+npm run test:e2e
+```
+
+The `PATH` change above applies only to the current terminal session. To make it permanent:
+
+1. Search Windows for **Edit environment variables for your account**.
+2. Under **User variables**, select **Path** and click **Edit**.
+3. Click **New** and add the folder containing `openssl.exe`:
+
+   ```text
+   C:\Program Files\Git\usr\bin
+   ```
+
+4. Save the changes and restart VS Code.
+5. Run `openssl version` to confirm that OpenSSL is available.
+
+If Git is installed in a different location, use the path to its `usr\bin` folder. If OpenSSL is not present there, install OpenSSL and add the folder containing `openssl.exe` to your `PATH`.
+
 ## Related Projects
 
 - **[Bruno Desktop](https://github.com/usebruno/bruno)** - The main Bruno desktop application

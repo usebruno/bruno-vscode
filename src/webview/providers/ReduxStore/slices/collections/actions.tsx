@@ -891,7 +891,6 @@ export const runCollectionFolder
           folder,
           collectionCopy,
           environment,
-          collectionCopy.runtimeVariables,
           recursive,
           delay,
           tags,
