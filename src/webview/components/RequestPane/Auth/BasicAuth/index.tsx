@@ -27,6 +27,7 @@ const BasicAuth = ({
 }: any) => {
   const dispatch = useDispatch();
   const { storedTheme } = useTheme();
+  const itemType = item?.type === 'folder' ? 'folder' : 'request';
 
   const basicAuth = get(request, 'auth.basic', {});
   const { isSensitive } = useDetectSensitiveField(collection);
@@ -69,7 +70,7 @@ const BasicAuth = ({
   return (
     <StyledWrapper className="mt-2 w-full">
       <label className="block mb-1">Username</label>
-      <div className="single-line-editor-wrapper mb-3" data-testid="request-auth-basic-username">
+      <div className="single-line-editor-wrapper mb-3" data-testid={`${itemType}-auth-basic-username`}>
         <SingleLineEditor
           value={basicAuth.username || ''}
           theme={storedTheme}
@@ -83,7 +84,7 @@ const BasicAuth = ({
       </div>
 
       <label className="block mb-1">Password</label>
-      <div className="single-line-editor-wrapper flex items-center" data-testid="request-auth-basic-password">
+      <div className="single-line-editor-wrapper flex items-center" data-testid={`${itemType}-auth-basic-password`}>
         <SingleLineEditor
           value={basicAuth.password || ''}
           theme={storedTheme}

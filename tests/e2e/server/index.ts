@@ -20,6 +20,7 @@
  *   GET  /api/auth/oauth2/resource                - Protected resource (all flows)
  *   POST /api/auth/oauth2/refresh                 - Token refresh
  *   POST /api/auth/oauth2/reset                   - Reset all OAuth2 state
+ *   GET  /api/auth/digest/protected               - Digest auth (bruno / della)
  *   ws://…/<path>                                  - WebSocket echo (sends a welcome
  *                                                    message containing the connected
  *                                                    path, then echoes every message)
@@ -34,6 +35,7 @@ import cors from 'cors';
 import * as http from 'http';
 import { WebSocketServer } from 'ws';
 import { oauth2Router } from './auth/oauth2';
+import { digestRouter } from './auth/digest';
 import { startGrpcServer } from './grpc';
 import { startMtlsServer, startMtlsGrpcServer, startUntrustedHttpsServer, startUntrustedGrpcServer } from '../ssl/client-certificate/server';
 import { MTLS_PORT, MTLS_GRPC_PORT, UNTRUSTED_HTTPS_PORT, UNTRUSTED_GRPC_PORT } from '../ssl/client-certificate/server/mtls-certs';
@@ -135,6 +137,7 @@ app.all('/api/echo/auth', (req, res) => {
 // --- Auth ---
 
 app.use('/api/auth/oauth2', oauth2Router);
+app.use('/api/auth/digest', digestRouter);
 
 // --- Start ---
 

@@ -26,6 +26,7 @@ async function withNtlmServer(options: Parameters<typeof startNtlmServer>[0], ru
 }
 
 test.describe('NTLM auth', () => {
+  // @deprecated Moved to tests/e2e/auth2/suites/ntlm.ts
   test('authenticates requests with NTLM', async ({ page, tmpDir }) => {
     const collectionName = 'NTLM';
     const sidebar = await openBrunoSidebar(page);
