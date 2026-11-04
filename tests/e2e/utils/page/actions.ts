@@ -1182,6 +1182,10 @@ export async function createFolder(
   await expect(
     buildCommonLocators(sidebar).sidebar.collectionItem(folderName)
   ).toBeVisible({ timeout: 15_000 });
+
+  const folderCreatedToast = sidebar.getByRole('status').filter({ hasText: 'Folder created' });
+  await expect(folderCreatedToast).toBeVisible();
+  await expect(folderCreatedToast).toBeHidden();
 }
 
 export async function pickDropdownItem(page: Page, trigger: Locator | string, label: string): Promise<void> {
