@@ -60,6 +60,25 @@ describe('EnvironmentSecretsStore', () => {
     expect(secrets[0].value).toBe('encrypted:secret-key-123');
   });
 
+  test('serializes typed (non-string) secret values to a string before encryption', () => {
+    // Regression guard: encryptStringSafe throws on a non-string, so a native number/object secret
+    // must be stringified first (mirrored on read by parseValueByDataType) or it is lost as ''.
+    secretsStore.storeEnvSecrets('/col', {
+      name: 'Typed',
+      variables: [
+        { name: 'TIMEOUT', value: 30, secret: true, dataType: 'number' },
+        { name: 'FLAG', value: true, secret: true, dataType: 'boolean' },
+        { name: 'CONFIG', value: { host: 'localhost' }, secret: true, dataType: 'object' }
+      ]
+    });
+
+    const secrets = secretsStore.getEnvSecrets('/col', { name: 'Typed' });
+    const byName = (n: string) => secrets.find((s: { name: string; value: string }) => s.name === n);
+    expect(byName('TIMEOUT')?.value).toBe('encrypted:30');
+    expect(byName('FLAG')?.value).toBe('encrypted:true');
+    expect(byName('CONFIG')?.value).toBe('encrypted:{"host":"localhost"}');
+  });
+
   test('only stores variables marked as secret', () => {
     secretsStore.storeEnvSecrets('/col', {
       name: 'env',

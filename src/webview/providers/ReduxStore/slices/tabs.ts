@@ -10,6 +10,8 @@ interface Tab {
   collectionUid: string;
   requestPaneWidth: number | null;
   requestPaneTab: string;
+  scriptPaneTab?: string;
+  focusErrorLine?: { scriptPhase: string; line: number; requestedAt: number } | null;
   responsePaneTab: string;
   responsePaneScrollPosition: number | null;
   responseFormat: string | null;
@@ -160,6 +162,31 @@ export const tabsSlice = createSlice({
         tab.requestPaneTab = action.payload.requestPaneTab;
       }
     },
+    updateScriptPaneTab: (state, action: PayloadAction<any>) => {
+      const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
+
+      if (tab) {
+        tab.scriptPaneTab = action.payload.scriptPaneTab;
+      }
+    },
+    setFocusErrorLine: (state, action: PayloadAction<any>) => {
+      const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
+
+      if (tab) {
+        tab.focusErrorLine = {
+          scriptPhase: action.payload.scriptPhase,
+          line: action.payload.line,
+          requestedAt: action.payload.requestedAt
+        };
+      }
+    },
+    clearFocusErrorLine: (state, action: PayloadAction<any>) => {
+      const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
+
+      if (tab) {
+        tab.focusErrorLine = null;
+      }
+    },
     updateResponsePaneTab: (state, action: PayloadAction<any>) => {
       const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
 
@@ -268,6 +295,9 @@ export const {
   updateRequestPaneTabWidth,
   updateRequestPaneTabHeight,
   updateRequestPaneTab,
+  updateScriptPaneTab,
+  setFocusErrorLine,
+  clearFocusErrorLine,
   updateResponsePaneTab,
   updateResponsePaneScrollPosition,
   updateResponseFormat,

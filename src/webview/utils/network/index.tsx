@@ -1,8 +1,8 @@
 import React from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 import { resolvePath } from 'utils/filesystem';
+import type { RequestSent, ResponseTimeline } from '@bruno-types';
 
-// Response types for network operations
 interface HttpResponse {
   error?: string | Error;
   data?: string;
@@ -12,7 +12,8 @@ interface HttpResponse {
   status?: number;
   statusText?: string;
   duration?: number;
-  timeline?: unknown[];
+  timeline?: ResponseTimeline;
+  requestSent?: RequestSent;
   stream?: unknown;
 }
 
@@ -55,7 +56,10 @@ export const sendNetworkRequest = async (item: any, collection: any, environment
             statusText: response.statusText,
             duration: response.duration,
             timeline: response.timeline,
-            stream: response.stream
+            requestSent: response.requestSent,
+            stream: response.stream,
+            // Interpolated URL that was sent, used as the HTML-preview <base href>
+            requestUrl: (response as { requestUrl?: string }).requestUrl
           });
         })
         .catch((err) => reject(err));

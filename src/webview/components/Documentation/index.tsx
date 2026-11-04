@@ -47,24 +47,26 @@ const Documentation = ({
 
   return (
     <StyledWrapper className="flex flex-col gap-y-1 h-full w-full relative">
-      <div className="editing-mode" role="tab" onClick={toggleViewMode}>
+      <div className="editing-mode flex-shrink-0" role="tab" onClick={toggleViewMode}>
         {isEditing ? 'Preview' : 'Edit'}
       </div>
 
-      {isEditing ? (
-        <CodeEditor
-          collection={collection}
-          theme={displayedTheme}
-          font={get(preferences, 'font.codeFont', 'default')}
-          fontSize={get(preferences, 'font.codeFontSize')}
-          value={docs || ''}
-          onEdit={onEdit}
-          onSave={onSave}
-          mode="application/text"
-        />
-      ) : (
-        <Markdown collectionPath={collection.pathname} onDoubleClick={toggleViewMode} content={docs} />
-      )}
+      <div className="flex-1 min-h-0">
+        {isEditing ? (
+          <CodeEditor
+            collection={collection}
+            theme={displayedTheme}
+            font={get(preferences, 'font.codeFont', 'default')}
+            fontSize={get(preferences, 'font.codeFontSize')}
+            value={docs || ''}
+            onEdit={onEdit}
+            onSave={onSave}
+            mode="application/text"
+          />
+        ) : (
+          <Markdown collectionPath={collection.pathname} onDoubleClick={toggleViewMode} content={docs} />
+        )}
+      </div>
     </StyledWrapper>
   );
 };

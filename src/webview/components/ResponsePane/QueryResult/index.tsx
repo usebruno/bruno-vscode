@@ -1,6 +1,7 @@
 import { debounce } from 'lodash';
 import { useTheme } from 'providers/Theme/index';
 import React, { useMemo, useState } from 'react';
+import { isScriptSourcedError } from '@bruno-types';
 import { formatResponse, getContentType } from 'utils/common';
 import { getDefaultResponseFormat, detectContentTypeFromBase64 } from 'utils/response';
 import LargeResponseWarning from '../LargeResponseWarning';
@@ -176,8 +177,6 @@ const QueryResult = ({
   }, [selectedFormat]);
 
   const queryFilterEnabled = useMemo(() => codeMirrorMode.includes('json') && selectedFormat === 'json' && selectedTab === 'editor', [codeMirrorMode, selectedFormat, selectedTab]);
-  const hasScriptError = item.preRequestScriptErrorMessage || item.postResponseScriptErrorMessage;
-
   return (
     <StyledWrapper
       className="w-full h-full relative flex"
@@ -185,8 +184,9 @@ const QueryResult = ({
     >
       {error ? (
         <div>
-          {hasScriptError ? null : (
-            <div className="error" style={{ whiteSpace: 'pre-line' }}>{formatErrorMessage(error)}</div>
+          {/* The runner reports a script failure through item.error too, where the card already shows it. */}
+          {isScriptSourcedError(item) ? null : (
+            <div className="error" data-testid="response-error" style={{ whiteSpace: 'pre-line' }}>{formatErrorMessage(error)}</div>
           )}
 
           {error && typeof error === 'string' && error.toLowerCase().includes('self signed certificate') ? (

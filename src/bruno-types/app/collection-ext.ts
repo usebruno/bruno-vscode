@@ -6,8 +6,9 @@ import type { ResponseState, TestResult, AssertionResult } from './response';
 export interface RequestSent {
   url?: string;
   method?: string;
-  headers?: KeyValue[];
+  headers?: KeyValue[] | Record<string, string>;
   body?: unknown;
+  data?: unknown;
   timestamp?: number;
   [key: string]: unknown;
 }
@@ -23,7 +24,8 @@ export interface OAuth2CredentialEntry {
 }
 
 export interface TimelineEntry {
-  type: 'request' | 'response' | 'error';
+  id?: string;
+  type: 'request' | 'response' | 'error' | 'oauth2';
   eventType?: string;
   collectionUid: UID;
   folderUid: UID | null;
@@ -33,8 +35,21 @@ export interface TimelineEntry {
     request?: unknown;
     response?: unknown;
     eventData?: unknown;
+    debugInfo?: unknown[];
     timestamp?: number;
   };
+}
+
+export interface DotEnvVariable {
+  uid?: UID;
+  name: string;
+  value: string;
+}
+
+export interface DotEnvFile {
+  filename: string;
+  variables: DotEnvVariable[];
+  content: string;
 }
 
 export interface RunnerConfiguration {
@@ -103,6 +118,7 @@ export interface AppItem extends Item {
   /** File size in MB (for large files) */
   size?: number;
   error?: { message: string } | null;
+  errorSource?: string | null;
 }
 
 export interface AppCollection extends Omit<Collection, 'items'> {
@@ -125,6 +141,7 @@ export interface AppCollection extends Omit<Collection, 'items'> {
   isLoading?: boolean;
   securityConfig?: SecurityConfig;
   processEnvVariables?: Record<string, unknown>;
+  dotEnvFiles?: DotEnvFile[];
   timeline?: TimelineEntry[];
   draft?: CollectionDraft | null;
   environmentsDraft?: EnvironmentsDraft | null;

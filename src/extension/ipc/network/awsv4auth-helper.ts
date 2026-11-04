@@ -1,10 +1,8 @@
-
-// TODO: Import actual packages when dependencies are set up
-// import { fromIni } from '@aws-sdk/credential-providers';
-// import { aws4Interceptor } from 'aws4-axios';
 import type { AxiosInstance } from 'axios';
+import { fromIni } from '@aws-sdk/credential-providers';
+import { aws4Interceptor } from 'aws4-axios';
 
-interface AwsV4Config {
+export interface AwsV4Config {
   profileName?: string;
   accessKeyId?: string;
   secretAccessKey?: string;
@@ -13,7 +11,7 @@ interface AwsV4Config {
   service?: string;
 }
 
-interface RequestWithAwsConfig {
+export interface RequestWithAwsConfig {
   awsv4config?: AwsV4Config;
 }
 
@@ -29,16 +27,14 @@ async function resolveAwsV4Credentials(request: RequestWithAwsConfig): Promise<A
 
   if (isStrPresent(awsv4.profileName)) {
     try {
-      // TODO: Implement with @aws-sdk/credential-providers
-      // const credentialsProvider = fromIni({
-      //   profile: awsv4.profileName,
-      //   ignoreCache: true
-      // });
-      // const credentials = await credentialsProvider();
-      // awsv4.accessKeyId = credentials.accessKeyId;
-      // awsv4.secretAccessKey = credentials.secretAccessKey;
-      // awsv4.sessionToken = credentials.sessionToken;
-      console.warn('AWS profile-based credentials not yet implemented');
+      const credentialsProvider = fromIni({
+        profile: awsv4.profileName,
+        ignoreCache: true
+      });
+      const credentials = await credentialsProvider();
+      awsv4.accessKeyId = credentials.accessKeyId;
+      awsv4.secretAccessKey = credentials.secretAccessKey;
+      awsv4.sessionToken = credentials.sessionToken;
     } catch {
       console.error('Failed to fetch credentials from AWS profile.');
     }
@@ -59,27 +55,24 @@ function addAwsV4Interceptor(axiosInstance: AxiosInstance, request: RequestWithA
     return;
   }
 
-  // TODO: Implement with aws4-axios
-  // const interceptor = aws4Interceptor({
-  //   options: {
-  //     region: awsv4.region,
-  //     service: awsv4.service
-  //   },
-  //   credentials: {
-  //     accessKeyId: awsv4.accessKeyId,
-  //     secretAccessKey: awsv4.secretAccessKey,
-  //     sessionToken: awsv4.sessionToken
-  //   }
-  // });
-  // axiosInstance.interceptors.request.use(interceptor);
+  const interceptor = aws4Interceptor({
+    options: {
+      region: awsv4.region,
+      service: awsv4.service
+    },
+    credentials: {
+      accessKeyId: awsv4.accessKeyId,
+      secretAccessKey: awsv4.secretAccessKey,
+      sessionToken: awsv4.sessionToken
+    }
+  });
 
-  console.warn('AWS V4 Interceptor not yet implemented');
+  axiosInstance.interceptors.request.use((config) => {
+    if ((config as { __skipAwsV4Sign?: boolean }).__skipAwsV4Sign) {
+      return config;
+    }
+    return interceptor(config);
+  });
 }
 
-export {
-  addAwsV4Interceptor,
-  resolveAwsV4Credentials,
-  isStrPresent,
-  AwsV4Config,
-  RequestWithAwsConfig
-};
+export { addAwsV4Interceptor, resolveAwsV4Credentials };

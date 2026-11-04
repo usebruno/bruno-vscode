@@ -1,6 +1,6 @@
 import React from 'react';
 import { collectionSchema, environmentSchema, itemSchema } from '@usebruno/schema';
-import { parseQueryParams, extractPromptVariables } from '@usebruno/common/utils';
+import { parseQueryParams, extractPromptVariables, getDataTypeFromValue } from '@usebruno/common/utils';
 import { REQUEST_TYPES } from 'utils/common/constants';
 import cloneDeep from 'lodash/cloneDeep';
 import filter from 'lodash/filter';
@@ -9,7 +9,7 @@ import get from 'lodash/get';
 import set from 'lodash/set';
 import trim from 'lodash/trim';
 import type { RootState, AppDispatch } from 'providers/ReduxStore/index';
-import type { AppCollection, AppItem } from '@bruno-types';
+import type { AppCollection, AppItem, DotEnvVariable, RequestSent } from '@bruno-types';
 import { variableNameRegex } from 'utils/common/regex';
 
 /** Redux thunk action creator type */
@@ -118,13 +118,14 @@ const safeCloneCollection = (collection: any): any => {
   };
 
   try {
-    const { items, ...collectionWithoutItems } = collection;
+    // `timeline` is UI-only and unbounded; the extension host never reads it back.
+    const { items, timeline, ...collectionWithoutItems } = collection;
     const clonedBase = JSON.parse(JSON.stringify(collectionWithoutItems));
     clonedBase.items = cloneItems(items);
     return clonedBase;
   } catch {
     // Fallback: create a shallow copy and clone items separately
-    const cloned = { ...collection };
+    const { timeline, ...cloned } = collection;
     cloned.items = cloneItems(collection.items);
     return cloned;
   }
@@ -176,11 +177,13 @@ import {
   addFolderVar,
   updateFolderVar,
   addCollectionVar,
-  updateCollectionVar
+  updateCollectionVar,
+  updatePathParam,
+  scriptUpdateCollectionVars
 } from './index';
 
-import { each } from 'lodash';
-import { closeAllCollectionTabs, updateResponsePaneScrollPosition } from 'providers/ReduxStore/slices/tabs';
+import { each, omit } from 'lodash';
+import { closeAllCollectionTabs, closeTabs, updateResponsePaneScrollPosition } from 'providers/ReduxStore/slices/tabs';
 import { removeCollectionFromWorkspace, addCollectionToWorkspace } from 'providers/ReduxStore/slices/workspaces';
 import { resolveRequestFilename } from 'utils/common/platform';
 import { interpolateUrl, parsePathParams, splitOnFirst } from 'utils/url/index';
@@ -198,9 +201,10 @@ import {
   mergeHeaders
 } from 'utils/collections/index';
 import { sanitizeName } from 'utils/common/regex';
-import { buildPersistedEnvVariables } from 'utils/environments';
+import { buildPersistedEnvVariables, applyScriptVars, getScriptModifiedKeys } from 'utils/environments';
 import { safeParseJSON, safeStringifyJSON } from 'utils/common/index';
 import { resolveInheritedAuth } from 'utils/auth';
+import { getPromptScannableBody, getPromptScannableParams } from 'utils/prompt-variables';
 import { addTab } from 'providers/ReduxStore/slices/tabs';
 import { updateSettingsSelectedTab } from './index';
 import { saveGlobalEnvironment } from 'providers/ReduxStore/slices/global-environments';
@@ -223,6 +227,9 @@ interface generateUniqueNameProps {
   collectionPathname?: unknown;
   brunoConfig?: unknown;
 }
+
+const isYmlCollection = (collection: any): boolean =>
+  collection?.format === 'yml' || Boolean(collection?.brunoConfig?.opencollection);
 
 // generate a unique names
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -485,7 +492,11 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
         const collectionCopy = safeCloneCollection(collection);
         const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
         const { ipcRenderer } = window;
-
+        /* 
+        TODO: Saving brunoConfig in openCollction.yml need to be handled in future. 
+        ** `saveCollectionSettings` has been refactored to save brunoConfig in openCollection.yml. 
+        ** Changes are not done here as the code is not reached in the current flow. 
+        */
         let savePromises = [];
 
         savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
@@ -623,6 +634,17 @@ export const wsConnectOnly = (item: AppItem, collectionUid: string): ThunkAction
 
     const environment = findEnvironmentInCollection(collectionCopy, collectionCopy.activeEnvironmentUid);
 
+    // Resolve any {{?prompt}} variables (e.g. in the URL/headers) before connecting.
+    try {
+      const promptVariables = await extractPromptVariablesForRequest(itemCopy, collectionCopy);
+      collectionCopy.promptVariables = promptVariables ?? {};
+    } catch (error) {
+      if (error === 'cancelled') {
+        return resolve(undefined); // Resolve without error if user cancels prompt
+      }
+      return reject(error);
+    }
+
     connectWS(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables, { connectOnly: true })
       .then(resolve)
       .catch((err: Error) => {
@@ -669,11 +691,9 @@ const extractPromptVariablesForRequest = async (item: AppItem, collection: AppCo
 
     // Attempt to extract unique prompt variables from anywhere in the request and environment variables.
     prompts.push(...extractPromptVariables(allVariables));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const bodyContent = (request.body as any)?.[request.body?.mode as string];
-    prompts.push(...extractPromptVariables(bodyContent));
+    prompts.push(...extractPromptVariables(getPromptScannableBody(request.body)));
     prompts.push(...extractPromptVariables(headers as any));
-    prompts.push(...extractPromptVariables((request as any).params));
+    prompts.push(...extractPromptVariables(getPromptScannableParams((request as any).params)));
     prompts.push(...extractPromptVariables(resolvedAuthRequest.auth));
     prompts.push(...extractPromptVariables(request.url));
 
@@ -767,23 +787,12 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
     } else {
       sendNetworkRequest(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables)
         .then((response: Record<string, unknown>) => {
-          interface TimelineEntry {
-            timestamp: Date | number;
-            [key: string]: unknown;
-          }
-          const serializedResponse = {
-            ...response,
-            timeline: (response.timeline as TimelineEntry[] | undefined)?.map((entry) => ({
-              ...entry,
-              timestamp: entry.timestamp instanceof Date ? entry.timestamp.getTime() : entry.timestamp
-            }))
-          };
-
           dispatch(
             responseReceived({
               itemUid,
               collectionUid,
-              response: serializedResponse
+              response,
+              requestSent: response.requestSent as RequestSent | undefined
             })
           );
         })
@@ -882,7 +891,6 @@ export const runCollectionFolder
           folder,
           collectionCopy,
           environment,
-          collectionCopy.runtimeVariables,
           recursive,
           delay,
           tags,
@@ -1242,7 +1250,7 @@ export const moveItem
 interface HandleCollectionItemDropParams {
   targetItem: TargetItem;
   draggedItem: DraggedItem;
-  dropType: 'adjacent' | 'inside';
+  dropType: 'above' | 'inside' | 'below';
   collectionUid: string;
 }
 
@@ -1268,13 +1276,17 @@ export const handleCollectionItemDrop
       const draggedItemDirectory = findParentItemInCollection(sourceCollection, draggedItemUid) || sourceCollection;
       const draggedItemDirectoryItems = draggedItemDirectory.items?.map(safeCloneItem) || [];
 
+      const sourceFormat = (sourceCollection?.format as 'bru' | 'yml') || 'bru';
+      const targetFormat = (collection?.format as 'bru' | 'yml') || 'bru';
+      const isCrossFormatMove = Boolean(isCrossCollectionMove) && sourceFormat !== targetFormat;
+
       interface MoveToNewLocationParams {
         draggedItem: DraggedItem;
         draggedItemDirectoryItems: AppItem[];
         targetItem: TargetItem;
         targetItemDirectoryItems: AppItem[];
         newPathname: string;
-        dropType: 'adjacent' | 'inside';
+        dropType: 'above' | 'inside' | 'below';
       }
 
       const handleMoveToNewLocation = async ({
@@ -1289,10 +1301,25 @@ export const handleCollectionItemDrop
         const { pathname: draggedItemPathname, uid: draggedItemUid } = draggedItem;
 
         const newDirname = path.dirname(newPathname);
-        await dispatch(moveItem({
-          targetDirname: newDirname,
-          sourcePathname: draggedItemPathname
-        }));
+
+        if (isCrossFormatMove && isItemARequest(draggedItem as unknown as AppItem)) {
+          /* Cross-format single-request move: the destination collection uses a different serializer
+          (.bru <-> .yml), so we cannot copy the file as-is. The IPC handler re-serializes and returns the
+          new pathname (with the swapped extension) which we use for the subsequent sequence updates.*/
+          const { ipcRenderer } = window;
+          const result = await ipcRenderer.invoke('renderer:move-item-cross-format', {
+            targetDirname: newDirname,
+            sourcePathname: draggedItemPathname,
+            sourceFormat,
+            targetFormat
+          }) as { newPathname: string };
+          newPathname = result.newPathname;
+        } else {
+          await dispatch(moveItem({
+            targetDirname: newDirname,
+            sourcePathname: draggedItemPathname
+          }));
+        }
 
         if (draggedItemDirectoryItems?.length) {
           // reorder items in the source directory
@@ -1305,7 +1332,7 @@ export const handleCollectionItemDrop
           }
         }
 
-        if (dropType === 'adjacent') {
+        if (dropType === 'above' || dropType === 'below') {
           const targetItemIndex = targetItemDirectoryItems.findIndex((i) => i.uid === targetItemUid);
           const targetItemSequence = targetItemIndex >= 0 ? targetItemDirectoryItems[targetItemIndex]?.seq : undefined;
 
@@ -1319,7 +1346,8 @@ export const handleCollectionItemDrop
           const reorderedTargetItems = getReorderedItemsInTargetDirectory({
             items: [...targetItemDirectoryItems, draggedItemWithNewPathAndSequence],
             targetItemUid,
-            draggedItemUid
+            draggedItemUid,
+            dropType
           });
 
           if (reorderedTargetItems?.length) {
@@ -1346,7 +1374,8 @@ export const handleCollectionItemDrop
         const reorderedItems = getReorderedItemsInTargetDirectory({
           items: targetItemDirectoryItems,
           targetItemUid,
-          draggedItemUid
+          draggedItemUid,
+          dropType
         });
 
         if (reorderedItems?.length) {
@@ -1362,8 +1391,14 @@ export const handleCollectionItemDrop
             dropType,
             collectionPathname: collection.pathname
           });
-          if (!newPathname) return;
-          if (targetItemPathname?.startsWith(draggedItemPathname)) return;
+          if (!newPathname) return resolve();
+          if (targetItemPathname?.startsWith(draggedItemPathname)) return resolve();
+
+          if (isCrossFormatMove && isItemAFolder(draggedItem as unknown as AppItem)) {
+            toast.error('Moving folders between collections with different formats is not supported');
+            return resolve();
+          }
+
           if (newPathname !== draggedItemPathname) {
             await handleMoveToNewLocation({
               targetItem,
@@ -1376,6 +1411,11 @@ export const handleCollectionItemDrop
           } else {
             await handleReorderInSameLocation({ draggedItem, targetItemDirectoryItems, targetItem });
           }
+
+          if (isCrossCollectionMove) {
+            dispatch(closeTabs({ tabUids: [draggedItemUid] }));
+          }
+
           resolve();
         } catch (error: unknown) {
           console.error(error);
@@ -1977,6 +2017,32 @@ export const renameEnvironment = (newName: string, environmentUid: string, colle
   });
 };
 
+const invokeDotEnvHandler = (
+  collectionUid: string,
+  channel: string,
+  ...args: unknown[]
+): ThunkAction<Promise<unknown>> => (dispatch, getState) => {
+  const collection = findCollectionByUid(getState().collections.collections, collectionUid);
+  if (!collection) {
+    return Promise.reject(new Error('Collection not found'));
+  }
+
+  const { ipcRenderer } = window;
+  return ipcRenderer.invoke(channel, collection.pathname, ...args);
+};
+
+export const saveDotEnvVariables = (collectionUid: string, variables: DotEnvVariable[], filename = '.env') =>
+  invokeDotEnvHandler(collectionUid, 'renderer:save-dotenv-variables', variables, filename);
+
+export const saveDotEnvRaw = (collectionUid: string, content: string, filename = '.env') =>
+  invokeDotEnvHandler(collectionUid, 'renderer:save-dotenv-raw', content, filename);
+
+export const createDotEnvFile = (collectionUid: string, filename = '.env') =>
+  invokeDotEnvHandler(collectionUid, 'renderer:create-dotenv-file', filename);
+
+export const deleteDotEnvFile = (collectionUid: string, filename = '.env') =>
+  invokeDotEnvHandler(collectionUid, 'renderer:delete-dotenv-file', filename);
+
 export const deleteEnvironment = (environmentUid: string, collectionUid: string): ThunkAction<Promise<unknown>> => (dispatch, getState) => {
   return new Promise((resolve, reject) => {
     const state = getState();
@@ -2191,6 +2257,35 @@ export const updateVariableInScope = (variableName: any, newValue: any, scopeInf
             .catch(reject);
         }
 
+        case 'path': {
+          const { item } = data;
+
+          if (!item) {
+            return reject(new Error('Request item not found'));
+          }
+
+          const requestItem = findItemInCollection(collection, item.uid);
+          if (!requestItem) {
+            return reject(new Error('Request item not found'));
+          }
+
+          const params = get(requestItem, 'draft.request.params') || get(requestItem, 'request.params') || [];
+          const pathParam = params.find((p: any) => p.type === 'path' && p.name === variableName);
+          if (!pathParam) {
+            return reject(new Error('Path parameter not found'));
+          }
+
+          dispatch(updatePathParam({
+            collectionUid,
+            itemUid: item.uid,
+            pathParam: { uid: pathParam.uid, name: pathParam.name, value: newValue }
+          }));
+
+          return dispatch(saveRequest(item.uid, collectionUid, true))
+            .then(resolve)
+            .catch(reject);
+        }
+
         default:
           return reject(new Error(`Unknown scope type: ${type}`));
       }
@@ -2211,19 +2306,21 @@ export const mergeAndPersistEnvironment
         const state = getState();
         const collection = findCollectionByUid(state.collections.collections, collectionUid);
 
+        // Best-effort persistence of script-set env vars: with no active environment there's nowhere
+        // to write, so resolve quietly instead of surfacing an unhandled rejection.
         if (!collection) {
-          return reject(new Error('Collection not found'));
+          return resolve();
         }
 
         const environmentUid = collection.activeEnvironmentUid;
         if (!environmentUid) {
-          return reject(new Error('No active environment found'));
+          return resolve();
         }
 
         const collectionCopy = safeCloneCollection(collection);
         const environment = findEnvironmentInCollection(collectionCopy, environmentUid);
         if (!environment) {
-          return reject(new Error('Environment not found'));
+          return resolve();
         }
 
         // Only proceed if there are persistent variables to save
@@ -2233,19 +2330,30 @@ export const mergeAndPersistEnvironment
 
         let existingVars = environment.variables || [];
 
-        let normalizedNewVars = Object.entries(persistentEnvVariables).map(([name, value]) => ({
+        // Script values are native (number/boolean/object); record the data type so serialization
+        // emits the matching `@type` annotation. 'string' is the implicit default — leave it off.
+        const withDataType = (value: unknown) => {
+          const dataType = getDataTypeFromValue(value);
+          return dataType === 'string' ? {} : { dataType };
+        };
+
+        const scriptEnvVariables = omit(persistentEnvVariables, ['__name__']);
+
+        let normalizedNewVars = Object.entries(scriptEnvVariables).map(([name, value]) => ({
           uid: uuid(),
           name,
           value,
           type: 'text',
           enabled: true,
-          secret: false
+          secret: false,
+          ...withDataType(value)
         }));
 
         const merged = existingVars.map((v: any) => {
           const found = normalizedNewVars.find((nv) => nv.name === v.name);
           if (found) {
-            return { ...v, value: found.value };
+            const { dataType, ...rest } = v;
+            return { ...rest, value: found.value, ...withDataType(found.value) };
           }
           return v;
         });
@@ -2255,7 +2363,7 @@ export const mergeAndPersistEnvironment
           }
         });
 
-        const persistedNames = new Set(Object.keys(persistentEnvVariables));
+        const persistedNames = new Set(Object.keys(scriptEnvVariables));
 
         existingVars.forEach((v: any) => {
           if (!v.ephemeral) {
@@ -2273,6 +2381,75 @@ export const mergeAndPersistEnvironment
           .then(resolve)
           .catch(reject);
       });
+    };
+
+// Persist collection variables written by scripts (bru.setCollectionVar / deleteCollectionVar) to
+// the collection root's pre-request vars, where collection-scoped variables live on disk. The script
+// map is the full enabled set after the script ran, so an absent enabled var was deleted and is
+// dropped.
+//
+// The script sees the *draft* collection vars (mergeVars reads the draft), so the baseline snapshots
+// those draft values: getScriptModifiedKeys then flags only what the script actually changed, and the
+// delta is applied onto the *saved* vars. This is what prevents a request run from silently flushing
+// unsaved draft edits to disk — the open draft is left untouched and only script-written values reach
+// the saved file. Values are native, so the data type is recorded for annotated serialization.
+export const collectionVariablesUpdateEvent
+  = ({ collectionVariables, collectionUid }: any) =>
+    (dispatch: any, getState: any) => {
+      if (!collectionVariables || !collectionUid) {
+        return Promise.resolve();
+      }
+
+      const state = getState();
+      const collection = findCollectionByUid(state.collections.collections, collectionUid);
+      if (!collection) {
+        return Promise.resolve();
+      }
+
+      const savedVars = (get(collection, 'root.request.vars.req', []) as any[]) || [];
+      const draftVars = collection.draft?.root
+        ? (get(collection, 'draft.root.request.vars.req', null) as any[] | null)
+        : null;
+
+      // Recompute the baseline from the live draft on every run: the script starts from the current
+      // draft values (mergeVars reads the draft), so a var whose script-map value still equals the
+      // draft wasn't touched by the script and must not be flushed to the saved file. A once-captured
+      // baseline would misread later draft edits as script changes. No draft => direct apply vs saved.
+      let baseline: Record<string, unknown> | null = null;
+      if (draftVars) {
+        baseline = {};
+        draftVars.forEach((v: any) => {
+          if (v.enabled) baseline![v.name] = v.value;
+        });
+      }
+
+      let vars = cloneDeep(savedVars);
+      vars = applyScriptVars(vars, collectionVariables, baseline);
+
+      const modifiedKeys = getScriptModifiedKeys(collectionVariables, baseline);
+      modifiedKeys.forEach((name) => {
+        // Target the enabled slot applyScriptVars wrote to, not a same-named disabled var.
+        const existing = vars.find((v: any) => v.name === name && v.enabled);
+        if (!existing) return;
+        const inferred = getDataTypeFromValue(collectionVariables[name]);
+        if (inferred === 'string') {
+          delete existing.dataType;
+        } else {
+          existing.dataType = inferred;
+        }
+      });
+
+      dispatch(scriptUpdateCollectionVars({ collectionUid, vars }));
+
+      const fresh = findCollectionByUid(getState().collections.collections, collectionUid);
+      if (!fresh) {
+        return Promise.resolve();
+      }
+      const collectionRootToSave = transformCollectionRootToSave({ root: fresh.root });
+      const { ipcRenderer } = window;
+      return ipcRenderer
+        .invoke('renderer:save-collection-root', fresh.pathname, collectionRootToSave, fresh.brunoConfig)
+        .catch((err: Error) => console.error('Failed to persist collection variables:', err));
     };
 
 export const selectEnvironment = (environmentUid: any, collectionUid: any) => (dispatch: any, getState: any) => {
@@ -2384,19 +2561,27 @@ export const saveCollectionSettings = (collectionUid: any, brunoConfig: Record<s
     const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
     const { ipcRenderer } = window;
 
-    const savePromises = [];
-
-    savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
-
     const brunoConfigToSave = brunoConfig || (collectionCopy.draft && collectionCopy.draft.brunoConfig);
-    if (brunoConfigToSave) {
-      // Pass transformed collectionRootToSave instead of collectionCopy.root
-      // For YML format, update-bruno-config also writes to opencollection.yml,
-      // so it needs the transformed root data to avoid overwriting headers/auth/scripts
-      savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave));
-    }
 
-    Promise.all(savePromises)
+    const save = async () => {
+      if (isYmlCollection(collectionCopy)) {
+        await ipcRenderer.invoke(
+          'renderer:save-collection-root',
+          collectionCopy.pathname,
+          collectionRootToSave,
+          brunoConfigToSave || collectionCopy.brunoConfig
+        );
+        return;
+      }
+
+      await ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig);
+
+      if (brunoConfigToSave) {
+        await ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave);
+      }
+    };
+
+    save()
       .then(() => {
         if (!silent) {
           toast.success('Collection Settings saved successfully');
@@ -2600,18 +2785,19 @@ export const collectionAddEnvFileEvent = (payload: any) => (dispatch: any, getSt
       return reject(new Error('Collection not found'));
     }
 
-    environmentSchema
-      .validate(environment)
-      .then(() =>
-        dispatch(
-          _collectionAddEnvFileEvent({
-            environment,
-            collectionUid: meta.collectionUid
-          })
-        )
-      )
-      .then(resolve)
-      .catch(reject);
+    // Validate synchronously so the environment is in the store before any following event is handled
+    try {
+      environmentSchema.validateSync(environment);
+      dispatch(
+        _collectionAddEnvFileEvent({
+          environment,
+          collectionUid: meta.collectionUid
+        })
+      );
+      resolve(undefined);
+    } catch (error) {
+      reject(error);
+    }
   });
 };
 
@@ -2623,18 +2809,21 @@ export const importCollection = (collection: any, collectionLocation: any, optio
       const state = getState();
       const activeWorkspace = state.workspaces.workspaces.find((w: any) => w.uid === state.workspaces.activeWorkspaceUid);
 
-      const collectionPath = await ipcRenderer.invoke('renderer:import-collection', collection, collectionLocation, options.format || 'yml');
+      const result = await ipcRenderer.invoke('renderer:import-collection', collection, collectionLocation, options.format || 'yml') as {
+        success: { items: Array<{ name: string; path: string }> };
+      };
+      const importedItems = result.success.items;
 
       if (activeWorkspace && activeWorkspace.pathname && activeWorkspace.type !== 'default') {
-        const workspaceCollection = {
-          name: collection.name,
-          path: collectionPath
-        };
-
-        await ipcRenderer.invoke('renderer:add-collection-to-workspace', activeWorkspace.pathname, workspaceCollection);
+        for (const importedItem of importedItems) {
+          await ipcRenderer.invoke('renderer:add-collection-to-workspace', activeWorkspace.pathname, {
+            name: importedItem.name,
+            path: importedItem.path
+          });
+        }
       }
 
-      resolve(collectionPath);
+      resolve(Array.isArray(collection) ? importedItems.map((item) => item.path) : importedItems[0]?.path);
     } catch (error) {
       reject(error);
     }
@@ -2746,6 +2935,19 @@ export const fetchOauth2Credentials = (payload: FetchOauth2CredentialsPayload): 
   const { globalEnvironments, activeGlobalEnvironmentUid } = state.globalEnvironments;
   const globalEnvironmentVariables = getGlobalEnvironmentVariables({ globalEnvironments, activeGlobalEnvironmentUid });
   request.globalEnvironmentVariables = globalEnvironmentVariables;
+
+  // Resolve any {{?prompt}} variables in the OAuth2 config before fetching the token.
+  const oauth2Item = findItemInCollection(collection, itemUid);
+  if (oauth2Item) {
+    try {
+      const promptVariables = await extractPromptVariablesForRequest(oauth2Item, collection);
+      request.promptVariables = promptVariables ?? {};
+    } catch (error) {
+      if (error === 'cancelled') throw new Error('Request cancelled by user');
+      throw error;
+    }
+  }
+
   return new Promise((resolve, reject) => {
     window.ipcRenderer
       .invoke('renderer:fetch-oauth2-credentials', { itemUid, request, collection })
@@ -2773,6 +2975,19 @@ export const refreshOauth2Credentials = (payload: FetchOauth2CredentialsPayload)
   const { globalEnvironments, activeGlobalEnvironmentUid } = state.globalEnvironments;
   const globalEnvironmentVariables = getGlobalEnvironmentVariables({ globalEnvironments, activeGlobalEnvironmentUid });
   request.globalEnvironmentVariables = globalEnvironmentVariables;
+
+  // Resolve any {{?prompt}} variables in the OAuth2 config before refreshing the token.
+  const oauth2Item = findItemInCollection(collection, itemUid);
+  if (oauth2Item) {
+    try {
+      const promptVariables = await extractPromptVariablesForRequest(oauth2Item, collection);
+      request.promptVariables = promptVariables ?? {};
+    } catch (error) {
+      if (error === 'cancelled') throw new Error('Request cancelled by user');
+      throw error;
+    }
+  }
+
   return new Promise((resolve, reject) => {
     window.ipcRenderer
       .invoke('renderer:refresh-oauth2-credentials', { itemUid, request, collection })

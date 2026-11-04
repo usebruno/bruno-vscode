@@ -21,7 +21,7 @@ const getMethodText = (item: any, {
   if (isGrpc) return 'grpc';
   if (isWS) return 'ws';
   if (isGraphQL) return 'gql';
-  return item.request.method.length > 5
+  return item.request?.method?.length > 5
     ? item.request.method.substring(0, 3)
     : item.request.method;
 };
@@ -55,7 +55,7 @@ const RequestMethod = ({
 
   const flags = getMethodFlags(item);
   const methodText = getMethodText(item, flags);
-  const className = getClassname(item.request.method, flags);
+  const className = getClassname(item.request?.method, flags);
 
   return (
     <StyledWrapper>

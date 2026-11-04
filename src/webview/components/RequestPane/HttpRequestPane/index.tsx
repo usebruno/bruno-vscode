@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback } from 'react';
+import React, { useRef, useMemo, useCallback, useEffect } from 'react';
 import classnames from 'classnames';
 import { useSelector, useDispatch } from 'react-redux';
 import { find, get } from 'lodash';
@@ -14,10 +14,12 @@ import Script from 'components/RequestPane/Script';
 import Tests from 'components/RequestPane/Tests';
 import Settings from 'components/RequestPane/Settings';
 import Documentation from 'components/Documentation/index';
+import AppUnsupported from 'components/RequestTabPanel/AppUnsupported';
 import StatusDot from 'components/StatusDot';
 import ResponsiveTabs from 'ui/ResponsiveTabs';
 import HeightBoundContainer from 'ui/HeightBoundContainer';
 import AuthMode from '../Auth/AuthMode/index';
+import { hasEffectiveAuth } from 'utils/auth';
 
 interface TAB_CONFIGProps {
   item?: React.ReactNode;
@@ -35,6 +37,7 @@ const TAB_CONFIG = [
   { key: 'assert', label: 'Assert' },
   { key: 'tests', label: 'Tests' },
   { key: 'docs', label: 'Docs' },
+  { key: 'app', label: 'App' },
   { key: 'settings', label: 'Settings' }
 ];
 
@@ -48,6 +51,7 @@ const TAB_PANELS: Record<string, React.ComponentType<any>> = {
   script: Script,
   tests: Tests,
   docs: Documentation,
+  app: AppUnsupported,
   settings: Settings
 };
 
@@ -77,6 +81,7 @@ const HttpRequestPane = ({
   const responseVars = get(draftOrOriginal, 'request.vars.res', []);
   const auth = get(draftOrOriginal, 'request.auth', {});
   const tags = get(draftOrOriginal, 'tags', []);
+  const appEnabled = get(draftOrOriginal, 'app.enabled', false) === true;
 
   const activeCounts = useMemo(() => ({
     params: params.filter((p: any) => p.enabled).length,
@@ -92,27 +97,34 @@ const HttpRequestPane = ({
     [dispatch, item.uid]
   );
 
+  const hasAuth = useMemo(
+    () => hasEffectiveAuth(collection, item),
+    [item, auth.mode, collection]
+  );
+
   const indicators: Record<string, React.ReactNode> = useMemo(() => {
     const hasScriptError = item.preRequestScriptErrorMessage || item.postResponseScriptErrorMessage;
     const hasTestError = item.testScriptErrorMessage;
 
     return {
       params: activeCounts.params > 0 ? <sup className="font-medium">{activeCounts.params}</sup> : null,
-      body: body.mode !== 'none' ? <StatusDot /> : null,
+      body: body.mode !== 'none' ? <StatusDot testId="body" /> : null,
       headers: activeCounts.headers > 0 ? <sup className="font-medium">{activeCounts.headers}</sup> : null,
-      auth: auth.mode !== 'none' ? <StatusDot /> : null,
+      auth: hasAuth ? <StatusDot testId="auth" /> : null,
       vars: activeCounts.vars > 0 ? <sup className="font-medium">{activeCounts.vars}</sup> : null,
-      script: (script.req || script.res) ? (hasScriptError ? <StatusDot type="error" /> : <StatusDot />) : null,
+      script: (script.req || script.res) ? (hasScriptError ? <StatusDot type="error" testId="script" /> : <StatusDot testId="script" />) : null,
       assert: activeCounts.assertions > 0 ? <sup className="font-medium">{activeCounts.assertions}</sup> : null,
-      tests: tests?.length > 0 ? (hasTestError ? <StatusDot type="error" /> : <StatusDot />) : null,
-      docs: docs?.length > 0 ? <StatusDot /> : null,
-      settings: tags?.length > 0 ? <StatusDot /> : null
+      tests: tests?.length > 0 ? (hasTestError ? <StatusDot type="error" testId="tests" /> : <StatusDot testId="tests" />) : null,
+      docs: docs?.length > 0 ? <StatusDot testId="docs" /> : null,
+      settings: tags?.length > 0 ? <StatusDot testId="settings" /> : null
     };
-  }, [activeCounts, body.mode, auth.mode, script, item.preRequestScriptErrorMessage, item.postResponseScriptErrorMessage, item.testScriptErrorMessage, tests, docs, tags]);
+  }, [activeCounts, body.mode, hasAuth, script, item.preRequestScriptErrorMessage, item.postResponseScriptErrorMessage, item.testScriptErrorMessage, tests, docs, tags]);
 
   const allTabs = useMemo(
-    () => TAB_CONFIG.map(({ key, label }) => ({ key, label, indicator: indicators[key] })),
-    [indicators]
+    () => (appEnabled
+      ? TAB_CONFIG.map(({ key, label }) => ({ key, label, indicator: indicators[key] }))
+      : TAB_CONFIG.filter(({ key }) => key !== 'app').map(({ key, label }) => ({ key, label, indicator: indicators[key] }))),
+    [indicators, appEnabled]
   );
 
   const tabPanel = useMemo(() => {
@@ -135,8 +147,9 @@ const HttpRequestPane = ({
   ) : null;
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full relative" data-testid="http-request-pane">
       <ResponsiveTabs
+        testId="request-pane-tabs"
         tabs={allTabs}
         activeTab={requestPaneTab}
         onTabSelect={selectTab}

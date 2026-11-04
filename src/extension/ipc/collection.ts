@@ -6,6 +6,9 @@ import * as vscode from 'vscode';
 import * as fsExtra from 'fs-extra';
 import AdmZip from 'adm-zip';
 import extractZip from 'extract-zip';
+import type { BrunoVariableDataType } from '@usebruno/common/utils';
+import { jsonToDotenv } from '@usebruno/common/utils';
+import type { BrunoCollection } from '@bruno-types';
 import { registerHandler, registerEventListener, sendToWebview, broadcastToAllWebviews, emit, getCurrentWebview } from './handlers';
 import { stateManager } from '../webview/state-manager';
 import {
@@ -25,7 +28,9 @@ import {
   removePath,
   getPaths,
   generateUniqueName,
+  makeFolderNameUnique,
   isDotEnvFile,
+  isValidDotEnvFilename,
   isBrunoConfigFile,
   isBruEnvironmentConfig,
   isCollectionRootBruFile,
@@ -52,18 +57,14 @@ import { getProcessEnvVars } from '../store/process-env';
 import collectionWatcher from '../app/collection-watcher';
 import { transformBrunoConfigBeforeSave } from '../utils/transformBrunoConfig';
 import { REQUEST_TYPES } from '../utils/constants';
+import { parseRequest, parseRequestViaWorker, parseCollection, parseFolder } from '../utils/parse';
 
 const {
-  parseRequest,
   stringifyRequest,
-  parseRequestViaWorker,
   stringifyRequestViaWorker,
-  parseCollection,
   stringifyCollection,
-  parseFolder,
   stringifyFolder,
-  stringifyEnvironment,
-  parseEnvironment
+  stringifyEnvironment
 } = require('@usebruno/filestore');
 
 const {
@@ -84,9 +85,32 @@ export function setSidebarWebviewGetter(getter: () => vscode.Webview | undefined
   sidebarWebviewGetter = getter;
 }
 
+// Tracks the item the sidebar is currently highlighting, so a deactivating or
+// closing panel can clear the highlight without stomping a newer active item.
+let activeSidebarItemUid: string | null = null;
+
+// Tell the sidebar which item (request/folder/collection) is open in the active
+// editor, so it can highlight the matching row. Pass null to clear.
+export function notifyActiveItemToSidebar(itemUid: string | null): void {
+  activeSidebarItemUid = itemUid;
+  const sidebar = sidebarWebviewGetter?.();
+  if (sidebar) {
+    stateManager.sendTo(sidebar, 'main:set-active-item', itemUid);
+  }
+}
+
+// Clear the sidebar highlight, but only if `itemUid` is still the highlighted
+// item. Safe to call when a panel deactivates or is disposed regardless of
+// event ordering: if another item became active first, this is a no-op.
+export function clearActiveItemFromSidebar(itemUid: string): void {
+  if (activeSidebarItemUid === itemUid) {
+    notifyActiveItemToSidebar(null);
+  }
+}
+
 interface Environment {
   name: string;
-  variables: Array<{ name: string; value: string; secret?: boolean; uid?: string }>;
+  variables: Array<{ name: string; value: string | number | boolean | Record<string, unknown> | null; secret?: boolean; uid?: string; dataType?: BrunoVariableDataType }>;
 }
 
 interface BrunoConfig {
@@ -390,7 +414,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
   });
 
   registerHandler('renderer:new-request', async (args) => {
-    const [pathname, request] = args as [string, { filename?: string; [key: string]: unknown }];
+    const [pathname, request] = args as [string, { filename?: string;[key: string]: unknown }];
 
     try {
       if (fs.existsSync(pathname)) {
@@ -586,6 +610,64 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     } catch (error) {
       throw error;
     }
+  });
+
+  registerHandler('renderer:save-dotenv-variables', async (args) => {
+    const [collectionPathname, variables, filename = '.env'] = args as [string, Array<{ name: string; value: string }>, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    await writeFile(path.join(collectionPathname, filename), jsonToDotenv(variables));
+
+    return { success: true };
+  });
+
+  registerHandler('renderer:save-dotenv-raw', async (args) => {
+    const [collectionPathname, content, filename = '.env'] = args as [string, string, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    await writeFile(path.join(collectionPathname, filename), content);
+
+    return { success: true };
+  });
+
+  registerHandler('renderer:create-dotenv-file', async (args) => {
+    const [collectionPathname, filename = '.env'] = args as [string, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    const dotEnvPath = path.join(collectionPathname, filename);
+    if (fs.existsSync(dotEnvPath)) {
+      throw new Error(`${filename} file already exists`);
+    }
+
+    await writeFile(dotEnvPath, '');
+
+    return { success: true, filename };
+  });
+
+  registerHandler('renderer:delete-dotenv-file', async (args) => {
+    const [collectionPathname, filename = '.env'] = args as [string, string?];
+
+    if (!isValidDotEnvFilename(filename)) {
+      throw new Error('Invalid .env filename');
+    }
+
+    const dotEnvPath = path.join(collectionPathname, filename);
+    if (!fs.existsSync(dotEnvPath)) {
+      throw new Error(`${filename} file does not exist`);
+    }
+
+    fs.unlinkSync(dotEnvPath);
+
+    return { success: true };
   });
 
   // Rename item (file/folder)
@@ -784,6 +866,9 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       }
 
       validatePathIsInsideCollection(sourcePathname);
+      const sourceIsDirectory = fs.statSync(sourcePathname).isDirectory();
+      const collectionPath = findCollectionPathByItemPath(sourcePathname);
+      const collectionUid = collectionPath ? generateUidBasedOnHash(collectionPath) : null;
 
       const sourceDirname = path.dirname(sourcePathname);
       const pathnamesBefore = await getPaths(sourcePathname);
@@ -794,8 +879,61 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       pathnamesAfter?.forEach((_, index) => {
         moveRequestUid(pathnamesBefore[index], pathnamesAfter[index]);
       });
+      if (sourceIsDirectory && collectionUid) {
+        broadcastToAllWebviews('main:collection-tree-updated', 'unlinkDir', {
+          directory: { pathname: posixifyPath(sourcePathname) },
+          meta: { collectionUid }
+        });
+      }
 
       return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  /* Cross-format drag & drop for a single request (e.g. dropping a .bru request into a .yml collection).
+  A same-format move can just copy the file; a cross-format move must re-serialize the content and swap the
+  filename extension, otherwise the destination collection can't parse the file and the sidebar breaks. */
+  registerHandler('renderer:move-item-cross-format', async (args) => {
+    const [{ targetDirname, sourcePathname, sourceFormat, targetFormat }] = args as [{
+      targetDirname: string;
+      sourcePathname: string;
+      sourceFormat: 'bru' | 'yml';
+      targetFormat: 'bru' | 'yml';
+    }];
+
+    try {
+      if (!fs.existsSync(sourcePathname)) {
+        throw new Error(`source: ${sourcePathname} does not exist`);
+      }
+      if (!fs.existsSync(targetDirname)) {
+        throw new Error(`target directory: ${targetDirname} does not exist`);
+      }
+
+      validatePathIsInsideCollection(sourcePathname);
+      validatePathIsInsideCollection(targetDirname);
+
+      const sourceBasename = path.basename(sourcePathname);
+      const filenameWithoutExt = sourceBasename.replace(/\.(bru|yml|yaml)$/, '');
+      const targetExt = targetFormat === 'yml' ? 'yml' : 'bru';
+      const targetFilename = `${filenameWithoutExt}.${targetExt}`;
+      const targetPathname = path.join(targetDirname, targetFilename);
+
+      if (fs.existsSync(targetPathname)) {
+        throw new Error(`A file with the name "${targetFilename}" already exists in the target location`);
+      }
+
+      const sourceContent = await fs.promises.readFile(sourcePathname, 'utf8');
+      const parsedRequest = await parseRequest(sourceContent, { format: sourceFormat });
+      const finalContent = await stringifyRequest(parsedRequest, { format: targetFormat });
+
+      await writeFile(targetPathname, finalContent);
+      await removePath(sourcePathname);
+
+      moveRequestUid(sourcePathname, targetPathname);
+
+      return { newPathname: targetPathname };
     } catch (error) {
       throw error;
     }
@@ -829,11 +967,22 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         for (const child of (sourceItem.items || [])) {
           if (child.type === 'folder') {
             await cloneFolderRecursive(child, path.join(destPath, child.filename));
-          } else {
-            // Clone request file - copy the source file directly
-            if (child.pathname && fs.existsSync(child.pathname)) {
+          } else if (child.pathname && fs.existsSync(child.pathname)) {
+            const sourceCollectionPath = findCollectionPathByItemPath(child.pathname);
+            const sourceFormat = sourceCollectionPath ? getCollectionFormat(sourceCollectionPath) : format;
+
+            if (sourceFormat === format) {
               const destFilePath = path.join(destPath, child.filename);
               fs.copyFileSync(child.pathname, destFilePath);
+            } else {
+              /* Cross-format paste (e.g. .bru -> .yml): re-serialize so the content matches the destination
+              extension, otherwise the sidebar can't parse it. Also swap the filename extension.*/
+              const childContent = fs.readFileSync(child.pathname, 'utf8');
+              const parsedChild = await parseRequest(childContent, { format: sourceFormat });
+              const childBaseName = path.basename(child.filename, path.extname(child.filename));
+              const destFilePath = path.join(destPath, `${childBaseName}.${format}`);
+              const newChildContent = await stringifyRequest(parsedChild, { format });
+              await writeFile(destFilePath, newChildContent);
             }
           }
         }
@@ -858,19 +1007,27 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         throw new Error(`destination: ${destPathname} already exists`);
       }
 
-      const collectionPath = findCollectionPathByItemPath(sourcePathname);
-      if (!collectionPath) {
+      const sourceCollectionPath = findCollectionPathByItemPath(sourcePathname);
+      if (!sourceCollectionPath) {
         throw new Error('Collection not found for the given pathname');
       }
 
-      const format = getCollectionFormat(collectionPath);
+      const destCollectionPath = findCollectionPathByItemPath(destPathname);
+      if (!destCollectionPath) {
+        throw new Error('Collection not found for the destination pathname');
+      }
+
+      /* Pasting across collections of different formats (e.g. .bru -> .yml) must write content that matches
+      the destination file extension, otherwise the file can't be re-parsed and the sidebar renders a broken item.*/
+      const sourceFormat = getCollectionFormat(sourceCollectionPath);
+      const destFormat = getCollectionFormat(destCollectionPath);
       const content = fs.readFileSync(sourcePathname, 'utf8');
-      const parsed = await parseRequest(content, { format });
+      const parsed = await parseRequest(content, { format: sourceFormat });
 
       parsed.name = newName;
       parsed.seq = newSeq;
 
-      const newContent = await stringifyRequest(parsed, { format });
+      const newContent = await stringifyRequest(parsed, { format: destFormat });
       await writeFile(destPathname, newContent);
 
       return { success: true };
@@ -899,6 +1056,50 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
+  const writeCollectionFile = async (filePath: string, content: string) => {
+    if (isDocumentRegistered(filePath)) {
+      await writeFileViaVSCode(filePath, content);
+    } else {
+      await writeFile(filePath, content);
+    }
+  };
+
+  registerHandler('renderer:resequence-items', async (args: [Array<{ type: string; pathname: string; seq: number }>, string]) => {
+    const [itemsToResequence, collectionPathname] = args;
+
+    try {
+      const format = getCollectionFormat(collectionPathname);
+
+      for (const item of itemsToResequence) {
+        validatePathIsInsideCollection(item.pathname);
+
+        if (item.type === 'folder') {
+          if (!fs.existsSync(item.pathname)) {
+            continue;
+          }
+          // A folder keeps its order in its own folder.bru / folder.yml
+          const folderFilePath = path.join(item.pathname, `folder.${format}`);
+          const folderJson = fs.existsSync(folderFilePath) ? await parseFolder(fs.readFileSync(folderFilePath, 'utf8'), { format }) : {};
+          // meta is missing when there is no folder file, or when a .bru folder file has no meta block
+          if (!folderJson.meta) {
+            folderJson.meta = { name: path.basename(item.pathname) };
+          }
+          folderJson.meta.seq = item.seq;
+          await writeCollectionFile(folderFilePath, await stringifyFolder(folderJson, { format }));
+        } else if (fs.existsSync(item.pathname)) {
+          // Only update seq, so unsaved changes are not saved
+          const request = await parseRequest(fs.readFileSync(item.pathname, 'utf8'), { format });
+          request.seq = item.seq;
+          await writeCollectionFile(item.pathname, await stringifyRequest(request, { format }));
+        }
+      }
+
+      return true;
+    } catch (error) {
+      throw error;
+    }
+  });
+
   registerHandler('renderer:save-bruno-config', async (args) => {
     const [collectionPath, brunoConfig] = args as [string, BrunoConfig];
 
@@ -915,7 +1116,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         const content = fs.readFileSync(configFilePath, 'utf8');
         const parsed = await parseCollection(content, { format });
         const newContent = await stringifyCollection(parsed.collectionRoot, transformedConfig, { format });
-        await writeFile(configFilePath, newContent);
+        await writeCollectionFile(configFilePath, newContent);
       } else {
         const content = await stringifyJson(transformedConfig);
         await writeFile(configFilePath, content);
@@ -939,7 +1140,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       if (format === 'yml') {
         const configFilePath = path.join(collectionPath, 'opencollection.yml');
         const content = await stringifyCollection(collectionRoot, transformedConfig, { format });
-        await writeFile(configFilePath, content);
+        await writeCollectionFile(configFilePath, content);
       } else {
         const configFilePath = path.join(collectionPath, 'bruno.json');
         const content = await stringifyJson(transformedConfig);
@@ -1034,15 +1235,11 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     try {
       const format = getCollectionFormat(collectionPathname);
       const filename = format === 'yml' ? 'opencollection.yml' : 'collection.bru';
-      const content = await stringifyCollection(collectionRoot, brunoConfig, { format });
+      const configToSave = format === 'yml' && brunoConfig ? transformBrunoConfigBeforeSave(brunoConfig) : brunoConfig;
+      const content = await stringifyCollection(collectionRoot, configToSave, { format });
       const filePath = path.join(collectionPathname, filename);
 
-      // Use VS Code-aware write if the file is open in a custom editor
-      if (isDocumentRegistered(filePath)) {
-        await writeFileViaVSCode(filePath, content);
-      } else {
-        await writeFile(filePath, content);
-      }
+      await writeCollectionFile(filePath, content);
 
       return { success: true };
     } catch (error) {
@@ -1050,25 +1247,16 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
-  // Additional handlers to be implemented:
-  // - renderer:save-multiple-requests
-  // - renderer:copy-environment
-  // - renderer:export-collection
-
-  registerHandler('renderer:import-collection', async (args) => {
-    const [collection, collectionLocation, format = 'yml'] = args as [any, string, string];
-
+  const importCollection = async (
+    collection: any,
+    collectionLocation: string,
+    format: string
+  ): Promise<string> => {
     try {
-      const collectionName = collection.name || 'Imported Collection';
+      const collectionName = makeFolderNameUnique(collection.name || 'Imported Collection', collectionLocation)
       const collectionFolderName = sanitizeName(collectionName);
       const dirPath = path.join(collectionLocation, collectionFolderName);
-
-      if (fs.existsSync(dirPath)) {
-        const files = fs.readdirSync(dirPath);
-        if (files.length > 0) {
-          throw new Error(`collection: ${dirPath} already exists and is not empty`);
-        }
-      }
+      collection.name = collectionName;
 
       if (!fs.existsSync(dirPath)) {
         await createDirectory(dirPath);
@@ -1079,17 +1267,17 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       // Use existing brunoConfig from collection if available, otherwise create new
       let brunoConfig: BrunoConfig = collection.brunoConfig || (format === 'yml'
         ? {
-            opencollection: '1.0.0',
-            name: collectionName,
-            type: 'collection',
-            ignore: ['node_modules', '.git']
-          }
+          opencollection: '1.0.0',
+          name: collectionName,
+          type: 'collection',
+          ignore: ['node_modules', '.git']
+        }
         : {
-            version: '1',
-            name: collectionName,
-            type: 'collection',
-            ignore: ['node_modules', '.git']
-          });
+          version: '1',
+          name: collectionName,
+          type: 'collection',
+          ignore: ['node_modules', '.git']
+        });
 
       if (format === 'yml') {
         const content = await stringifyCollection(collection.root || { meta: { name: collectionName } }, brunoConfig, { format });
@@ -1194,6 +1382,32 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     } catch (error) {
       throw error;
     }
+  };
+
+  // Additional handlers to be implemented:
+  // - renderer:save-multiple-requests
+  // - renderer:copy-environment
+  // - renderer:export-collection
+
+  registerHandler('renderer:import-collection', async (args) => {
+    const [uploadedContent, collectionLocation, format = 'yml'] = args as [BrunoCollection | BrunoCollection[], string, string];
+    const collections = Array.isArray(uploadedContent) ? uploadedContent : [uploadedContent]
+
+    const items: Array<{ uid: string; name: string; path: string }> = [];
+    const failures: Array<{ uid: string; name: string; message: string }> = [];
+
+    for (const collection of collections) {
+      try {
+        const dirPath = await importCollection(collection, collectionLocation, format);
+        items.push({ uid: collection.uid, name: collection.name, path: dirPath });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[Import] Failed to import collection "${collection?.name}":`, error);
+        failures.push({ uid: collection?.uid, name: collection?.name, message });
+      }
+    }
+
+    return { success: { count: items.length, items }, failures };
   });
 
   // --- Collection format conversion handlers ---
@@ -1203,7 +1417,8 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
   registerHandler('renderer:convert-postman-to-bruno', async (args) => {
     const [postmanCollection] = args as [any];
     try {
-      return await postmanToBrunoConverter(postmanCollection);
+      const result = await postmanToBrunoConverter(postmanCollection);
+      return result?.collection ?? result;
     } catch (error) {
       console.error('[Collection IPC] Error converting Postman to Bruno:', error);
       throw error;
@@ -1276,7 +1491,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       );
 
       if (!valid) {
-        await fsExtra.remove(tempDir).catch(() => {});
+        await fsExtra.remove(tempDir).catch(() => { });
       }
 
       return { valid, tempZipPath: valid ? tempZipPath : '' };
@@ -1405,7 +1620,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
 
         await fsExtra.move(collectionDir, finalCollectionPath);
         if (tempDir !== collectionDir) {
-          await fsExtra.remove(tempDir).catch(() => {});
+          await fsExtra.remove(tempDir).catch(() => { });
         }
 
         const uid = generateUidBasedOnHash(finalCollectionPath);
@@ -1431,7 +1646,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
 
         return finalCollectionPath;
       } catch (error) {
-        await fsExtra.remove(tempDir).catch(() => {});
+        await fsExtra.remove(tempDir).catch(() => { });
         throw error;
       }
     } catch (error) {
@@ -2058,7 +2273,7 @@ get {
 
     const basename = path.basename(pathname);
     if (basename === 'folder.bru' || basename === 'folder.yml' ||
-        basename === 'collection.bru' || basename === 'opencollection.yml') {
+      basename === 'collection.bru' || basename === 'opencollection.yml') {
       return;
     }
     if (path.basename(path.dirname(pathname)) === 'environments') {

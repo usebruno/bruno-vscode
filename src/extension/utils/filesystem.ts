@@ -172,7 +172,10 @@ export const browseDirectory = async (): Promise<string | false> => {
   return isDirectory(resolvedPath) ? resolvedPath : false;
 };
 
-export const browseFiles = async (filters?: { name: string; extensions: string[] }[]): Promise<string[]> => {
+export const browseFiles = async (
+  filters?: { name: string; extensions: string[] }[],
+  properties?: string[]
+): Promise<string[]> => {
   const vscodeFilters: { [key: string]: string[] } = {};
   if (filters) {
     for (const filter of filters) {
@@ -183,7 +186,7 @@ export const browseFiles = async (filters?: { name: string; extensions: string[]
   const uris = await vscode.window.showOpenDialog({
     canSelectFiles: true,
     canSelectFolders: false,
-    canSelectMany: true,
+    canSelectMany: properties?.includes('multiSelections') ?? false,
     filters: vscodeFilters
   });
 
@@ -268,6 +271,21 @@ export const generateUniqueName = (baseName: string, checkExists: (name: string)
     uniqueName = `${baseName} copy ${counter}`;
   }
   return uniqueName;
+};
+
+export const makeFolderNameUnique = (baseName: string, parentDir: string): string => {
+  const isTaken = (folderName: string): boolean => {
+    const dirPath = path.join(parentDir, folderName);
+    return fs.existsSync(dirPath) && fs.readdirSync(dirPath).length > 0;
+  };
+
+  let counter = 0;
+  let folderName = baseName;
+  while (isTaken(folderName)) {
+    counter++;
+    folderName = `${baseName} - ${counter}`;
+  }
+  return folderName;
 };
 
 export const validateName = (name: string): boolean => {
@@ -376,10 +394,23 @@ export const isLargeFile = (filePath: string, threshold = 10 * 1024 * 1024): boo
   return size > threshold;
 };
 
+export const isDotEnvFilename = (filename: string): boolean => {
+  return filename === '.env' || filename.startsWith('.env.');
+};
+
+export const isValidDotEnvFilename = (filename: string): boolean => {
+  if (!filename || typeof filename !== 'string') {
+    return false;
+  }
+  if (path.basename(filename) !== filename) {
+    return false;
+  }
+  return filename === '.env' || /^\.env\.[a-zA-Z0-9._-]+$/.test(filename);
+};
+
 export const isDotEnvFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
-  const basename = path.basename(pathname);
-  return path.normalize(dirname) === path.normalize(collectionPath) && basename === '.env';
+  return path.normalize(dirname) === path.normalize(collectionPath) && isDotEnvFilename(path.basename(pathname));
 };
 
 export const isBrunoConfigFile = (pathname: string, collectionPath: string): boolean => {

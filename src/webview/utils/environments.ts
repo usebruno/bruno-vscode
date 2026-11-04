@@ -1,5 +1,98 @@
+import isEqual from 'lodash/isEqual';
 import { uuid } from './common/index';
-import type { EnvironmentVariable, UID } from '@bruno-types';
+import type { EnvironmentVariable, UID, BrunoVariableDataType } from '@bruno-types';
+
+interface ScriptVarEntry {
+  name: string;
+  value: unknown;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+interface ApplyScriptVarsOptions {
+  skipKeys?: string[];
+  newVarDefaults?: Record<string, unknown>;
+}
+
+/**
+ * Apply a scope's script-produced variable map onto an existing variable array.
+ *
+ * The map is the full set of *enabled* variables after the script ran, so an enabled variable
+ * absent from it was deleted (bru.deleteCollectionVar / bru.deleteGlobalEnvVar) and is dropped;
+ * disabled variables are always preserved. Script writes target the enabled slot only.
+ *
+ * With a baseline: only values the script actually changed (vs the snapshot) are applied, so a
+ * concurrent draft edit is not clobbered by a no-op re-run. Without a baseline: direct apply.
+ *
+ * Pure — never mutates the input array or its entries. `newVarDefaults` shapes inserted variables
+ * per scope (env vars carry `type`/`secret`; collection/global vars do not).
+ */
+export const applyScriptVars = (
+  variables: ScriptVarEntry[] | undefined,
+  scriptVars: Record<string, unknown>,
+  baseline: Record<string, unknown> | null | undefined,
+  { skipKeys = [], newVarDefaults = {} }: ApplyScriptVarsOptions = {}
+): ScriptVarEntry[] => {
+  const scriptVarNames = new Set(Object.keys(scriptVars || {}));
+  const skip = new Set(skipKeys);
+  const next: ScriptVarEntry[] = (variables || []).map((v) => ({ ...v }));
+  const makeNew = (name: string, value: unknown): ScriptVarEntry => ({ uid: uuid(), name, value, enabled: true, ...newVarDefaults });
+
+  const setValue = (name: string, value: unknown) => {
+    const existing = next.find((v) => v.name === name && v.enabled);
+    if (existing) {
+      existing.value = value;
+    } else {
+      next.push(makeNew(name, value));
+    }
+  };
+
+  if (baseline) {
+    Object.entries(scriptVars).forEach(([key, value]) => {
+      if (skip.has(key)) return;
+      const isNew = !(key in baseline);
+      // Deep-equal so structurally-equal object/array values aren't seen as modifications.
+      const isModified = !isNew && !isEqual(baseline[key], value);
+      if (isNew || isModified) setValue(key, value);
+    });
+
+    return next.filter((v) => {
+      if (!v.enabled) return true;
+      if (v.name in baseline && !scriptVarNames.has(v.name)) return false;
+      return true;
+    });
+  }
+
+  Object.entries(scriptVars).forEach(([key, value]) => {
+    if (skip.has(key)) return;
+    setValue(key, value);
+  });
+
+  return next.filter((v) => !v.enabled || scriptVarNames.has(v.name));
+};
+
+/**
+ * Keys the script actually modified relative to a baseline (or all script keys in direct-apply
+ * mode). Scopes dataType re-inference to changed variables so a no-op re-run can't overwrite a
+ * user's in-progress draft type change.
+ */
+export const getScriptModifiedKeys = (
+  scriptVars: Record<string, unknown>,
+  baseline: Record<string, unknown> | null | undefined,
+  { skipKeys = [] }: { skipKeys?: string[] } = {}
+): Set<string> => {
+  const skip = new Set(skipKeys);
+  const out = new Set<string>();
+  Object.entries(scriptVars || {}).forEach(([key, value]) => {
+    if (skip.has(key)) return;
+    if (baseline) {
+      const isNew = !(key in baseline);
+      if (!isNew && isEqual(baseline[key], value)) return;
+    }
+    out.add(key);
+  });
+  return out;
+};
 
 interface EnvVariableInput {
   name?: string;
@@ -8,6 +101,7 @@ interface EnvVariableInput {
   secret?: boolean;
   ephemeral?: boolean;
   persistedValue?: string | number | boolean | Record<string, unknown>;
+  dataType?: BrunoVariableDataType;
 }
 
 interface BuildEnvVariableOptions {
@@ -61,7 +155,9 @@ export const buildEnvVariable = ({ envVariable: obj, withUuid = false }: BuildEn
     value: !!obj.secret ? '' : (obj.value ?? ''),
     type: 'text',
     enabled: obj.enabled !== false,
-    secret: !!obj.secret
+    secret: !!obj.secret,
+    // 'string' is the implicit default — never materialize it as an explicit @string annotation.
+    ...(obj.dataType && obj.dataType !== 'string' ? { dataType: obj.dataType } : {})
   };
 
   if (!withUuid) {

@@ -1,8 +1,8 @@
 /**
  * Payload types for collection slice reducers
  */
-import type { UID, KeyValue, AuthMode } from '@bruno-types';
-import type { AppCollection, AppItem, SecurityConfig } from '@bruno-types';
+import type { UID, KeyValue, AuthMode, BrunoVariableDataType, ScriptErrorContext } from '@bruno-types';
+import type { AppCollection, AppItem, DotEnvVariable, RequestSent, SecurityConfig } from '@bruno-types';
 
 export interface CollectionUidPayload {
   collectionUid: UID;
@@ -16,7 +16,7 @@ export interface FolderUidPayload extends CollectionUidPayload {
   folderUid: UID;
 }
 
-export interface CreateCollectionPayload extends AppCollection {}
+export interface CreateCollectionPayload extends AppCollection { }
 
 export interface UpdateCollectionMountStatusPayload extends CollectionUidPayload {
   mountStatus?: 'unmounted' | 'mounting' | 'mounted';
@@ -104,10 +104,18 @@ export interface ProcessEnvUpdateEventPayload extends CollectionUidPayload {
   processEnvVariables: Record<string, unknown>;
 }
 
-export interface RequestCancelledPayload extends ItemUidPayload {}
+export interface SetDotEnvVariablesPayload extends CollectionUidPayload {
+  filename: string;
+  variables: DotEnvVariable[];
+  content: string;
+  exists: boolean;
+}
+
+export interface RequestCancelledPayload extends ItemUidPayload { }
 
 export interface ResponseReceivedPayload extends ItemUidPayload {
-  response: Record<string, unknown>;
+  response: Record<string, unknown> | null;
+  requestSent?: RequestSent;
 }
 
 export interface RunGrpcRequestEventPayload extends ItemUidPayload {
@@ -124,31 +132,31 @@ export interface ResponseClearedPayload extends ItemUidPayload {
   response?: null;
 }
 
-export interface ClearTimelinePayload extends CollectionUidPayload {}
+export interface ClearTimelinePayload extends CollectionUidPayload { }
 
 export interface ClearRequestTimelinePayload extends CollectionUidPayload {
   itemUid?: UID;
 }
 
 // Draft actions
-export interface SaveRequestPayload extends ItemUidPayload {}
+export interface SaveRequestPayload extends ItemUidPayload { }
 
-export interface DeleteRequestDraftPayload extends ItemUidPayload {}
+export interface DeleteRequestDraftPayload extends ItemUidPayload { }
 
-export interface SaveCollectionDraftPayload extends CollectionUidPayload {}
+export interface SaveCollectionDraftPayload extends CollectionUidPayload { }
 
-export interface SaveFolderDraftPayload extends FolderUidPayload {}
+export interface SaveFolderDraftPayload extends FolderUidPayload { }
 
-export interface DeleteCollectionDraftPayload extends CollectionUidPayload {}
+export interface DeleteCollectionDraftPayload extends CollectionUidPayload { }
 
-export interface DeleteFolderDraftPayload extends FolderUidPayload {}
+export interface DeleteFolderDraftPayload extends FolderUidPayload { }
 
 export interface SetEnvironmentsDraftPayload extends CollectionUidPayload {
   environmentUid: UID;
   variables: KeyValue[];
 }
 
-export interface ClearEnvironmentsDraftPayload extends CollectionUidPayload {}
+export interface ClearEnvironmentsDraftPayload extends CollectionUidPayload { }
 
 export interface NewEphemeralHttpRequestPayload extends CollectionUidPayload {
   uid: UID;
@@ -160,7 +168,7 @@ export interface NewEphemeralHttpRequestPayload extends CollectionUidPayload {
 
 export type ToggleCollectionPayload = UID;
 
-export interface ToggleCollectionItemPayload extends ItemUidPayload {}
+export interface ToggleCollectionItemPayload extends ItemUidPayload { }
 
 export interface RequestUrlChangedPayload extends ItemUidPayload {
   url: string;
@@ -175,7 +183,7 @@ export interface UpdateAuthPayload extends ItemUidPayload {
   content: unknown;
 }
 
-export interface AddQueryParamPayload extends ItemUidPayload {}
+export interface AddQueryParamPayload extends ItemUidPayload { }
 
 export interface SetQueryParamsPayload extends ItemUidPayload {
   params: Array<{
@@ -213,7 +221,7 @@ export interface UpdatePathParamPayload extends ItemUidPayload {
   };
 }
 
-export interface AddRequestHeaderPayload extends ItemUidPayload {}
+export interface AddRequestHeaderPayload extends ItemUidPayload { }
 
 export interface UpdateRequestHeaderPayload extends ItemUidPayload {
   header: {
@@ -261,9 +269,10 @@ export interface UpdateRequestGraphqlVariablesPayload extends ItemUidPayload {
 
 export interface UpdateRequestMethodPayload extends ItemUidPayload {
   method: string;
+  methodType?: string;
 }
 
-export interface AddFormUrlEncodedParamPayload extends ItemUidPayload {}
+export interface AddFormUrlEncodedParamPayload extends ItemUidPayload { }
 
 export interface UpdateFormUrlEncodedParamPayload extends ItemUidPayload {
   param: {
@@ -279,7 +288,7 @@ export interface DeleteFormUrlEncodedParamPayload extends ItemUidPayload {
   paramUid: UID;
 }
 
-export interface AddMultipartFormParamPayload extends ItemUidPayload {}
+export interface AddMultipartFormParamPayload extends ItemUidPayload { }
 
 export interface UpdateMultipartFormParamPayload extends ItemUidPayload {
   param: {
@@ -322,7 +331,7 @@ export interface DeleteRequestVarPayload extends ItemUidPayload {
   varType: 'req' | 'res';
 }
 
-export interface AddAssertionPayload extends ItemUidPayload {}
+export interface AddAssertionPayload extends ItemUidPayload { }
 
 export interface UpdateAssertionPayload extends ItemUidPayload {
   assertion: {
@@ -366,7 +375,7 @@ export interface UpdateCollectionDocsPayload extends CollectionUidPayload {
   docs: string;
 }
 
-export interface AddCollectionHeaderPayload extends CollectionUidPayload {}
+export interface AddCollectionHeaderPayload extends CollectionUidPayload { }
 
 export interface UpdateCollectionHeaderPayload extends CollectionUidPayload {
   header: {
@@ -395,7 +404,7 @@ export interface UpdateFolderScriptPayload extends FolderUidPayload {
   script: string;
 }
 
-export interface AddFolderHeaderPayload extends FolderUidPayload {}
+export interface AddFolderHeaderPayload extends FolderUidPayload { }
 
 export interface UpdateFolderHeaderPayload extends FolderUidPayload {
   header: {
@@ -411,13 +420,13 @@ export interface DeleteFolderHeaderPayload extends FolderUidPayload {
   headerUid: UID;
 }
 
-export interface CollectionRunnerStartPayload extends CollectionUidPayload {}
+export interface CollectionRunnerStartPayload extends CollectionUidPayload { }
 
 export interface CollectionRunnerUpdatePayload extends CollectionUidPayload {
   result: unknown;
 }
 
-export interface CollectionRunnerEndPayload extends CollectionUidPayload {}
+export interface CollectionRunnerEndPayload extends CollectionUidPayload { }
 
 export interface UpdateRunnerTagsPayload extends CollectionUidPayload {
   tags?: string[];
@@ -428,7 +437,7 @@ export interface ToggleRunnerTagsPayload extends CollectionUidPayload {
   enabled: boolean;
 }
 
-export interface UpdateCollectionTagsListPayload extends CollectionUidPayload {}
+export interface UpdateCollectionTagsListPayload extends CollectionUidPayload { }
 
 // File system events - structure sent from watcher
 export interface FileEventMeta {
@@ -490,7 +499,7 @@ export interface SetOAuthTokenPayload extends CollectionUidPayload {
   token: Record<string, unknown>;
 }
 
-export interface ClearOAuthTokenPayload extends CollectionUidPayload {}
+export interface ClearOAuthTokenPayload extends CollectionUidPayload { }
 
 export interface AddExamplePayload extends ItemUidPayload {
   example: unknown;
@@ -505,9 +514,9 @@ export interface DeleteExamplePayload extends ItemUidPayload {
   exampleUid: UID;
 }
 
-export interface WsConnectPayload extends ItemUidPayload {}
+export interface WsConnectPayload extends ItemUidPayload { }
 
-export interface WsDisconnectPayload extends ItemUidPayload {}
+export interface WsDisconnectPayload extends ItemUidPayload { }
 
 export interface WsSendPayload extends ItemUidPayload {
   message: unknown;
@@ -545,19 +554,20 @@ export interface RunFolderEventPayload extends CollectionUidPayload {
   folderUid?: UID;
   itemUid?: UID;
   type?: 'testrun-started' | 'testrun-ended' | 'request-queued' | 'request-sent' | 'response-received' |
-         'test-results' | 'test-results-pre-request' | 'test-results-post-response' | 'assertion-results' |
-         'error' | 'runner-request-skipped' | 'post-response-script-execution' | 'test-script-execution' |
-         'pre-request-script-execution';
+  'test-results' | 'test-results-pre-request' | 'test-results-post-response' | 'assertion-results' |
+  'error' | 'runner-request-skipped' | 'post-response-script-execution' | 'test-script-execution' |
+  'pre-request-script-execution';
   isRecursive?: boolean;
   cancelTokenUid?: UID;
   error?: string;
-  requestSent?: Record<string, unknown>;
+  requestSent?: RequestSent;
   responseReceived?: Record<string, unknown>;
   testResults?: unknown[];
   preRequestTestResults?: unknown[];
   postResponseTestResults?: unknown[];
   assertionResults?: unknown[];
-  errorMessage?: string;
+  errorMessage?: string | null;
+  errorContext?: ScriptErrorContext | null;
   runCompletionTime?: number;
   statusText?: string;
   [key: string]: unknown;
@@ -595,7 +605,7 @@ export interface CollectionAddEnvFileEventPayload {
   collectionUid: UID;
 }
 
-export interface ResetRunResultsPayload extends CollectionUidPayload {}
+export interface ResetRunResultsPayload extends CollectionUidPayload { }
 
 export interface InitRunRequestEventPayload extends ItemUidPayload {
   [key: string]: unknown;
@@ -652,6 +662,7 @@ export interface SetFolderVarsPayload extends FolderUidPayload {
     value?: string;
     enabled?: boolean;
     local?: boolean;
+    dataType?: BrunoVariableDataType;
   }>;
   type: 'request' | 'response';
 }
@@ -663,11 +674,12 @@ export interface SetCollectionVarsPayload extends CollectionUidPayload {
     value?: string;
     enabled?: boolean;
     local?: boolean;
+    dataType?: BrunoVariableDataType;
   }>;
   type: 'request' | 'response';
 }
 
-export interface AddFilePayload extends ItemUidPayload {}
+export interface AddFilePayload extends ItemUidPayload { }
 
 export interface UpdateFilePayload extends ItemUidPayload {
   param: {

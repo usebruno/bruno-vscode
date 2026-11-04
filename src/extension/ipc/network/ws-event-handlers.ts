@@ -6,6 +6,7 @@ import { registerHandler, sendToWebview } from '../handlers';
 import { interpolateVars } from './interpolate-vars';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeHeaders, mergeScripts, mergeVars, mergeAuth } from '../../utils/collection';
 import { getCertsAndProxyConfig } from './cert-utils';
+import { getRuntimeVariables } from '../../store/runtime-variables';
 import { setAuthHeaders } from './prepare-request';
 
 interface WsMessage {
@@ -32,10 +33,10 @@ interface WsRequestData {
   headers?: Array<{ name: string; value: string; enabled?: boolean }>;
   body?: WsBody;
   vars?: unknown;
-  collectionVariables?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
-  globalEnvironmentVariables?: Record<string, string>;
+  collectionVariables?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
+  globalEnvironmentVariables?: Record<string, unknown>;
   oauth2CredentialVariables?: Record<string, string>;
   auth?: unknown;
   script?: unknown;
@@ -77,14 +78,14 @@ interface PreparedWsRequest {
   url: string;
   headers: Record<string, string>;
   processEnvVars: Record<string, string>;
-  envVars: Record<string, string>;
-  runtimeVariables: Record<string, string>;
+  envVars: Record<string, unknown>;
+  runtimeVariables: Record<string, unknown>;
   body?: WsBody;
   vars?: unknown;
-  collectionVariables?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
-  globalEnvironmentVariables?: Record<string, string>;
+  collectionVariables?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
+  globalEnvironmentVariables?: Record<string, unknown>;
   oauth2CredentialVariables?: Record<string, string>;
   oauth2?: unknown;
   oauth2Credentials?: unknown;
@@ -94,7 +95,7 @@ const prepareWsRequest = async (
   item: WsRequestItem,
   collection: Collection,
   environment: Environment | null,
-  runtimeVariables: Record<string, string>,
+  runtimeVariables: Record<string, unknown>,
   _certsAndProxyConfig: Record<string, unknown> = {}
 ): Promise<PreparedWsRequest> => {
   const request = item.draft ? item.draft.request : item.request;
@@ -172,7 +173,8 @@ const prepareWsRequest = async (
     collectionVariables: request.collectionVariables,
     folderVariables: request.folderVariables,
     requestVariables: request.requestVariables,
-    globalEnvironmentVariables: request.globalEnvironmentVariables
+    globalEnvironmentVariables: request.globalEnvironmentVariables,
+    promptVariables: ((collection as any)?.promptVariables || {}) as Record<string, string>
   });
 
   return wsRequest;
@@ -200,7 +202,8 @@ const registerWsEventHandlers = (): void => {
       options?: WsOptions;
     }];
 
-    const { request, collection, environment, runtimeVariables, settings, options = {} } = params;
+    const { request, collection, environment, settings, options = {} } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);
@@ -226,7 +229,7 @@ const registerWsEventHandlers = (): void => {
       const certsAndProxyConfig = await getCertsAndProxyConfig({
         collectionUid: collection.uid,
         collection: collection as never,
-        request: requestCopy as never,
+        request: preparedRequest as never,
         envVars: preparedRequest.envVars,
         runtimeVariables,
         processEnvVars: preparedRequest.processEnvVars,
@@ -289,7 +292,8 @@ const registerWsEventHandlers = (): void => {
       messageContent?: string;
     }];
 
-    const { item, collection, environment, runtimeVariables, messageContent } = params;
+    const { item, collection, environment, messageContent } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const itemCopy = cloneDeep(item);

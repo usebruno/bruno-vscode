@@ -77,6 +77,10 @@ const Wrapper = styled.div`
       &:hover {
         background: ${(props) => props.theme.sidebar.collection.item.bg} !important;
       }
+
+      #sidebar-collection-name {
+        color: ${(props) => props.theme.sidebar.collection.item.activeColor};
+      }
     }
 
     &.collection-keyboard-focused {

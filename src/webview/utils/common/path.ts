@@ -43,6 +43,19 @@ const posixify = (str: string): string => {
 // so we fall back to path itself which is already POSIX in the browser.
 const brunoPath = path.posix || path;
 
+const isAbsolutePath = (p: string): boolean => {
+  if (!p) return false;
+  return p.startsWith('/') || /^[a-zA-Z]:\//.test(p);
+};
+
+const toAbsolutePath = (basePath: string, relativePath: string): string => {
+  const relative = posixify(relativePath ?? '');
+  if (isAbsolutePath(relative)) {
+    return relative;
+  }
+  return brunoPath.join(posixify(basePath ?? ''), relative);
+};
+
 /**
  * Get a relative path from one location to another.
  *
@@ -74,7 +87,7 @@ const brunoPath = path.posix || path;
  */
 const getRelativePath = (fromPath: string, toPath: string, shouldPosixify = true): string => {
   try {
-    const relativePath = brunoPath.relative(fromPath, toPath);
+    const relativePath = brunoPath.relative(posixify(fromPath), posixify(toPath));
 
     if (relativePath === '') {
       return '.';
@@ -120,7 +133,7 @@ const getBasename = (basePath: string, relativePath: string): string => {
     return '';
   }
 
-  const resolvedPath = brunoPath.resolve(basePath, relativePath);
+  const resolvedPath = toAbsolutePath(basePath, relativePath);
   const basename = brunoPath.basename(resolvedPath);
 
   return basename;
@@ -129,14 +142,9 @@ const getBasename = (basePath: string, relativePath: string): string => {
 /**
  * Resolve a relative file path against a base path to get an absolute file path.
  *
- * This function resolves a relative path against a base path using the appropriate
- * path resolution method for the current platform (Windows or Unix). It handles
- * cross-platform path separators and returns a normalized absolute path.
- *
  * @param basePath - The base path to resolve against (e.g., "/users/john/collections" or "C:\\Users\\John\\Collections")
  * @param relativePath - The relative path to resolve (e.g., "config/settings.json" or "config\\settings.json")
- * @param shouldPosixify - Whether to convert backslashes to forward slashes for cross-platform compatibility.
- * @returns The resolved absolute file path
+ * @returns The resolved absolute file path, POSIX-separated
  *
  * @example
  * Basic relative path resolution
@@ -154,13 +162,12 @@ const getBasename = (basePath: string, relativePath: string): string => {
  * → "/users/john/collections/local-file.json"
  *
  * @example
- * On Windows with posixify enabled
- * getAbsoluteFilePath('C:\\Users\\John\\Collections', 'config\\settings.json', true);
+ * On Windows
+ * getAbsoluteFilePath('C:\\Users\\John\\Collections', 'config\\settings.json');
  * → "C:/Users/John/Collections/config/settings.json"
  */
-const getAbsoluteFilePath = (basePath: string, relativePath: string, shouldPosixify = false): string => {
-  const result = brunoPath.resolve(basePath, relativePath);
-  return shouldPosixify ? posixify(result) : result;
+const getAbsoluteFilePath = (basePath: string, relativePath: string): string => {
+  return toAbsolutePath(basePath, relativePath);
 };
 
 const normalizePath = (p: string | null | undefined): string => {

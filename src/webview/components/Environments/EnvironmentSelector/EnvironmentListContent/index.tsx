@@ -26,8 +26,12 @@ const EnvironmentListContent = ({
     <div>
       {environments && environments.length > 0 ? (
         <>
-          <div className="environment-list">
-            <div className="dropdown-item no-environment" onClick={() => onEnvironmentSelect(null)}>
+          <div className="environment-list" data-testid="environment-list">
+            <div
+              className="dropdown-item no-environment"
+              onClick={() => onEnvironmentSelect(null)}
+              data-testid="environment-list-no-environment"
+            >
               <span>No Environment</span>
             </div>
             <ToolHint
@@ -45,6 +49,7 @@ const EnvironmentListContent = ({
                   key={env.uid}
                   className={`dropdown-item ${env.uid === activeEnvironmentUid ? 'dropdown-item-active' : ''}`}
                   onClick={() => onEnvironmentSelect(env)}
+                  data-testid={`environment-dropdown-item-${env.name}`}
                   data-tooltip-content={env.name}
                   data-tooltip-hidden={env.name?.length < 90}
                 >
@@ -53,7 +58,7 @@ const EnvironmentListContent = ({
               </div>
             </ToolHint>
             <div className="dropdown-item configure-button">
-              <button onClick={onSettingsClick} id="configure-env">
+              <button onClick={onSettingsClick} id="configure-env" data-testid="environment-configure-button">
                 <IconSettings size={16} strokeWidth={1.5} />
                 <span>Configure</span>
               </button>
@@ -61,11 +66,11 @@ const EnvironmentListContent = ({
           </div>
         </>
       ) : (
-        <div className="empty-state">
+        <div className="empty-state" data-testid="environment-list-empty-state">
           <h3>Ready to get started?</h3>
           <p>{description}</p>
           <div className="space-y-2">
-            <button onClick={onCreateClick} id="create-env">
+            <button onClick={onCreateClick} id="create-env" data-testid="create-environment">
               <IconPlus size={16} strokeWidth={1.5} />
               Create
             </button>

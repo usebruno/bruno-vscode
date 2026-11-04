@@ -1,10 +1,12 @@
 
-import { ScriptRuntime, VarsRuntime, TestRuntime, AssertRuntime, ScriptResult, TestResult, VarsResult } from '@usebruno/js';
+import { ScriptRuntime, VarsRuntime, TestRuntime, AssertRuntime, ScriptResult, TestResult, VarsResult, formatErrorWithContextV2 } from '@usebruno/js';
 import get from 'lodash/get';
-import { sendToWebview } from '../ipc/handlers';
+import isEqual from 'lodash/isEqual';
+import { sendToWebview, broadcastToAllWebviews } from '../ipc/handlers';
+import { setRuntimeVariables } from '../store/runtime-variables';
 import logsStore, { LogLevel } from '../store/logs';
+import type { ScriptErrorContext } from '@bruno-types';
 
-// Strip comments from script (simple implementation)
 const decomment = (script: string): string => {
   if (!script) return '';
   return script;
@@ -30,11 +32,12 @@ interface ScriptRunResult {
   success: boolean;
   skipRequest?: boolean;
   nextRequestName?: string;
-  envVariables?: Record<string, unknown>;
-  runtimeVariables?: Record<string, unknown>;
-  persistentEnvVariables?: Record<string, unknown>;
-  globalEnvironmentVariables?: Record<string, unknown>;
+  envVariables?: Record<string, unknown> | null;
+  runtimeVariables?: Record<string, unknown> | null;
+  collectionVariables?: Record<string, unknown> | null;
+  globalEnvironmentVariables?: Record<string, unknown> | null;
   error?: string;
+  errorContext?: ScriptErrorContext | null;
 }
 
 interface TestRunResult {
@@ -45,6 +48,18 @@ interface TestRunResult {
     passed: boolean;
     error?: string;
   }>;
+  error?: string;
+  errorContext?: ScriptErrorContext | null;
+}
+
+interface ScriptError extends Error {
+  partialResults?: {
+    envVariables?: Record<string, unknown>;
+    runtimeVariables?: Record<string, unknown>;
+    collectionVariables?: unknown;
+    globalEnvironmentVariables?: unknown;
+    results?: TestRunResult['results'];
+  };
 }
 
 const createConsoleLogHandler = (collectionUid: string, requestUid: string) => {
@@ -59,6 +74,67 @@ const createConsoleLogHandler = (collectionUid: string, requestUid: string) => {
   };
 };
 
+const emitScriptTestResults = (
+  channel: 'main:pre-request-test-results' | 'main:post-response-test-results',
+  results: TestRunResult['results'] | undefined,
+  context: ScriptContext
+): void => {
+  if (!results?.length) return;
+
+  sendToWebview(channel, {
+    results,
+    requestUid: context.requestUid,
+    collectionUid: context.collectionUid,
+    itemUid: context.itemUid
+  });
+};
+
+const emitScriptVariableUpdates = (
+  result: {
+    envVariables?: Record<string, unknown>;
+    runtimeVariables?: Record<string, unknown>;
+    collectionVariables?: unknown;
+    globalEnvironmentVariables?: unknown;
+  },
+  context: ScriptContext,
+  envVarsBefore?: Record<string, unknown>
+): void => {
+  broadcastToAllWebviews('main:script-environment-update', {
+    envVariables: result.envVariables,
+    runtimeVariables: result.runtimeVariables,
+    requestUid: context.requestUid,
+    collectionUid: context.collectionUid
+  });
+
+  if (result.runtimeVariables) {
+    setRuntimeVariables(context.collectionUid, result.runtimeVariables);
+    broadcastToAllWebviews('main:runtime-variables-update', {
+      collectionUid: context.collectionUid,
+      runtimeVariables: result.runtimeVariables
+    });
+  }
+
+  if (result.envVariables && !isEqual(result.envVariables, envVarsBefore)) {
+    sendToWebview('main:persistent-env-variables-update', {
+      persistentEnvVariables: result.envVariables,
+      collectionUid: context.collectionUid
+    });
+  }
+
+  if (result.collectionVariables) {
+    broadcastToAllWebviews('main:collection-variables-update', {
+      collectionVariables: result.collectionVariables,
+      collectionUid: context.collectionUid
+    });
+  }
+
+  if (result.globalEnvironmentVariables) {
+    broadcastToAllWebviews('main:global-environment-variables-update', {
+      globalEnvironmentVariables: result.globalEnvironmentVariables
+    });
+  }
+};
+
 export const runPreRequestScript = async (
   request: unknown,
   context: ScriptContext
@@ -68,6 +144,9 @@ export const runPreRequestScript = async (
   if (!script || !script.length) {
     return { success: true };
   }
+
+  // The runtime mutates envVars in place; snapshot first to detect script-made env changes.
+  const envVarsBefore = { ...context.envVars };
 
   try {
     const scriptRuntime = new ScriptRuntime({
@@ -91,29 +170,9 @@ export const runPreRequestScript = async (
       context.collectionName
     );
 
-    sendToWebview('main:script-environment-update', {
-      envVariables: result.envVariables,
-      runtimeVariables: result.runtimeVariables,
-      persistentEnvVariables: result.persistentEnvVariables,
-      requestUid: context.requestUid,
-      collectionUid: context.collectionUid
-    });
+    emitScriptVariableUpdates(result, context, envVarsBefore);
 
-    if (result.globalEnvironmentVariables) {
-      sendToWebview('main:global-environment-variables-update', {
-        globalEnvironmentVariables: result.globalEnvironmentVariables
-      });
-    }
-
-    const preReqTestResults = (result as any).results;
-    if (preReqTestResults && preReqTestResults.length > 0) {
-      sendToWebview('main:pre-request-test-results', {
-        results: preReqTestResults,
-        requestUid: context.requestUid,
-        collectionUid: context.collectionUid,
-        itemUid: context.itemUid
-      });
-    }
+    emitScriptTestResults('main:pre-request-test-results', (result as any).results, context);
 
     return {
       success: true,
@@ -121,14 +180,21 @@ export const runPreRequestScript = async (
       nextRequestName: result.nextRequestName,
       envVariables: result.envVariables,
       runtimeVariables: result.runtimeVariables,
-      persistentEnvVariables: result.persistentEnvVariables,
+      collectionVariables: result.collectionVariables,
       globalEnvironmentVariables: result.globalEnvironmentVariables
     };
   } catch (error) {
-    const err = error as Error;
+    const err = error as ScriptError;
+    if (err.partialResults) {
+      emitScriptVariableUpdates(err.partialResults, context, envVarsBefore);
+      emitScriptTestResults('main:pre-request-test-results', err.partialResults.results, context);
+    }
     return {
       success: false,
-      error: err.message
+      error: err.message,
+      errorContext: formatErrorWithContextV2(err, 'pre-request', get(request, 'script.reqMetadata'), context.collectionPath),
+      envVariables: err.partialResults?.envVariables,
+      runtimeVariables: err.partialResults?.runtimeVariables as Record<string, unknown> | undefined
     };
   }
 };
@@ -149,6 +215,7 @@ export const runPostResponseVars = (
       runtime: context.scriptingConfig?.runtime
     });
 
+    const envVarsBefore = { ...context.envVars };
     const result = varsRuntime.runPostResponseVars(
       postResponseVars,
       request,
@@ -160,19 +227,7 @@ export const runPostResponseVars = (
     );
 
     if (result) {
-      sendToWebview('main:script-environment-update', {
-        envVariables: result.envVariables,
-        runtimeVariables: result.runtimeVariables,
-        persistentEnvVariables: result.persistentEnvVariables,
-        requestUid: context.requestUid,
-        collectionUid: context.collectionUid
-      });
-
-      if (result.globalEnvironmentVariables) {
-        sendToWebview('main:global-environment-variables-update', {
-          globalEnvironmentVariables: result.globalEnvironmentVariables
-        });
-      }
+      emitScriptVariableUpdates(result, context, envVarsBefore);
 
       if (result.error) {
         sendToWebview('main:display-error', { error: result.error });
@@ -198,6 +253,8 @@ export const runPostResponseScript = async (
     return { success: true };
   }
 
+  const envVarsBefore = { ...context.envVars };
+
   try {
     const scriptRuntime = new ScriptRuntime({
       runtime: context.scriptingConfig?.runtime
@@ -221,43 +278,30 @@ export const runPostResponseScript = async (
       context.collectionName
     );
 
-    sendToWebview('main:script-environment-update', {
-      envVariables: result.envVariables,
-      runtimeVariables: result.runtimeVariables,
-      persistentEnvVariables: result.persistentEnvVariables,
-      requestUid: context.requestUid,
-      collectionUid: context.collectionUid
-    });
+    emitScriptVariableUpdates(result, context, envVarsBefore);
 
-    if (result.globalEnvironmentVariables) {
-      sendToWebview('main:global-environment-variables-update', {
-        globalEnvironmentVariables: result.globalEnvironmentVariables
-      });
-    }
-
-    const postResTestResults = (result as any).results;
-    if (postResTestResults && postResTestResults.length > 0) {
-      sendToWebview('main:post-response-test-results', {
-        results: postResTestResults,
-        requestUid: context.requestUid,
-        collectionUid: context.collectionUid,
-        itemUid: context.itemUid
-      });
-    }
+    emitScriptTestResults('main:post-response-test-results', (result as any).results, context);
 
     return {
       success: true,
       nextRequestName: result.nextRequestName,
       envVariables: result.envVariables,
       runtimeVariables: result.runtimeVariables,
-      persistentEnvVariables: result.persistentEnvVariables,
+      collectionVariables: result.collectionVariables,
       globalEnvironmentVariables: result.globalEnvironmentVariables
     };
   } catch (error) {
-    const err = error as Error;
+    const err = error as ScriptError;
+    if (err.partialResults) {
+      emitScriptVariableUpdates(err.partialResults, context, envVarsBefore);
+      emitScriptTestResults('main:post-response-test-results', err.partialResults.results, context);
+    }
     return {
       success: false,
-      error: err.message
+      error: err.message,
+      errorContext: formatErrorWithContextV2(err, 'post-response', get(request, 'script.resMetadata'), context.collectionPath),
+      envVariables: err.partialResults?.envVariables,
+      runtimeVariables: err.partialResults?.runtimeVariables as Record<string, unknown> | undefined
     };
   }
 };
@@ -272,6 +316,8 @@ export const runTests = async (
   if (!testsScript || !testsScript.length) {
     return { success: true, results: [] };
   }
+
+  const envVarsBefore = { ...context.envVars };
 
   try {
     const testRuntime = new TestRuntime({
@@ -296,6 +342,8 @@ export const runTests = async (
       context.collectionName
     );
 
+    emitScriptVariableUpdates(result, context, envVarsBefore);
+
     sendToWebview('main:test-results', {
       results: result.results,
       requestUid: context.requestUid,
@@ -308,8 +356,12 @@ export const runTests = async (
       results: result.results
     };
   } catch (error) {
-    const err = error as Error;
-    const errorResults = [{
+    const err = error as ScriptError;
+    if (err.partialResults) {
+      emitScriptVariableUpdates(err.partialResults, context, envVarsBefore);
+    }
+
+    const errorResults = [...(err.partialResults?.results || []), {
       uid: 'error',
       description: 'Test execution error',
       passed: false,
@@ -326,7 +378,9 @@ export const runTests = async (
 
     return {
       success: false,
-      results: errorResults
+      results: errorResults,
+      error: err.message,
+      errorContext: formatErrorWithContextV2(err, 'test', get(request, 'testsMetadata'), context.collectionPath)
     };
   }
 };

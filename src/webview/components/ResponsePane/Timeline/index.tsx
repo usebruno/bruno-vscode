@@ -1,87 +1,59 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import StyledWrapper from './StyledWrapper';
-import { findItemInCollection, findParentItemInCollection } from 'utils/collections/index';
-import { get } from 'lodash';
 import TimelineItem from './TimelineItem/index';
 import GrpcTimelineItem from './GrpcTimelineItem/index';
-
-interface getEffectiveAuthSourceProps {
-  collection?: React.ReactNode;
-  item?: React.ReactNode;
-}
-
-const getEffectiveAuthSource = (collection: any, item: any) => {
-  const authMode = item.draft ? get(item, 'draft.request.auth.mode') : get(item, 'request.auth.mode');
-  if (authMode !== 'inherit') return null;
-
-  const collectionRoot = collection?.draft?.root || collection?.root || {};
-  const collectionAuth = get(collectionRoot, 'request.auth');
-  let effectiveSource = {
-    type: 'collection',
-    uid: collection.uid,
-    auth: collectionAuth
-  };
-
-  let path = [];
-  let currentItem = findItemInCollection(collection, item?.uid);
-  while (currentItem) {
-    path.unshift(currentItem);
-    currentItem = findParentItemInCollection(collection, currentItem?.uid);
-  }
-
-  for (let i of [...path].reverse()) {
-    if (i.type === 'folder') {
-      const folderAuth = get(i, 'root.request.auth');
-      if (folderAuth && folderAuth.mode && folderAuth.mode !== 'none' && folderAuth.mode !== 'inherit') {
-        effectiveSource = {
-          type: 'folder',
-          uid: i.uid,
-          auth: folderAuth
-        };
-        break;
-      }
-    }
-  }
-
-  return effectiveSource;
-};
+import { useTimelineEntries } from '../timeline-utils';
+import { countByKind, getEntryKind } from './buildEntries';
+import { FILTER_CHIPS } from './entryMeta';
 
 const Timeline = ({
   collection,
   item
 }: any) => {
-  const authSource = getEffectiveAuthSource(collection, item);
+  const [selectedFilter, setSelectedFilter] = useState('all');
   const isGrpcRequest = item.type === 'grpc-request' || item.type === 'ws-request';
+  const entries = useTimelineEntries(collection, item);
+  const counts = useMemo(() => countByKind(entries), [entries]);
 
-  const combinedTimeline = ([...(collection?.timeline || [])]).filter((obj) => {
-    // Always show entries for this item
-    if (obj.itemUid === item.uid) return true;
-
-    // For OAuth2 entries, also show if auth is inherited
-    if (obj.type === 'oauth2' && authSource) {
-      if (authSource.type === 'folder' && obj.folderUid === authSource.uid) return true;
-      if (authSource.type === 'collection' && !obj.folderUid) return true;
-    }
-
-    return false;
-  }).sort((a, b) => b.timestamp - a.timestamp);
+  const visibleChips = FILTER_CHIPS.filter((chip) => chip.id === 'all' || counts[chip.id] > 0);
+  const showFilterBar = entries.length > 0 && counts.oauth > 0;
+  // Clearing the timeline can retire the selected kind, so fall back rather than render nothing.
+  const activeFilter = visibleChips.some((chip) => chip.id === selectedFilter) ? selectedFilter : 'all';
 
   return (
-    <StyledWrapper
-      className="pb-4 w-full flex flex-grow flex-col"
-    >
-      {/* Timeline container with scrollbar */}
-      <div
-        className="timeline-container"
-      >
-        {combinedTimeline.map((event, index) => {
-          if (event.type === 'request') {
-            const { data, timestamp, eventType } = event;
-            const { request, response, eventData = {}, timestamp: eventTimestamp = timestamp } = data;
+    <StyledWrapper className="pb-4 w-full flex flex-grow flex-col">
+      {showFilterBar && (
+        <div className="timeline-filter-bar" data-testid="timeline-filter-bar">
+          {visibleChips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`timeline-chip ${activeFilter === chip.id ? 'is-active' : ''}`}
+              onClick={() => setSelectedFilter(chip.id)}
+              data-testid={`timeline-chip-${chip.id}`}
+            >
+              {chip.label}
+              <span className="timeline-chip-count" data-testid={`timeline-chip-count-${chip.id}`}>{counts[chip.id] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="timeline-container" data-testid="timeline-container">
+        {entries.map((entry) => {
+          if (activeFilter !== 'all' && activeFilter !== getEntryKind(entry)) return null;
+
+          // Newest-first: an index key would let a new row inherit the top row's expand state.
+          // OAuth2 rows share their parent's id, so the timestamp separates them.
+          const key = `${entry.id ?? `${entry.type}-${entry.itemUid}`}-${entry.timestamp}-${entry.eventType ?? ''}`;
+
+          if (entry.type === 'request') {
+            const { data, timestamp, eventType } = entry;
+            const { request, response, eventData = {}, timestamp: eventTimestamp = timestamp } = data as any;
 
             if (isGrpcRequest) {
               return (
-                <div key={index} className="timeline-event">
+                <div key={key} className="timeline-event" data-testid={`timeline-event-${key}`}>
                   <GrpcTimelineItem
                     timestamp={eventTimestamp}
                     request={request}
@@ -96,7 +68,7 @@ const Timeline = ({
             }
 
             return (
-              <div key={index} className="timeline-event">
+              <div key={key} className="timeline-event" data-testid={`timeline-event-${key}`}>
                 <TimelineItem
                   timestamp={timestamp}
                   request={request}
@@ -106,34 +78,19 @@ const Timeline = ({
                 />
               </div>
             );
-          } else if (event.type === 'oauth2') { // Handle OAuth2 events
-            const { data, timestamp } = event;
-            const { debugInfo } = data;
+          }
+
+          if (entry.type === 'oauth2' && entry._oauth2Child) {
             return (
-              <div key={index} className="timeline-event">
-                <div className="timeline-event-header cursor-pointer flex items-center">
-                  <div className="flex items-center">
-                    <span className="font-bold">OAuth2.0 Calls</span>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  {debugInfo && debugInfo.length > 0 ? (
-                    debugInfo.map((data: any, idx: any) => (
-                      <div className="ml-4" key={idx}>
-                        <TimelineItem
-                          timestamp={timestamp}
-                          request={data?.request}
-                          response={data?.response}
-                          item={item}
-                          collection={collection}
-                          isOauth2={true}
-                        />
-                      </div>
-                    ))
-                  ) : (
-                    <div>No debug information available.</div>
-                  )}
-                </div>
+              <div key={key} className="timeline-event" data-testid={`timeline-event-${key}`}>
+                <TimelineItem
+                  timestamp={entry.timestamp}
+                  request={entry._oauth2Child.request}
+                  response={entry._oauth2Child.response}
+                  item={item}
+                  collection={collection}
+                  isOauth2={true}
+                />
               </div>
             );
           }

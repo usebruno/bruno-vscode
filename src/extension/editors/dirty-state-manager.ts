@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { registerHandler } from '../ipc/handlers';
+import { setUnsavedRoot, clearUnsavedRootForFile } from '../store/unsaved-roots';
+import { DIRTY_MARKER, dirtyMarkerOffsets, stripDirtyMarker } from '../utils/dirty-marker';
+import { hasRequestExtension } from '../utils/filesystem';
+import type { FolderRoot } from '@bruno-types';
 
 interface DirtyDocument {
   filePath: string;
@@ -19,9 +23,6 @@ const registeredDocuments = new Map<string, vscode.TextDocument>();
 
 // Track files currently being written to prevent re-entrant writes
 const filesBeingWritten = new Set<string>();
-
-// Marker used to make documents dirty (zero-width space - invisible)
-const DIRTY_MARKER = '\u200B';
 
 function normalizePath(filePath: string): string {
   // Use path.normalize and convert to lowercase on case-insensitive systems
@@ -42,6 +43,7 @@ export function unregisterDocument(filePath: string): void {
   const normalizedPath = normalizePath(filePath);
   registeredDocuments.delete(normalizedPath);
   dirtyDocuments.delete(normalizedPath);
+  clearUnsavedRootForFile(filePath);
 }
 
 export function getRegisteredDocument(filePath: string): vscode.TextDocument | undefined {
@@ -67,14 +69,11 @@ async function markDocumentDirty(
     registeredPaths: Array.from(registeredDocuments.keys())
   });
 
-  // If already dirty, just update the metadata
-  if (dirtyDocuments.has(normalizedPath)) {
-    const existing = dirtyDocuments.get(normalizedPath)!;
+  const existing = dirtyDocuments.get(normalizedPath);
+  if (existing) {
     existing.itemUid = itemUid;
     existing.collectionUid = collectionUid;
     existing.itemType = itemType;
-    console.log('[DirtyStateManager] Document already dirty, updated metadata');
-    return;
   }
 
   let document = registeredDocuments.get(normalizedPath);
@@ -91,7 +90,6 @@ async function markDocumentDirty(
     }
   }
 
-  // Track this dirty document
   dirtyDocuments.set(normalizedPath, {
     filePath: normalizedPath,
     document,
@@ -100,34 +98,49 @@ async function markDocumentDirty(
     itemType
   });
 
-  // Make a minimal edit to mark the document dirty in VS Code
-  // We append a zero-width space at the end of the document
-  const edit = new vscode.WorkspaceEdit();
-  const lastLine = document.lineAt(document.lineCount - 1);
+  // Checked against the document rather than the map above: a save strips the marker while the
+  // draft is still unsaved, so an already tracked document can need it back.
+  if (document.getText().endsWith(DIRTY_MARKER)) {
+    return;
+  }
 
-  // Only add marker if not already present
-  if (!document.getText().endsWith(DIRTY_MARKER)) {
-    edit.insert(document.uri, lastLine.range.end, DIRTY_MARKER);
-    const success = await vscode.workspace.applyEdit(edit);
-    if (!success) {
-      console.error('[DirtyStateManager] Failed to apply workspace edit for dirty marker');
-    } else {
-      console.log('[DirtyStateManager] Successfully marked document dirty');
-    }
-  } else {
-    console.log('[DirtyStateManager] Document already has dirty marker');
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, document.lineAt(document.lineCount - 1).range.end, DIRTY_MARKER);
+  const success = await vscode.workspace.applyEdit(edit);
+  if (!success) {
+    console.error('[DirtyStateManager] Failed to apply workspace edit for dirty marker');
   }
 }
 
 async function markDocumentClean(filePath: string): Promise<void> {
   const normalizedPath = normalizePath(filePath);
-  const dirtyDoc = dirtyDocuments.get(normalizedPath);
 
-  if (dirtyDoc) {
-    dirtyDocuments.delete(normalizedPath);
+  dirtyDocuments.delete(normalizedPath);
+
+  // Discarding a draft clears the state without a write, which used to leave the marker behind.
+  const document = registeredDocuments.get(normalizedPath);
+  if (document) {
+    await removeDirtyMarker(document);
   }
+}
 
-  // Don't do anything else - the writeFileViaVSCode function handles syncing
+function dirtyMarkerRanges(document: vscode.TextDocument): vscode.Range[] {
+  return dirtyMarkerOffsets(document.getText()).map(
+    (offset) => new vscode.Range(document.positionAt(offset), document.positionAt(offset + DIRTY_MARKER.length))
+  );
+}
+
+async function removeDirtyMarker(document: vscode.TextDocument): Promise<void> {
+  const ranges = dirtyMarkerRanges(document);
+  if (!ranges.length) return;
+
+  const edit = new vscode.WorkspaceEdit();
+  ranges.forEach((range) => edit.delete(document.uri, range));
+  await vscode.workspace.applyEdit(edit);
+
+  // A forward edit does not reset VS Code's dirty flag even though the content now matches disk,
+  // so the tab would keep a phantom unsaved dot and prompt on close. The save writes the same bytes.
+  await document.save();
 }
 
 /**
@@ -161,11 +174,8 @@ export async function writeFileViaVSCode(
       // Document is open in VS Code - update via workspace edit
       const currentContent = document.getText();
 
-      // Remove any dirty markers from the new content (shouldn't have any, but just in case)
-      const cleanContent = content.replace(new RegExp(DIRTY_MARKER, 'g'), '');
-
-      // Only update if content is different (ignoring dirty markers)
-      const currentClean = currentContent.replace(new RegExp(DIRTY_MARKER, 'g'), '');
+      const cleanContent = stripDirtyMarker(content);
+      const currentClean = stripDirtyMarker(currentContent);
 
       if (currentClean !== cleanContent) {
         const edit = new vscode.WorkspaceEdit();
@@ -222,9 +232,7 @@ export async function syncDocumentWithDisk(filePath: string): Promise<void> {
 
     const diskContent = fs.readFileSync(filePath, 'utf8');
     const currentContent = document.getText();
-
-    // Remove dirty markers for comparison
-    const currentClean = currentContent.replace(new RegExp(DIRTY_MARKER, 'g'), '');
+    const currentClean = stripDirtyMarker(currentContent);
 
     if (currentClean !== diskContent) {
       const edit = new vscode.WorkspaceEdit();
@@ -278,6 +286,7 @@ export function registerDirtyStateHandlers(): void {
       collectionUid: string;
       itemType: 'request' | 'folder' | 'collection';
       isDirty: boolean;
+      root?: FolderRoot;
     }];
 
     if (!payload) {
@@ -286,6 +295,9 @@ export function registerDirtyStateHandlers(): void {
     }
 
     if (payload.isDirty) {
+      if (payload.root && payload.itemType !== 'request') {
+        setUnsavedRoot(payload.itemType, payload.filePath, payload.root);
+      }
       await markDocumentDirty(
         payload.filePath,
         payload.itemUid,
@@ -293,6 +305,7 @@ export function registerDirtyStateHandlers(): void {
         payload.itemType
       );
     } else {
+      clearUnsavedRootForFile(payload.filePath);
       await markDocumentClean(payload.filePath);
     }
 
@@ -333,26 +346,45 @@ export function registerDirtyStateHandlers(): void {
 }
 
 /**
- * Register VS Code save event handler
- *
- * This handler tracks document changes to keep our registered document references
- * up to date. We no longer interfere with VS Code's native save - instead, Bruno's
- * saves go through writeFileViaVSCode which properly updates the TextDocument.
+ * Keeps our registered document references current, and strips the dirty marker from any save
+ * VS Code starts on its own. Bruno's own save already writes marker free content, but auto-save,
+ * Save All and the close-tab prompt go straight to disk and would persist it.
  */
 export function registerSaveHandler(context: vscode.ExtensionContext): void {
+  // Drop a document once VS Code closes it
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      const normalizedPath = normalizePath(document.uri.fsPath);
+      if (registeredDocuments.get(normalizedPath) === document) {
+        registeredDocuments.delete(normalizedPath);
+      }
+    })
+  );
+
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
       const filePath = event.document.uri.fsPath;
 
-      // Only handle .bru and .yml files
-      if (!filePath.endsWith('.bru') && !filePath.endsWith('.yml')) {
+      if (!hasRequestExtension(filePath)) {
         return;
       }
 
-      // Update our registered document reference
       const normalizedPath = normalizePath(filePath);
       if (registeredDocuments.has(normalizedPath)) {
         registeredDocuments.set(normalizedPath, event.document);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onWillSaveTextDocument((event) => {
+      if (!hasRequestExtension(event.document.uri.fsPath)) {
+        return;
+      }
+
+      const ranges = dirtyMarkerRanges(event.document);
+      if (ranges.length) {
+        event.waitUntil(Promise.resolve(ranges.map((range) => vscode.TextEdit.delete(range))));
       }
     })
   );

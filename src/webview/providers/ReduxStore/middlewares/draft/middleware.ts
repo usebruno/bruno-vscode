@@ -56,6 +56,7 @@ const actionsToIntercept = [
   'collections/addRequestTag',
   'collections/deleteRequestTag',
   'collections/runRequestEvent', // TODO: This doesn't necessarily related to a draft state, need to rethink.
+  'collections/responseReceived',
 
   'collections/addFolderHeader',
   'collections/updateFolderHeader',

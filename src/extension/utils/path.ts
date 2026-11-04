@@ -25,6 +25,17 @@ export function isCollectionRoot(dirPath: string): boolean {
   return fs.existsSync(brunoJsonPath) || fs.existsSync(ocYmlPath);
 }
 
+/**
+ * Resolve the collection root for a path that may be a collection-root directory,
+ * a file inside a collection, or a subfolder. 
+ */
+export function resolveCollectionRoot(targetPath: string): string | null {
+  if (isCollectionRoot(targetPath)) {
+    return targetPath;
+  }
+  return findCollectionRoot(targetPath);
+}
+
 export function getCollectionName(collectionRoot: string): string {
   try {
     const brunoJsonPath = path.join(collectionRoot, 'bruno.json');

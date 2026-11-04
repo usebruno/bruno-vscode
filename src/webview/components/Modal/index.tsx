@@ -63,7 +63,7 @@ const ModalFooter = ({
   return (
     <div className="flex justify-end p-4 bruno-modal-footer">
       <span className={hideCancel ? 'hidden' : 'mr-2'}>
-        <Button type="button" color="secondary" variant="ghost" onClick={handleCancel}>
+        <Button type="button" color="secondary" variant="ghost" onClick={handleCancel} data-testid="modal-cancel-button">
           {cancelText}
         </Button>
       </span>
@@ -74,6 +74,7 @@ const ModalFooter = ({
           disabled={confirmDisabled}
           onClick={handleSubmit}
           className="submit"
+          data-testid="modal-confirm-button"
         >
           {confirmText}
         </Button>

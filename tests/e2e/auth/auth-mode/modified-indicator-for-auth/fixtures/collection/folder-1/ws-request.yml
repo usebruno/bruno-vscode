@@ -1,0 +1,7 @@
+info:
+  name: ws-request
+  type: websocket
+  seq: 3
+
+websocket:
+  url: ws://example.com

@@ -143,7 +143,7 @@ const QueryParams = ({
 
   if (isBulkEditMode) {
     return (
-      <StyledWrapper className="w-full mt-3">
+      <StyledWrapper className="w-full h-full mt-3 flex flex-col min-h-0">
         <BulkEditor
           params={queryParams}
           onChange={handleQueryParamsChange}
@@ -160,6 +160,7 @@ const QueryParams = ({
       <div className="flex-1">
         <div className="mb-3 title text-xs">Query</div>
         <EditableTable
+          testId="query-params"
           columns={queryColumns}
           rows={queryParams || []}
           onChange={handleQueryParamsChange}
@@ -188,6 +189,7 @@ const QueryParams = ({
         </div>
         {pathParams && pathParams.length > 0 ? (
           <EditableTable
+            testId="path-params-table"
             columns={pathColumns}
             rows={pathParams}
             onChange={() => {}}

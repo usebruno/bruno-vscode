@@ -23,6 +23,14 @@ interface EventTypeNamesProps {
   item: unknown;
 }
 
+// gRPC status codes are small integers, so the chip carries the code name alongside the code.
+const GrpcStatus = ({
+  statusCode,
+  statusText
+}: any) => (
+  <Status statusCode={statusText ? `${statusCode} ${statusText}` : statusCode} />
+);
+
 // Event type display names
 const EventTypeNames: Record<string, string> = {
   metadata: 'Metadata',
@@ -179,7 +187,7 @@ const GrpcTimelineItem = ({
         return (
           <div className="content-status">
             <div className="flex items-center gap-2">
-              <Status statusCode={statusCode} statusText={statusText} />
+              <GrpcStatus statusCode={statusCode} statusText={statusText} />
             </div>
 
             {response.statusDescription && (
@@ -212,7 +220,7 @@ const GrpcTimelineItem = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <Status statusCode={statusCode} statusText={statusText} />
+              <GrpcStatus statusCode={statusCode} statusText={statusText} />
             </div>
 
             {response.trailers && response.trailers.length > 0 && (
@@ -271,7 +279,7 @@ const GrpcTimelineItem = ({
         )}
         {eventType === 'status' && (
           <div className="flex items-center gap-2">
-            <Status statusCode={statusCode} statusText={statusText} />
+            <GrpcStatus statusCode={statusCode} statusText={statusText} />
           </div>
         )}
         <pre className="event-timestamp">[{new Date(timestamp).toISOString()}]</pre>

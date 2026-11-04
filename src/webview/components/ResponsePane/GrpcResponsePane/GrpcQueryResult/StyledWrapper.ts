@@ -11,6 +11,10 @@ const StyledWrapper = styled.div`
   .responses-container {
     height: 100%;
 
+    div.CodeMirror {
+      height: 100%;
+    }
+
     &.single {
       height: 100%;
     }
@@ -28,6 +32,7 @@ const StyledWrapper = styled.div`
   .message-item {
     display: flex;
     flex-direction: column;
+    flex: 0 0 auto;
 
     &:not(.last) {
       border-bottom: 1px solid ${(props) => props.theme.border.border1};
@@ -73,8 +78,10 @@ const StyledWrapper = styled.div`
   }
 
   .message-content {
+    flex: 0 0 auto;
     height: 240px;
     margin-bottom: 8px;
+    overflow: hidden;
   }
 `;
 

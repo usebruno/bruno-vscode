@@ -1,0 +1,6 @@
+{
+  "version": "2",
+  "name": "Bru Version 2",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

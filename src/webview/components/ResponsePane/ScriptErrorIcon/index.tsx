@@ -18,6 +18,7 @@ const ScriptErrorIcon = ({
     <>
       <div
         id={toolhintId}
+        data-testid="script-error-icon"
         className="cursor-pointer ml-2"
         onClick={onClick}
       >

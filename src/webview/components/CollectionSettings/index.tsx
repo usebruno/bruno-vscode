@@ -13,11 +13,7 @@ import StyledWrapper from './StyledWrapper';
 import Vars from './Vars/index';
 import StatusDot from 'components/StatusDot';
 import Overview from './Overview/index';
-
-interface CollectionSettingsProps {
-  collection?: React.ReactNode;
-}
-
+import ClientCertSettings from './ClientCertSettings/index'
 
 const CollectionSettings = ({
   collection
@@ -58,7 +54,14 @@ const CollectionSettings = ({
     ? get(collection, 'draft.brunoConfig.protobuf', {})
     : get(collection, 'brunoConfig.protobuf', {});
   const presets = collection.draft?.brunoConfig ? get(collection, 'draft.brunoConfig.presets', {}) : get(collection, 'brunoConfig.presets', {});
-  const hasPresets = presets && presets.requestUrl !== '';
+  // "Has a preset" = a non-default request type OR a non-empty base URL.
+  const hasPresets = presets
+    && ((presets.requestType && presets.requestType !== 'http')
+      || (typeof presets.requestUrl === 'string' && presets.requestUrl.length > 0));
+  const clientCerts = collection.draft?.brunoConfig
+    ? get(collection, 'draft.brunoConfig.clientCertificates.certs', [])
+    : get(collection, 'brunoConfig.clientCertificates.certs', []);
+  const hasClientCerts = clientCerts.length > 0;
 
   const getTabPanel = (tab: any) => {
     switch (tab) {
@@ -83,6 +86,9 @@ const CollectionSettings = ({
       case 'presets': {
         return <Presets collection={collection} />;
       }
+      case 'client-certs': {
+        return <ClientCertSettings collection={collection} />;
+      }
       case 'protobuf': {
         return <Protobuf collection={collection} />;
       }
@@ -96,7 +102,7 @@ const CollectionSettings = ({
   };
 
   return (
-    <StyledWrapper className="flex flex-col h-full relative px-4 py-4 overflow-hidden">
+    <StyledWrapper className="flex flex-col h-full relative px-4 py-4 overflow-hidden" data-testid="collection-settings">
       <div className="flex flex-wrap items-center tabs" role="tablist">
         <div className={getTabClassname('overview')} role="tab" onClick={() => setTab('overview')}>
           Overview
@@ -111,26 +117,30 @@ const CollectionSettings = ({
         </div>
         <div className={getTabClassname('auth')} role="tab" onClick={() => setTab('auth')}>
           Auth
-          {authMode !== 'none' && <StatusDot />}
+          {authMode !== 'none' && <StatusDot testId="auth" />}
         </div>
         <div className={getTabClassname('script')} role="tab" onClick={() => setTab('script')}>
           Script
-          {hasScripts && <StatusDot />}
+          {hasScripts && <StatusDot testId="script" />}
         </div>
         <div className={getTabClassname('tests')} role="tab" onClick={() => setTab('tests')}>
           Tests
-          {hasTests && <StatusDot />}
+          {hasTests && <StatusDot testId="tests" />}
         </div>
         <div className={getTabClassname('presets')} role="tab" onClick={() => setTab('presets')}>
           Presets
-          {hasPresets && <StatusDot />}
+          {hasPresets && <StatusDot testId="presets" />}
+        </div>
+        <div className={getTabClassname('client-certs')} role="tab" onClick={() => setTab('client-certs')}>
+          Client Certificates
+          {hasClientCerts && <StatusDot testId="client-certs" />}
         </div>
         <div className={getTabClassname('protobuf')} role="tab" onClick={() => setTab('protobuf')}>
           Protobuf
-          {protobufConfig.protoFiles && protobufConfig.protoFiles.length > 0 && <StatusDot />}
+          {protobufConfig.protoFiles && protobufConfig.protoFiles.length > 0 && <StatusDot testId="protobuf" />}
         </div>
       </div>
-      <section className="mt-4 h-full overflow-auto">{getTabPanel(tab)}</section>
+      <section className="mt-4 flex-1 min-h-0 overflow-auto">{getTabPanel(tab)}</section>
     </StyledWrapper>
   );
 };

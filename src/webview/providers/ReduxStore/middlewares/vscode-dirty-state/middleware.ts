@@ -104,7 +104,8 @@ const notifyDirtyState = async (
   itemUid: string,
   collectionUid: string,
   itemType: 'request' | 'folder' | 'collection',
-  isDirty: boolean
+  isDirty: boolean,
+  root?: unknown
 ) => {
   console.log('[VSCodeDirtyState] Notifying dirty state:', {
     filePath,
@@ -117,7 +118,8 @@ const notifyDirtyState = async (
       itemUid,
       collectionUid,
       itemType,
-      isDirty
+      isDirty,
+      root
     });
     console.log('[VSCodeDirtyState] Notification result:', result);
   } catch (error) {
@@ -192,7 +194,7 @@ export const vscodeDirtyStateMiddleware = ({
         if (folder) {
           const filePath = getFolderFilePath(folder, collection);
           if (filePath) {
-            notifyDirtyState(filePath, folderUid, collectionUid, 'folder', true);
+            notifyDirtyState(filePath, folderUid, collectionUid, 'folder', true, folder.draft?.root);
           }
         }
       }
@@ -201,7 +203,7 @@ export const vscodeDirtyStateMiddleware = ({
       if (collection) {
         const filePath = getCollectionFilePath(collection);
         if (filePath) {
-          notifyDirtyState(filePath, collectionUid, collectionUid, 'collection', true);
+          notifyDirtyState(filePath, collectionUid, collectionUid, 'collection', true, collection.draft?.root);
         }
       }
     } else {

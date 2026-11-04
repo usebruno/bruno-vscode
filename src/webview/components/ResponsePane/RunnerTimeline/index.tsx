@@ -1,6 +1,4 @@
 import React, { useMemo } from 'react';
-import forOwn from 'lodash/forOwn';
-import StyledWrapper from './StyledWrapper';
 import TimelineItem from '../Timeline/TimelineItem';
 
 const RunnerTimeline = ({
@@ -9,25 +7,16 @@ const RunnerTimeline = ({
   item,
   collection
 }: any) => {
-  const requestHeaders = [];
-
-  forOwn(request.headers, (value, key) => {
-    requestHeaders.push({
-      name: key,
-      value
-    });
-  });
-
-  const oauth2Events = useMemo(
+  const oauth2Calls = useMemo(
     () =>
-      collection?.timeline?.filter(
-        (event: any) => event.type === 'oauth2' && event.itemUid === item.uid
-      ) || [],
+      (collection?.timeline || [])
+        .filter((event: any) => event.type === 'oauth2' && event.itemUid === item.uid)
+        .flatMap((event: any) => event.data?.debugInfo || []),
     [collection?.timeline, item.uid]
   );
 
   return (
-    <StyledWrapper className="pb-4 w-full">
+    <div className="pb-4 w-full">
       <TimelineItem
         request={request}
         response={response}
@@ -36,38 +25,18 @@ const RunnerTimeline = ({
         hideTimestamp={true}
       />
 
-      {oauth2Events.map((event: any, index: any) => {
-        const { data, timestamp } = event;
-        const { debugInfo } = data;
-        return (
-          <div key={`oauth2-${index}`} className="timeline-event mt-4">
-            <div className="timeline-event-header cursor-pointer flex items-center">
-              <div className="flex items-center">
-                <span className="font-bold">OAuth2.0 Calls</span>
-              </div>
-            </div>
-            <div className="mt-2">
-              {debugInfo && debugInfo.length > 0 ? (
-                debugInfo.map((data: any, idx: any) => (
-                  <div key={idx} className="ml-4">
-                    <TimelineItem
-                      timestamp={timestamp}
-                      request={data?.request}
-                      response={data?.response}
-                      item={item}
-                      collection={collection}
-                      isOauth2={true}
-                    />
-                  </div>
-                ))
-              ) : (
-                <div>No debug information available.</div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </StyledWrapper>
+      {oauth2Calls.map((call: any, index: number) => (
+        <TimelineItem
+          key={index}
+          request={call?.request}
+          response={call?.response}
+          item={item}
+          collection={collection}
+          isOauth2={true}
+          hideTimestamp={true}
+        />
+      ))}
+    </div>
   );
 };
 

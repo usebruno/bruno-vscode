@@ -14,12 +14,12 @@ interface Collection {
 
 interface Request {
   url?: string;
-  collectionVariables?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
+  collectionVariables?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
 }
 
-interface CACertificatesCount {
+export interface CACertificatesCount {
   system: number;
   root: number;
   custom: number;
@@ -52,11 +52,11 @@ interface CertsAndProxyConfigParams {
   collectionUid: string;
   collection: Collection;
   request: Request;
-  envVars: Record<string, string>;
-  runtimeVariables: Record<string, string>;
+  envVars: Record<string, unknown>;
+  runtimeVariables: Record<string, unknown>;
   processEnvVars: Record<string, string>;
   collectionPath: string;
-  globalEnvironmentVariables: Record<string, string>;
+  globalEnvironmentVariables: Record<string, unknown>;
 }
 
 interface CertsAndProxyConfigResult {
@@ -204,6 +204,21 @@ const getCertsAndProxyConfig = async ({
   globalEnvironmentVariables
 }: CertsAndProxyConfigParams): Promise<CertsAndProxyConfigResult> => {
   const httpsAgentRequestFields: HttpsAgentFields = { keepAlive: true };
+
+  if (preferencesUtil.shouldVerifyTls()) {
+    // CAs only matter when verifying, so a stale custom CA path can't break requests with verification off.
+    const caCertFilePath = preferencesUtil.shouldUseCustomCaCertificate()
+      ? preferencesUtil.getCustomCaCertificateFilePath() ?? undefined
+      : undefined;
+    const { caCertificates, caCertificatesCount } = getCACertificates({
+      caCertFilePath,
+      shouldKeepDefaultCerts: preferencesUtil.shouldKeepDefaultCaCertificates()
+    });
+    httpsAgentRequestFields.ca = caCertificates;
+    httpsAgentRequestFields.caCertificatesCount = caCertificatesCount;
+  } else {
+    httpsAgentRequestFields.rejectUnauthorized = false;
+  }
 
   const { promptVariables } = collection;
   const collectionVariables = request.collectionVariables || {};

@@ -609,3 +609,57 @@ describe('OAuth2 Helper - Validation', () => {
     expect(result.error).toContain('Password is required');
   });
 });
+
+// ─── TLS and proxy settings ──────────────────────────────────────────────────
+
+describe('OAuth2 Helper - TLS and proxy settings', () => {
+  let originalAdapter: any;
+
+  beforeEach(() => {
+    originalAdapter = axios.defaults.adapter;
+  });
+
+  afterEach(() => {
+    axios.defaults.adapter = originalAdapter;
+  });
+
+  const certsAndProxyConfig = (rejectUnauthorized?: boolean): any => ({
+    proxyMode: 'off',
+    proxyConfig: {},
+    httpsAgentRequestFields: { keepAlive: true, rejectUnauthorized, ca: 'custom-ca' },
+    interpolationOptions: {}
+  });
+
+  test('resolves the settings for the token URL and applies them to the token request', async () => {
+    const { adapter, getCapturedConfig } = createMockAdapter();
+    axios.defaults.adapter = adapter;
+    const resolveCertsAndProxyConfig = vi.fn(async () => certsAndProxyConfig(false));
+
+    await getOAuth2TokenUsingClientCredentials({
+      request: {
+        oauth2: { grantType: 'client_credentials', accessTokenUrl: 'https://auth.example.com/token', clientId: 'id' }
+      },
+      collectionUid: 'test',
+      forceFetch: true,
+      resolveCertsAndProxyConfig
+    });
+
+    expect(resolveCertsAndProxyConfig).toHaveBeenCalledWith('https://auth.example.com/token');
+    expect(getCapturedConfig().httpsAgent.options).toMatchObject({ rejectUnauthorized: false, ca: 'custom-ca' });
+  });
+
+  test('verifies certificates when no settings are resolved', async () => {
+    const { adapter, getCapturedConfig } = createMockAdapter();
+    axios.defaults.adapter = adapter;
+
+    await getOAuth2TokenUsingClientCredentials({
+      request: {
+        oauth2: { grantType: 'client_credentials', accessTokenUrl: 'https://auth.example.com/token', clientId: 'id' }
+      },
+      collectionUid: 'test',
+      forceFetch: true
+    });
+
+    expect(getCapturedConfig().httpsAgent.options.rejectUnauthorized).toBe(true);
+  });
+});

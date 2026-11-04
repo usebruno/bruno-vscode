@@ -4,6 +4,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Toaster } from 'react-hot-toast';
 import SimpleApp from './SimpleApp';
+import ThemeProvider from '../providers/Theme';
+import '../styles/globals.css';
 
 const rootElement = document.getElementById('root');
 
@@ -12,8 +14,10 @@ if (rootElement) {
     const root = ReactDOM.createRoot(rootElement);
     root.render(
       <React.StrictMode>
-        <SimpleApp />
-        <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+        <ThemeProvider>
+          <SimpleApp />
+          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+        </ThemeProvider>
       </React.StrictMode>
     );
   } catch (error) {

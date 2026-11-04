@@ -129,6 +129,10 @@ const Wrapper = styled.div`
         background: ${(props) => props.theme.sidebar.collection.item.bg} !important;
       }
 
+      span.item-name {
+        color: ${(props) => props.theme.sidebar.collection.item.activeColor};
+      }
+
       .indent-block {
         border-right: 1px solid ${(props) => props.theme.border.border1} !important;
       }

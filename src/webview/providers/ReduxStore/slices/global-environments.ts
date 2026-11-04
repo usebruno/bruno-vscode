@@ -1,7 +1,9 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { uuid } from 'utils/common/index';
 import { environmentSchema } from '@usebruno/schema';
-import { cloneDeep, has } from 'lodash';
+import { getDataTypeFromValue } from '@usebruno/common/utils';
+import { applyScriptVars, getScriptModifiedKeys } from 'utils/environments';
+import { cloneDeep } from 'lodash';
 
 type AppThunk = (dispatch: (action: unknown) => void, getState: () => any) => unknown;
 
@@ -275,29 +277,22 @@ export const globalEnvironmentsUpdateEvent = ({
       return resolve();
     }
 
-    let variables = cloneDeep(environment?.variables);
+    // "globalEnvironmentVariables" is the full set of enabled global variables after the script ran,
+    // so an enabled variable absent from it was deleted (bru.deleteGlobalEnvVar) and is dropped.
+    let variables = applyScriptVars(cloneDeep(environment?.variables), globalEnvironmentVariables, null, {
+      newVarDefaults: { type: 'text', secret: false }
+    }) as any[];
 
-    // "globalEnvironmentVariables" will include only the enabled variables and newly added variables created using the script.
-    // Update the value of each variable if it's present in "globalEnvironmentVariables", otherwise keep the existing value.
-    variables = variables?.map?.((variable: any) => ({
-      ...variable,
-
-      value: has(globalEnvironmentVariables, variable?.name)
-        ? globalEnvironmentVariables[variable?.name]
-        : variable?.value
-    }));
-
-    Object.entries(globalEnvironmentVariables)?.forEach?.(([key, value]) => {
-      const isAnExistingVariable = variables?.find((v: any) => v?.name == key);
-      if (!isAnExistingVariable) {
-        variables.push({
-          uid: uuid(),
-          name: key,
-          value,
-          type: 'text',
-          secret: false,
-          enabled: true
-        });
+    // Script values are native; record the data type so serialization emits the matching `@type`
+    // annotation. 'string' is the implicit default, so it is dropped.
+    const modifiedKeys = getScriptModifiedKeys(globalEnvironmentVariables, null);
+    variables.forEach((v: any) => {
+      if (!modifiedKeys.has(v.name)) return;
+      const inferred = getDataTypeFromValue(globalEnvironmentVariables[v.name]);
+      if (inferred === 'string') {
+        delete v.dataType;
+      } else {
+        v.dataType = inferred;
       }
     });
 

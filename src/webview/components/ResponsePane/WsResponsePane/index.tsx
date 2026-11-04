@@ -9,6 +9,9 @@ import ResponseTime from '../ResponseTime/index';
 import ResponseClear from '../ResponseClear';
 import StyledWrapper from './StyledWrapper';
 import ResponseLayoutToggle from '../ResponseLayoutToggle';
+import Timeline from '../Timeline';
+import ClearTimeline from '../ClearTimeline';
+import { useTimelineEntries } from '../timeline-utils';
 import Tab from 'components/Tab';
 import WSMessagesList from './WSMessagesList';
 import WSResponseHeaders from './WSResponseHeaders';
@@ -35,6 +38,8 @@ const WSResponsePane = ({
   const activeTabUid = useSelector((state) => state.tabs.activeTabUid);
   const isLoading = ['queued', 'sending'].includes(item.requestState);
 
+  const requestTimeline = useTimelineEntries(collection, item);
+
   const selectTab = (tab: any) => {
     dispatch(updateResponsePaneTab({
       uid: item.uid,
@@ -52,6 +57,9 @@ const WSResponsePane = ({
       case 'headers': {
         return <WSResponseHeaders response={response} />;
       }
+      case 'timeline': {
+        return <Timeline item={item} collection={collection} />;
+      }
       default: {
         return <div>404 | Not found</div>;
       }
@@ -66,7 +74,7 @@ const WSResponsePane = ({
     );
   }
 
-  if (!item.response) {
+  if (!item.response && !requestTimeline.length) {
     return (
       <StyledWrapper className="flex h-full relative">
         <Placeholder />
@@ -94,6 +102,11 @@ const WSResponsePane = ({
       label: 'Headers',
       count: response.headers ? Object.keys(response.headers).length : 0
     },
+    {
+      name: 'timeline',
+      label: 'Timeline',
+      count: requestTimeline.length
+    }
   ];
 
   return (
@@ -111,7 +124,12 @@ const WSResponsePane = ({
         ))}
         {!isLoading ? (
           <div className="flex flex-grow justify-end items-center">
-            {item?.response ? (
+            {focusedTab.responsePaneTab === 'timeline' ? (
+              <>
+                <ResponseLayoutToggle />
+                <ClearTimeline item={item} collection={collection} />
+              </>
+            ) : item?.response ? (
               <>
                 <ResponseLayoutToggle />
                 <ResponseClear item={item} collection={collection} />
@@ -134,6 +152,8 @@ const WSResponsePane = ({
         <div className="flex-1 min-h-0 min-w-0 overflow-auto">
           {item?.response ? (
             <>{getTabPanel(focusedTab.responsePaneTab)}</>
+          ) : focusedTab.responsePaneTab === 'timeline' && requestTimeline.length ? (
+            <Timeline item={item} collection={collection} />
           ) : null}
         </div>
       </section>

@@ -12,6 +12,8 @@ import WsBody from '../WsBody/index';
 import StyledWrapper from './StyledWrapper';
 import WSAuth from './WSAuth';
 import WSSettingsPane from '../WSSettingsPane/index';
+import { hasEffectiveAuth } from 'utils/auth';
+import { AUTH_MODES_WS } from 'utils/common/constants';
 
 interface WSRequestPaneProps {
   item?: React.ReactNode;
@@ -92,30 +94,30 @@ const WSRequestPane = ({
 
   const headers = getPropertyFromDraftOrRequest(item, 'request.headers');
   const docs = getPropertyFromDraftOrRequest(item, 'request.docs');
-  const auth = getPropertyFromDraftOrRequest(item, 'request.auth');
+  const hasAuth = hasEffectiveAuth(collection, item, AUTH_MODES_WS);
 
   const activeHeadersLength = headers.filter((header: any) => header.enabled).length;
 
   return (
-    <StyledWrapper className="flex flex-col h-full relative">
+    <StyledWrapper className="flex flex-col h-full relative" data-testid="ws-request-pane">
       <div className="flex flex-wrap items-center tabs" role="tablist">
-        <div className={getTabClassname('body')} role="tab" onClick={() => selectTab('body')}>
+        <div className={getTabClassname('body')} role="tab" data-testid="ws-request-tab-body" onClick={() => selectTab('body')}>
           Message
         </div>
-        <div className={getTabClassname('headers')} role="tab" onClick={() => selectTab('headers')}>
+        <div className={getTabClassname('headers')} role="tab" data-testid="ws-request-tab-headers" onClick={() => selectTab('headers')}>
           Headers
           {activeHeadersLength > 0 && <sup className="ml-[.125rem] font-medium">{activeHeadersLength}</sup>}
         </div>
-        <div className={getTabClassname('auth')} role="tab" onClick={() => selectTab('auth')}>
+        <div className={getTabClassname('auth')} role="tab" data-testid="ws-request-tab-auth" onClick={() => selectTab('auth')}>
           Auth
-          {auth.mode !== 'none' && <StatusDot type="default" />}
+          {hasAuth && <StatusDot type="default" testId="auth" />}
         </div>
-        <div className={getTabClassname('settings')} role="tab" onClick={() => selectTab('settings')}>
+        <div className={getTabClassname('settings')} role="tab" data-testid="ws-request-tab-settings" onClick={() => selectTab('settings')}>
           Settings
         </div>
-        <div className={getTabClassname('docs')} role="tab" onClick={() => selectTab('docs')}>
+        <div className={getTabClassname('docs')} role="tab" data-testid="ws-request-tab-docs" onClick={() => selectTab('docs')}>
           Docs
-          {docs && docs.length > 0 && <StatusDot type="default" />}
+          {docs && docs.length > 0 && <StatusDot type="default" testId="docs" />}
         </div>
       </div>
       <section

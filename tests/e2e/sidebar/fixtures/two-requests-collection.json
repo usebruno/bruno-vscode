@@ -1,0 +1,55 @@
+{
+  "name": "Highlight Collection",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "Alpha Request",
+      "filename": "alpha-request.bru",
+      "seq": 1,
+      "settings": { "encodeUrl": true },
+      "tags": [],
+      "request": {
+        "url": "https://echo.usebruno.com/alpha",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": { "mode": "none" }
+      }
+    },
+    {
+      "type": "http",
+      "name": "Beta Request",
+      "filename": "beta-request.bru",
+      "seq": 2,
+      "settings": { "encodeUrl": true },
+      "tags": [],
+      "request": {
+        "url": "https://echo.usebruno.com/beta",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": { "mode": "none" }
+      }
+    }
+  ],
+  "environments": [],
+  "brunoConfig": {
+    "version": "1",
+    "name": "Highlight Collection",
+    "type": "collection",
+    "ignore": ["node_modules", ".git"]
+  }
+}

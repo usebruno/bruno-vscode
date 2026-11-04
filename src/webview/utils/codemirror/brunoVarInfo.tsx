@@ -8,6 +8,7 @@ import React from 'react';
  */
 
 import { interpolate, mockDataFunctions } from '@usebruno/common';
+import { valueToString } from '@usebruno/common/utils';
 import { getVariableScope, isVariableSecret, getAllVariables } from 'utils/collections';
 import { updateVariableInScope } from 'providers/ReduxStore/slices/collections/actions';
 import store from 'providers/ReduxStore';
@@ -55,6 +56,8 @@ export const COPY_SUCCESS_TIMEOUT = 1000;
 const EDITOR_MIN_HEIGHT = 1.75;
 const EDITOR_MAX_HEIGHT = 11.125;
 
+const VALUE_INDENT = 2;
+
 /**
  * Calculate editor height based on content, clamped between min and max
  * @param {number} contentHeight - The actual content height from CodeMirror
@@ -97,7 +100,7 @@ const getScopeLabel = (scopeType: string) => {
 };
 
 const getMaskedDisplay = (value: any) => {
-  const contentLength = (value || '').length;
+  const contentLength = valueToString(value, VALUE_INDENT).length;
   return contentLength > 0 ? '*'.repeat(contentLength) : '';
 };
 
@@ -105,7 +108,7 @@ const updateValueDisplay = (valueDisplay: any, value: any, isSecret: any, isMask
   if ((isSecret || isMasked) && !isRevealed) {
     valueDisplay.textContent = getMaskedDisplay(value);
   } else {
-    valueDisplay.textContent = value || '';
+    valueDisplay.textContent = valueToString(value, VALUE_INDENT);
   }
 };
 
@@ -131,7 +134,7 @@ const containsSecretVariableReferences = (rawValue: any, collection: any, item: 
   return false;
 };
 
-const getCopyButton = (variableValue: string, onCopyCallback?: () => void) => {
+const getCopyButton = (variableValue: unknown, onCopyCallback?: () => void) => {
   const copyButton = document.createElement('button');
 
   copyButton.className = 'copy-button';
@@ -149,7 +152,7 @@ const getCopyButton = (variableValue: string, onCopyCallback?: () => void) => {
     }
 
     navigator.clipboard
-      .writeText(variableValue)
+      .writeText(valueToString(variableValue, VALUE_INDENT))
       .then(() => {
         isCopied = true;
         copyButton.innerHTML = CHECKMARK_ICON_SVG_TEXT;
@@ -265,16 +268,17 @@ export const renderVarInfo = (token: any, options: any) => {
     }
   }
 
-  // Check if variable is read-only (process.env, runtime, dynamic/faker, oauth2, path, and undefined variables cannot be edited)
-  const isReadOnly = scopeInfo.type === 'process.env' || scopeInfo.type === 'runtime' || scopeInfo.type === 'dynamic' || scopeInfo.type === 'oauth2' || scopeInfo.type === 'path' || scopeInfo.type === 'undefined';
+  // Check if variable is read-only (process.env, runtime, dynamic/faker, oauth2, and undefined variables cannot be edited)
+  const isReadOnly = scopeInfo.type === 'process.env' || scopeInfo.type === 'runtime' || scopeInfo.type === 'dynamic' || scopeInfo.type === 'oauth2' || scopeInfo.type === 'undefined';
 
-  const rawValue = scopeInfo.value || '';
+  const rawValue = scopeInfo.value ?? '';
 
   const isSecret = scopeInfo.type !== 'undefined' ? isVariableSecret(scopeInfo) : false;
   const hasSecretReferences = containsSecretVariableReferences(rawValue, collection, item);
   const shouldMaskValue = isSecret || hasSecretReferences;
 
-  const isMasked = options.variables?.maskedEnvVariables?.includes(variableName);
+  const allVariables = collection ? getAllVariables(collection, item) : {};
+  const isMasked = allVariables?.maskedEnvVariables?.includes(variableName);
 
   const into = document.createElement('div');
   into.className = 'bruno-var-info-container';
@@ -354,10 +358,10 @@ export const renderVarInfo = (token: any, options: any) => {
     const isDarkTheme = document.documentElement.classList.contains('dark');
     const cmTheme = isDarkTheme ? 'monokai' : 'default';
 
-    const allVariables = collection ? getAllVariables(collection, item) : {};
+    const editorInitialValue = valueToString(rawValue, VALUE_INDENT);
 
     const cmEditor = CodeMirror(editorContainer, {
-      value: typeof rawValue === 'string' ? rawValue : String(rawValue), // Use raw value (e.g., {{echo-host}} not resolved value) (ensure it's always a string for CodeMirror) #usebruno/bruno/#6265
+      value: editorInitialValue,
       mode: 'brunovariables',
       theme: cmTheme,
       lineWrapping: true,
@@ -384,7 +388,8 @@ export const renderVarInfo = (token: any, options: any) => {
       maskedEditor.enable();
     }
 
-    let originalValue = rawValue;
+    // Must match the editor's content, or a no-op blur reads as an edit and saves.
+    let originalValue = editorInitialValue;
     let isEditing = false;
 
     cmEditor.setOption('extraKeys', {
@@ -446,7 +451,7 @@ export const renderVarInfo = (token: any, options: any) => {
     }
 
     // Copy button (copy actual value, not masked)
-    const copyButton = getCopyButton(variableValue || '', () => {
+    const copyButton = getCopyButton(variableValue, () => {
       if (isEditing) {
         setTimeout(() => {
           cmEditor.focus();
@@ -545,7 +550,7 @@ export const renderVarInfo = (token: any, options: any) => {
     }
 
     // Copy button (always copy actual value, not masked)
-    const copyButton = getCopyButton(variableValue || '');
+    const copyButton = getCopyButton(variableValue);
     iconsContainer.appendChild(copyButton);
 
     valueContainer.appendChild(valueDisplay);
@@ -565,11 +570,6 @@ export const renderVarInfo = (token: any, options: any) => {
       const readOnlyNote = document.createElement('div');
       readOnlyNote.className = 'var-readonly-note';
       readOnlyNote.textContent = 'read-only';
-      into.appendChild(readOnlyNote);
-    } else if (scopeInfo.type === 'path') {
-      const readOnlyNote = document.createElement('div');
-      readOnlyNote.className = 'var-readonly-note';
-      readOnlyNote.textContent = 'Edit in Params tab';
       into.appendChild(readOnlyNote);
     } else if (scopeInfo.type === 'undefined') {
       const readOnlyNote = document.createElement('div');

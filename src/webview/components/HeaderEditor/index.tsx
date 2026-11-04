@@ -63,7 +63,7 @@ const HeaderEditor = ({
 
   return (
     <div className="flex items-center w-full">
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <SingleLineEditor
           value={value || ''}
           theme={theme}
@@ -77,7 +77,7 @@ const HeaderEditor = ({
         />
       </div>
       {error && !isLastEmptyRow && (
-        <span className="ml-1">
+        <span className="ml-1 shrink-0">
           <IconAlertCircle
             data-tooltip-id={`error-${rowUid}-${type}`}
             className="text-red-600 cursor-pointer"

@@ -1,5 +1,5 @@
 
-import { interpolate as interpolateRaw } from '@usebruno/common';
+import { interpolate as interpolateRaw, utils as brunoUtils } from '@usebruno/common';
 
 // Type assertion for @usebruno/common interpolate (no type definitions available)
 const interpolate = interpolateRaw as (
@@ -25,6 +25,16 @@ const getRawQueryString = (url: string): string => {
   const queryIndex = url.indexOf('?');
   return queryIndex !== -1 ? url.slice(queryIndex) : '';
 };
+
+interface FormField {
+  name?: string;
+  value?: string;
+  enabled?: boolean;
+}
+
+const buildFormUrlEncodedPayload = (fields: FormField[]): string =>
+  (brunoUtils as { buildFormUrlEncodedPayload: (fields: FormField[]) => string })
+    .buildFormUrlEncodedPayload(fields.filter((f) => f.enabled !== false));
 
 interface InterpolationOptions {
   globalEnvironmentVariables?: Record<string, unknown>;
@@ -135,6 +145,8 @@ const interpolateVars = (request: any, options: InterpolationOptions): any => {
     }
   }
 
+  let rawFormUrlEncoded: FormField[] | undefined;
+
   // Interpolate body in BrunoRequest format (body.json, body.text, etc.)
   if (request.body && typeof request.body === 'object' && !Buffer.isBuffer(request.body)) {
     if (request.body.json) {
@@ -147,7 +159,8 @@ const interpolateVars = (request: any, options: InterpolationOptions): any => {
       request.body.xml = _interpolate(request.body.xml) as string;
     }
     if (request.body.formUrlEncoded && Array.isArray(request.body.formUrlEncoded)) {
-      request.body.formUrlEncoded = request.body.formUrlEncoded.map((f: { name?: string; value?: string; enabled?: boolean }) => ({
+      rawFormUrlEncoded = request.body.formUrlEncoded;
+      request.body.formUrlEncoded = request.body.formUrlEncoded.map((f: FormField) => ({
         ...f,
         name: _interpolate(f.name) as string,
         value: _interpolate(f.value) as string
@@ -161,11 +174,29 @@ const interpolateVars = (request: any, options: InterpolationOptions): any => {
       }));
     }
     if (request.body.graphql) {
+      const rawQuery = request.body.graphql.query;
+      const rawVariables = request.body.graphql.variables;
+
       if (request.body.graphql.query) {
         request.body.graphql.query = _interpolate(request.body.graphql.query) as string;
       }
       if (request.body.graphql.variables) {
         request.body.graphql.variables = _interpolate(request.body.graphql.variables, { escapeJSONStrings: true }) as string;
+      }
+
+      const data = request.data as { query?: unknown; variables?: unknown } | undefined;
+      const isBodyDerived = !!data && typeof data === 'object' && (data.query ?? '') === (rawQuery ?? '');
+      const variablesDropped = !!data && (typeof data.variables === 'string'
+        || (!!data.variables && typeof data.variables === 'object' && !Object.keys(data.variables).length));
+
+      if (rawVariables && isBodyDerived && variablesDropped) {
+        try {
+          const variables = JSON.parse(request.body.graphql.variables);
+          data.query = request.body.graphql.query || '';
+          data.variables = variables;
+        } catch {
+          // keep whatever was derived earlier
+        }
       }
     }
   }
@@ -228,6 +259,10 @@ const interpolateVars = (request: any, options: InterpolationOptions): any => {
           ...d,
           value: _interpolate(d?.value)
         }));
+      } else if (typeof request.data === 'string' && rawFormUrlEncoded) {
+        if (request.data === buildFormUrlEncodedPayload(rawFormUrlEncoded)) {
+          request.data = buildFormUrlEncodedPayload(request.body.formUrlEncoded);
+        }
       }
     } else if (contentType === 'multipart/form-data') {
       if (Array.isArray(request?.data) && !(request.data instanceof FormData)) {

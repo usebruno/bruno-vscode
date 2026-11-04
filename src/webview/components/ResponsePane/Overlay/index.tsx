@@ -26,7 +26,7 @@ const ResponseLoadingOverlay = ({
 
   return (
     <StyledWrapper className={`w-full ${isVerticalLayout ? 'vertical-layout' : ''}`}>
-      <div className="overlay">
+      <div className="overlay" data-testid="response-loading-overlay">
         <div style={{ marginBottom: 15, fontSize: 26 }}>
           <div style={{ display: 'inline-block', fontSize: 20, marginLeft: 5, marginRight: 5 }}>
             <StopWatch startTime={item?.requestStartTime} />

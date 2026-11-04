@@ -1,10 +1,12 @@
 import React, { useCallback, useRef, useMemo, useEffect } from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 import { get } from 'lodash';
-import { IconTrash, IconAlertCircle, IconInfoCircle } from '@tabler/icons';
+import { IconTrash } from '@tabler/icons';
 import { useTheme } from 'providers/Theme';
 import { useDispatch, useSelector } from 'react-redux';
+import { valueToString, BRUNO_VARIABLE_DATATYPES } from '@usebruno/common/utils';
 import MultiLineEditor from 'components/MultiLineEditor/index';
+import DataTypeSelector from 'components/DataTypeSelector';
 import StyledWrapper from './StyledWrapper';
 import { uuid } from 'utils/common';
 import { useFormik } from 'formik';
@@ -14,9 +16,9 @@ import toast from 'react-hot-toast';
 import { saveEnvironment } from 'providers/ReduxStore/slices/collections/actions';
 import { setEnvironmentsDraft, clearEnvironmentsDraft } from 'providers/ReduxStore/slices/collections';
 import { saveGlobalEnvironment, setGlobalEnvironmentDraft, clearGlobalEnvironmentDraft } from 'providers/ReduxStore/slices/global-environments';
-import { Tooltip } from 'react-tooltip';
 import { getGlobalEnvironmentVariables, flattenItems, isItemARequest } from 'utils/collections';
 import SensitiveFieldWarning from 'components/SensitiveFieldWarning';
+import VariableNameError from 'components/Environments/Common/VariableNameError';
 import { sensitiveFields } from './constants';
 
 interface EnvironmentVariablesProps {
@@ -137,7 +139,8 @@ const EnvironmentVariables = ({
         secret: Yup.boolean(),
         type: Yup.string(),
         uid: Yup.string(),
-        value: Yup.mixed().nullable()
+        value: Yup.mixed().nullable(),
+        dataType: Yup.string().oneOf(BRUNO_VARIABLE_DATATYPES as unknown as string[]).nullable()
       })
     ),
     validate: (values) => {
@@ -233,32 +236,6 @@ const EnvironmentVariables = ({
 
     return () => clearTimeout(timeoutId);
   }, [formik.values, savedValuesJson, environment.uid, isGlobal ? null : collection?.uid, dispatch, hasDraftForThisEnv, environmentsDraft?.variables, isGlobal]);
-
-  const ErrorMessage = ({
-    name,
-    index
-  }: any) => {
-    const meta = formik.getFieldMeta(name);
-    const id = `error-${name}-${index}`;
-
-    const isLastRow = index === formik.values.length - 1;
-    const variable = formik.values[index];
-    const isEmptyRow = !variable?.name || variable.name.trim() === '';
-
-    if (isLastRow && isEmptyRow) {
-      return null;
-    }
-
-    if (!meta.error || !meta.touched) {
-      return null;
-    }
-    return (
-      <span>
-        <IconAlertCircle id={id} className="text-red-600 cursor-pointer" size={20} />
-        <Tooltip className="tooltip-mod" anchorId={id} html={meta.error || ''} />
-      </span>
-    );
-  };
 
   const handleRemoveVar = useCallback((id: any) => {
     const currentValues = formik.values;
@@ -432,7 +409,7 @@ const EnvironmentVariables = ({
               const isLastEmptyRow = isLastRow && isEmptyRow;
 
               return (
-                <tr key={variable.uid} data-testid={`env-var-row-${variable.name}`}>
+                <tr key={variable.uid} data-testid={isLastEmptyRow ? 'env-var-row-new' : `env-var-row-${variable.name}`}>
                   <td className="text-center">
                     {!isLastEmptyRow && (
                       <input
@@ -453,6 +430,7 @@ const EnvironmentVariables = ({
                         autoCapitalize="off"
                         spellCheck="false"
                         className="mousetrap"
+                        data-testid={isLastEmptyRow ? 'env-var-name-new' : `env-var-name-${variable.name}`}
                         id={`${index}.name`}
                         name={`${index}.name`}
                         value={variable.name}
@@ -461,31 +439,30 @@ const EnvironmentVariables = ({
                         onBlur={() => handleNameBlur(index)}
                         onKeyDown={(e) => handleNameKeyDown(index, e)}
                       />
-                      <ErrorMessage name={`${index}.name`} index={index} />
+                      <VariableNameError formik={formik} name={`${index}.name`} index={index} />
                     </div>
                   </td>
-                  <td className="flex flex-row flex-nowrap items-center">
+                  <td className="flex flex-row flex-nowrap items-center gap-2">
                     <div className="overflow-hidden grow w-full relative">
                       <MultiLineEditor
                         theme={storedTheme}
                         collection={_collection}
-                        value={variable.value}
+                        value={valueToString(variable.value, 2)}
                         placeholder={isLastEmptyRow ? 'Value' : ''}
                         isSecret={variable.secret}
-                        readOnly={typeof variable.value !== 'string'}
                         onChange={(newValue: any) => formik.setFieldValue(`${index}.value`, newValue, true)}
                         onSave={handleSave}
                       />
                     </div>
-                    {typeof variable.value !== 'string' && (
-                      <span className="ml-2 flex items-center">
-                        <IconInfoCircle id={`${variable.uid}-disabled-info-icon`} className="text-muted" size={16} />
-                        <Tooltip
-                          anchorId={`${variable.uid}-disabled-info-icon`}
-                          content="Non-string values set via scripts are read-only and can only be updated through scripts."
-                          place="top"
-                        />
-                      </span>
+                    {!isLastEmptyRow && (
+                      <DataTypeSelector
+                        variable={variable}
+                        onChange={(fields) => {
+                          Object.entries(fields).forEach(([key, val]) => {
+                            formik.setFieldValue(`${index}.${key}`, val, true);
+                          });
+                        }}
+                      />
                     )}
                     {!variable.secret && hasSensitiveUsage(variable.name) && (
                       <SensitiveFieldWarning
@@ -499,6 +476,7 @@ const EnvironmentVariables = ({
                       <input
                         type="checkbox"
                         className="mousetrap"
+                        data-testid={`env-var-secret-${variable.name}`}
                         name={`${index}.secret`}
                         checked={variable.secret}
                         onChange={formik.handleChange}

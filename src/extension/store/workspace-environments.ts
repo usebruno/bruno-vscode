@@ -10,6 +10,7 @@ const { parseEnvironment, stringifyEnvironment } = require('@usebruno/filestore'
 import { writeFile, createDirectory } from '../utils/filesystem';
 import { generateUidBasedOnHash, uuid } from '../utils/common';
 import { decryptStringSafe } from '../utils/encryption';
+import type { BrunoVariableDataType } from '@usebruno/common/utils';
 import EnvironmentSecretsStore from './env-secrets';
 
 const environmentSecretsStore = new EnvironmentSecretsStore();
@@ -19,9 +20,10 @@ export const ENV_FILE_EXTENSION = '.yml';
 interface EnvironmentVariable {
   uid?: string;
   name: string;
-  value: string;
+  value: string | number | boolean | Record<string, unknown> | null;
   secret?: boolean;
   type?: string;
+  dataType?: BrunoVariableDataType;
 }
 
 interface Environment {

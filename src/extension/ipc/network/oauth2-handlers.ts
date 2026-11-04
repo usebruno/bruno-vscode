@@ -9,8 +9,11 @@ import {
   getStoredOauth2Credentials,
   isTokenExpired,
   placeOAuth2Token,
-  OAuth2TokenResult
+  OAuth2TokenResult,
+  ResolveCertsAndProxyConfig
 } from '../../utils/oauth2';
+import { getCertsAndProxyConfig } from './cert-utils';
+import { getProcessEnvVars } from '../../store/process-env';
 import { isAuthorizationInProgress, cancelAuthorization } from './authorize-user-in-system-browser';
 import { interpolate } from '@usebruno/common';
 import { cloneDeep } from 'lodash';
@@ -28,6 +31,21 @@ interface FetchOAuth2Payload {
   collection: Record<string, unknown>;
 }
 
+// TLS and proxy settings for a token URL, from the request and collection the webview sends.
+const resolveCertsAndProxyConfigFromPayload = (
+  { request, collection }: FetchOAuth2Payload,
+  collectionUid: string
+): ResolveCertsAndProxyConfig => (url) => getCertsAndProxyConfig({
+  collectionUid,
+  collection: { promptVariables: request.promptVariables as Record<string, string> | undefined },
+  request: { url },
+  envVars: (request.mergedVariables as Record<string, unknown>) || {},
+  runtimeVariables: {},
+  processEnvVars: getProcessEnvVars(collectionUid) as Record<string, string>,
+  collectionPath: (collection as { pathname?: string }).pathname || '',
+  globalEnvironmentVariables: (request.globalEnvironmentVariables as Record<string, unknown>) || {}
+});
+
 export function registerOAuth2Handlers(): void {
   // Fetch credentials (all grant types)
   registerHandler('renderer:fetch-oauth2-credentials', async (args) => {
@@ -41,14 +59,15 @@ export function registerOAuth2Handlers(): void {
     const interpolatedRequest = interpolateOAuth2Config(request, additionalVars);
     const oauth2Config = ((interpolatedRequest.auth as { oauth2?: OAuth2 })?.oauth2 || interpolatedRequest.oauth2) as OAuth2 | undefined;
     const grantType = oauth2Config?.grantType;
+    const resolveCertsAndProxyConfig = resolveCertsAndProxyConfigFromPayload(payload, collectionUid);
 
     switch (grantType) {
       case 'client_credentials':
-        return getOAuth2TokenUsingClientCredentials({ request: interpolatedRequest, collectionUid, forceFetch: true });
+        return getOAuth2TokenUsingClientCredentials({ request: interpolatedRequest, collectionUid, forceFetch: true, resolveCertsAndProxyConfig });
       case 'password':
-        return getOAuth2TokenUsingPasswordCredentials({ request: interpolatedRequest, collectionUid, forceFetch: true });
+        return getOAuth2TokenUsingPasswordCredentials({ request: interpolatedRequest, collectionUid, forceFetch: true, resolveCertsAndProxyConfig });
       case 'authorization_code':
-        return getOAuth2TokenUsingAuthorizationCode({ request: interpolatedRequest, collectionUid, forceFetch: true });
+        return getOAuth2TokenUsingAuthorizationCode({ request: interpolatedRequest, collectionUid, forceFetch: true, resolveCertsAndProxyConfig });
       case 'implicit':
         return getOAuth2TokenUsingImplicitGrant({ request: interpolatedRequest, collectionUid, forceFetch: true });
       default:
@@ -66,7 +85,11 @@ export function registerOAuth2Handlers(): void {
     // Interpolate OAuth2 config before refresh (resolves {{variables}})
     const additionalVars = (request.mergedVariables as Record<string, unknown>) || undefined;
     const interpolatedRequest = interpolateOAuth2Config(request, additionalVars);
-    return refreshOauth2Token({ requestCopy: interpolatedRequest, collectionUid });
+    return refreshOauth2Token({
+      requestCopy: interpolatedRequest,
+      collectionUid,
+      resolveCertsAndProxyConfig: resolveCertsAndProxyConfigFromPayload(payload, collectionUid)
+    });
   });
 
   // Clear cached credentials
@@ -125,6 +148,7 @@ function interpolateOAuth2Config(
     ...(requestCopy.oauth2CredentialVariables as Record<string, unknown> || {}),
     ...(requestCopy.runtimeVariables as Record<string, unknown> || {}),
     ...(additionalVars || {}),
+    ...(requestCopy.promptVariables as Record<string, unknown> || {}),
   };
 
   // Interpolate all string values in the oauth2 config
@@ -205,7 +229,8 @@ function populateOAuth2CredentialVariables(
 export async function applyOAuth2ToRequest(
   request: Record<string, unknown>,
   collectionUid: string,
-  variableContext?: OAuth2VariableContext
+  variableContext?: OAuth2VariableContext,
+  resolveCertsAndProxyConfig?: ResolveCertsAndProxyConfig
 ): Promise<void> {
   const auth = request.auth as { mode?: string; oauth2?: OAuth2 } | undefined;
   const oauth2Raw = (request.oauth2 as OAuth2 | undefined) || auth?.oauth2;
@@ -249,9 +274,9 @@ export async function applyOAuth2ToRequest(
 
     // Expired or missing — delegate to grant type function (handles auto-refresh/auto-fetch)
     if (grantType === 'client_credentials') {
-      result = await getOAuth2TokenUsingClientCredentials({ request: interpolatedRequest, collectionUid });
+      result = await getOAuth2TokenUsingClientCredentials({ request: interpolatedRequest, collectionUid, resolveCertsAndProxyConfig });
     } else {
-      result = await getOAuth2TokenUsingPasswordCredentials({ request: interpolatedRequest, collectionUid });
+      result = await getOAuth2TokenUsingPasswordCredentials({ request: interpolatedRequest, collectionUid, resolveCertsAndProxyConfig });
     }
   } else if (grantType === 'authorization_code' || grantType === 'implicit') {
     const storedUrl = grantType === 'implicit' ? (oauth2.authorizationUrl || '') : url;
@@ -266,7 +291,7 @@ export async function applyOAuth2ToRequest(
     // Auto-fetch for browser flows when autoFetchToken is true
     if (autoFetchToken) {
       if (grantType === 'authorization_code') {
-        result = await getOAuth2TokenUsingAuthorizationCode({ request: interpolatedRequest, collectionUid });
+        result = await getOAuth2TokenUsingAuthorizationCode({ request: interpolatedRequest, collectionUid, resolveCertsAndProxyConfig });
       } else {
         result = await getOAuth2TokenUsingImplicitGrant({ request: interpolatedRequest, collectionUid });
       }

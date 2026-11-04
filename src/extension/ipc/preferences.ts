@@ -1,6 +1,6 @@
 
 import * as vscode from 'vscode';
-import { registerHandler, registerEventListener, emit, sendToWebview } from './handlers';
+import { registerHandler, registerEventListener, emit, sendToWebview, broadcastToAllWebviews } from './handlers';
 import { getPreferences, savePreferences, preferencesUtil } from '../store/preferences';
 import { globalEnvironmentsStore } from '../store/global-environments';
 
@@ -44,10 +44,23 @@ const registerPreferencesIpc = (): void => {
     const [preferences] = args as [unknown];
     try {
       await savePreferences(preferences as Record<string, unknown>);
+      // Keep every open webview (sidebar, editors, panels) in sync with the saved preferences
+      broadcastToAllWebviews('main:load-preferences', getPreferences());
       return { success: true };
     } catch (error) {
       throw error;
     }
+  });
+
+  registerHandler('renderer:get-app-info', async () => {
+    const extension = vscode.extensions.getExtension('bruno-api-client.bruno');
+    return {
+      version: extension?.packageJSON?.version ?? null,
+      vscodeVersion: vscode.version,
+      appName: vscode.env.appName,
+      platform: process.platform,
+      arch: process.arch
+    };
   });
 
   // Note: VS Code manages its own theme, so we just acknowledge the change

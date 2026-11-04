@@ -357,11 +357,11 @@ const QueryUrl = ({
   return (
     <StyledWrapper className="flex items-center w-full">
       <div className="flex items-center h-full min-w-fit">
-        <HttpMethodSelector method={method} onMethodSelect={onMethodSelect} />
+        <HttpMethodSelector method={method} onMethodSelect={onMethodSelect} dropdownTestId="request-method" />
       </div>
       <div
         id="request-url"
-        className="h-full w-full flex flex-row input-container"
+        className="h-full w-full min-w-0 flex flex-row input-container"
       >
         <SingleLineEditor
           ref={editorRef}

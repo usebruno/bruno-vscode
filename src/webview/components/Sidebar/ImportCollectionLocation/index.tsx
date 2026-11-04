@@ -146,7 +146,7 @@ const ImportCollectionLocation = ({
   const GroupingDropdownIcon = forwardRef<HTMLDivElement>((props, ref) => {
     const selectedOption = groupingOptions.find((option) => option.value === groupingType);
     return (
-      <div ref={ref} className="flex items-center justify-between w-full current-group" data-testid="grouping-dropdown">
+      <div ref={ref} className="flex items-center justify-between w-full current-group" data-testid="import-location-group-by">
         <div>
           <div className="font-medium text-gray-900 dark:text-gray-100">{selectedOption?.label}</div>
         </div>
@@ -229,7 +229,7 @@ const ImportCollectionLocation = ({
             <div className="mt-4">
               <label htmlFor="format" className="flex items-center font-medium">
                 File Format
-                <Help width="300">
+                <Help width={300}>
                   <p>Choose the file format for storing requests in this collection.</p>
                   <p className="mt-2">
                     <strong>OpenCollection (YAML):</strong> Industry-standard YAML format (.yml files)

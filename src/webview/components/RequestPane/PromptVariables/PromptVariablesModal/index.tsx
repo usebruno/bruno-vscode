@@ -33,7 +33,7 @@ export default function PromptVariablesModal({
         <StyledWrapper data-testid="prompt-variables-modal-content">
           <div className="space-y-5 mt-2">
             {prompts.map((prompt: any, index: any) => (
-              <div key={prompt} data-testid="prompt-variable-input-container">
+              <div key={prompt} data-testid={`prompt-variable-input-container-${prompt}`}>
                 <label htmlFor={`prompt-${index}`} className="block font-medium">
                   {prompt}
                 </label>

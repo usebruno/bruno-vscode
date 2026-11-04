@@ -6,9 +6,11 @@ import { sendRequest, saveRequest } from 'providers/ReduxStore/slices/collection
 import MultiLineEditor from 'components/MultiLineEditor';
 import InfoTip from 'components/InfoTip';
 import EditableTable from 'components/EditableTable';
+import VarsDataTypeSelector from 'components/DataTypeSelector/VarsDataTypeSelector';
 import StyledWrapper from './StyledWrapper';
 import toast from 'react-hot-toast';
 import { variableNameRegex } from 'utils/common/regex';
+import { valueToString } from '@usebruno/common/utils';
 
 interface VarsTableProps {
   item: any;
@@ -87,16 +89,21 @@ const VarsTable = ({
         onChange,
         isLastEmptyRow
       }: any) => (
-        <MultiLineEditor
-          value={value || ''}
-          theme={storedTheme}
-          onSave={onSave}
-          onChange={onChange}
-          onRun={handleRun}
-          collection={collection}
-          item={item}
-          placeholder={isLastEmptyRow ? (varType === 'request' ? 'Value' : 'Expr') : ''}
-        />
+        <div className="flex items-center w-full gap-2">
+          <div className="flex-1 min-w-0">
+            <MultiLineEditor
+              value={valueToString(value)}
+              theme={storedTheme}
+              onSave={onSave}
+              onChange={onChange}
+              onRun={handleRun}
+              collection={collection}
+              item={item}
+              placeholder={isLastEmptyRow ? (varType === 'request' ? 'Value' : 'Expr') : ''}
+            />
+          </div>
+          <VarsDataTypeSelector row={row} vars={vars} isLastEmptyRow={isLastEmptyRow} varType={varType} onVarsChange={handleVarsChange} />
+        </div>
       )
     }
   ];
@@ -110,6 +117,7 @@ const VarsTable = ({
   return (
     <StyledWrapper className="w-full">
       <EditableTable
+        testId={`request-vars-${varType === 'request' ? 'req' : 'res'}`}
         columns={columns}
         rows={vars || []}
         onChange={handleVarsChange}

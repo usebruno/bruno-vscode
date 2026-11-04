@@ -134,7 +134,7 @@ declare module 'markdown-it' {
 
 declare module '@usebruno/common' {
   export function parseQueryParams(url: string): Array<{ name: string; value?: string }>;
-  export function extractPromptVariables(str: string): string[];
+  export function extractPromptVariables(value: unknown): string[];
   export function parsePathParams(url: string): Record<string, string>;
   export function getSubdirectoriesFromRoot(collection: unknown, item: unknown): string[];
   export function getContentType(headers: unknown[]): string;
@@ -147,7 +147,7 @@ declare module '@usebruno/common' {
 
 declare module '@usebruno/common/utils' {
   export function parseQueryParams(url: string): Array<{ name: string; value?: string }>;
-  export function extractPromptVariables(str: string): string[];
+  export function extractPromptVariables(value: unknown): string[];
   export function parsePathParams(url: string): Record<string, string>;
   export function getSubdirectoriesFromRoot(collection: unknown, item: unknown): string[];
   export function getContentType(headers: unknown[]): string;
@@ -159,6 +159,15 @@ declare module '@usebruno/common/utils' {
   export function humanizeNumberWithCommas(num: number): string;
   export function safeParseJSON(str: string): unknown;
   export function safeStringifyJSON(obj: unknown): string;
+  export type BrunoVariableDataType = 'string' | 'number' | 'boolean' | 'object';
+  export const BRUNO_VARIABLE_DATATYPES: readonly BrunoVariableDataType[];
+  export function getDataTypeFromValue(value: unknown): BrunoVariableDataType;
+  export function isSameOrigin(url1: string, url2: string): boolean;
+  // Mirrors @usebruno/common: value in / value out are `any` (coerced to the given data type).
+  export function parseValueByDataType(value: any, dataType?: BrunoVariableDataType): any;
+  export function valueToString(value: unknown, indent?: number): string;
+  export function validateDataTypeValue(value: any, dataType?: BrunoVariableDataType): string | null;
+  export function jsonToDotenv(variables: Array<{ name: string; value?: string }>): string;
 }
 
 declare module '@usebruno/schema' {

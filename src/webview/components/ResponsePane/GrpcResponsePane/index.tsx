@@ -13,6 +13,9 @@ import StyledWrapper from './StyledWrapper';
 import ResponseTrailers from './ResponseTrailers';
 import GrpcQueryResult from './GrpcQueryResult';
 import ResponseLayoutToggle from '../ResponseLayoutToggle';
+import Timeline from '../Timeline';
+import ClearTimeline from '../ClearTimeline';
+import { useTimelineEntries } from '../timeline-utils';
 import Tab from 'components/Tab';
 
 interface GrpcResponsePaneProps {
@@ -29,6 +32,8 @@ const GrpcResponsePane = ({
   const tabs = useSelector((state) => state.tabs.tabs);
   const activeTabUid = useSelector((state) => state.tabs.activeTabUid);
   const isLoading = ['queued', 'sending'].includes(item.requestState);
+
+  const requestTimeline = useTimelineEntries(collection, item);
 
   const selectTab = (tab: any) => {
     dispatch(
@@ -52,6 +57,9 @@ const GrpcResponsePane = ({
       case 'trailers': {
         return <ResponseTrailers trailers={response.trailers} />;
       }
+      case 'timeline': {
+        return <Timeline item={item} collection={collection} />;
+      }
       default: {
         return <div>404 | Not found</div>;
       }
@@ -66,7 +74,7 @@ const GrpcResponsePane = ({
     );
   }
 
-  if (!item.response) {
+  if (!item.response && !requestTimeline.length) {
     return (
       <StyledWrapper className="flex h-full relative">
         <Placeholder />
@@ -99,6 +107,11 @@ const GrpcResponsePane = ({
       label: 'Trailers',
       count: Array.isArray(response.trailers) ? response.trailers.length : 0
     },
+    {
+      name: 'timeline',
+      label: 'Timeline',
+      count: requestTimeline.length
+    }
   ];
 
   return (
@@ -116,7 +129,12 @@ const GrpcResponsePane = ({
         ))}
         {!isLoading ? (
           <div className="flex flex-grow justify-end items-center">
-            {item?.response ? (
+            {focusedTab.responsePaneTab === 'timeline' ? (
+              <>
+                <ResponseLayoutToggle />
+                <ClearTimeline item={item} collection={collection} />
+              </>
+            ) : item?.response ? (
               <>
                 <ResponseLayoutToggle />
                 <ResponseClear item={item} collection={collection} />
@@ -139,6 +157,8 @@ const GrpcResponsePane = ({
         <div className="flex-1 min-h-0 min-w-0 overflow-auto">
           {item?.response ? (
             <>{getTabPanel(focusedTab.responsePaneTab)}</>
+          ) : focusedTab.responsePaneTab === 'timeline' && requestTimeline.length ? (
+            <Timeline item={item} collection={collection} />
           ) : null}
         </div>
       </section>

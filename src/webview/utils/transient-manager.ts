@@ -10,6 +10,7 @@
  */
 
 import { uuid } from 'utils/common/index';
+import { flattenItems, isItemTransientRequest } from 'utils/collections/index';
 
 interface TransientItem {
   uid: string;
@@ -24,21 +25,28 @@ interface TransientItem {
   settings: Record<string, unknown>;
 }
 
+interface CollectionPresets {
+  requestType?: string;
+  requestUrl?: string;
+}
+
 interface CollectionInfo {
   uid: string;
   pathname: string;
   format?: string; // 'bru' or 'yml'
+  brunoConfig?: { presets?: CollectionPresets };
+  draft?: { brunoConfig?: { presets?: CollectionPresets } } | null;
+  items?: any[]; // saved requests + open transients
 }
 
-// Track the next number for auto-generated names per collection
-const counters: Record<string, number> = {};
-
-function getNextName(collectionUid: string): string {
-  if (!counters[collectionUid]) {
-    counters[collectionUid] = 0;
-  }
-  counters[collectionUid]++;
-  return `Untitled ${counters[collectionUid]}`;
+function getNextName(collection: CollectionInfo): string {
+  const items = flattenItems((collection?.items ?? []) as any);
+  const maxNumber = items.reduce((max: number, item: any) => {
+    if (!isItemTransientRequest(item)) return max;
+    const n = Number(item.name?.match(/^Untitled (\d+)$/)?.[1]);
+    return n > max ? n : max;
+  }, 0);
+  return `Untitled ${maxNumber + 1}`;
 }
 
 function getFileExtension(format?: string): string {
@@ -51,16 +59,25 @@ function buildTransientPath(collectionPathname: string, filename: string): strin
 }
 
 function generateItemMeta(collection: CollectionInfo): { name: string; filename: string; pathname: string } {
-  const name = getNextName(collection.uid);
+  const name = getNextName(collection);
   const ext = getFileExtension(collection.format);
   const filename = `${name}.${ext}`;
   const pathname = buildTransientPath(collection.pathname, filename);
   return { name, filename, pathname };
 }
 
-function createBaseRequest(): Record<string, unknown> {
+// Collection presets. 
+function getPresets(collection: CollectionInfo): CollectionPresets {
+  return collection?.draft?.brunoConfig?.presets || collection?.brunoConfig?.presets || {};
+}
+
+function getPresetUrl(collection: CollectionInfo): string {
+  return getPresets(collection).requestUrl || '';
+}
+
+function createBaseRequest(url = ''): Record<string, unknown> {
   return {
-    url: '',
+    url,
     method: 'GET',
     headers: [],
     params: [],
@@ -86,7 +103,7 @@ const transientManager = {
       draft: null,
       filename,
       pathname,
-      request: createBaseRequest(),
+      request: createBaseRequest(getPresetUrl(collection)),
       settings: { encodeUrl: true }
     };
   },
@@ -103,7 +120,7 @@ const transientManager = {
       filename,
       pathname,
       request: {
-        ...createBaseRequest(),
+        ...createBaseRequest(getPresetUrl(collection)),
         method: 'POST',
         body: {
           mode: 'graphql',
@@ -126,7 +143,7 @@ const transientManager = {
       filename,
       pathname,
       request: {
-        url: '',
+        url: getPresetUrl(collection),
         method: '',
         methodType: '',
         headers: [],
@@ -157,7 +174,7 @@ const transientManager = {
       filename,
       pathname,
       request: {
-        url: '',
+        url: getPresetUrl(collection),
         method: 'GET',
         headers: [],
         params: [],
@@ -174,10 +191,6 @@ const transientManager = {
       },
       settings: { timeout: 0, keepAliveInterval: 0 }
     };
-  },
-
-  resetCounter(collectionUid: string): void {
-    delete counters[collectionUid];
   }
 };
 

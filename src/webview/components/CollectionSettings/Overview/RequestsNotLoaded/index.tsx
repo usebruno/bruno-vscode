@@ -7,6 +7,7 @@ import { isItemARequest, itemIsOpenedInTabs } from 'utils/tabs/index';
 import { getDefaultRequestPaneTab } from 'utils/collections/index';
 import { addTab, focusTab } from 'providers/ReduxStore/slices/tabs';
 import { RootState } from 'providers/ReduxStore';
+import { isSidebarMode, openRequestInVSCodeEditor } from 'utils/webviewMode';
 
 interface RequestsNotLoadedProps {
   collection: React.ReactNode;
@@ -19,7 +20,8 @@ const RequestsNotLoaded = ({
   const dispatch = useDispatch();
   const tabs = useSelector((state: RootState) => state.tabs.tabs);
   const flattenedItems = flattenItems(collection.items);
-  const itemsFailedLoading = flattenedItems?.filter((item: any) => item?.partial && !item?.loading);
+  // `partial` is the normal lazy-load state, not a failure; only errored requests are "not loaded".
+  const itemsFailedLoading = flattenedItems?.filter((item: any) => isItemARequest(item) && item?.error);
 
   if (!itemsFailedLoading?.length) {
     return null;
@@ -27,28 +29,34 @@ const RequestsNotLoaded = ({
 
   const handleRequestClick = (item: any) => (e: any) => {
     e.preventDefault();
-    if (isItemARequest(item)) {
-      if (itemIsOpenedInTabs(item, tabs as any)) {
-        dispatch(
-          focusTab({
-            uid: item.uid
-          })
-        );
-        return;
-      }
+    if (!isItemARequest(item)) {
+      return;
+    }
+
+    if (isSidebarMode()) {
+      openRequestInVSCodeEditor(item.pathname);
+      return;
+    }
+
+    if (itemIsOpenedInTabs(item, tabs as any)) {
       dispatch(
-        addTab({
-          uid: item.uid,
-          collectionUid: collection.uid,
-          requestPaneTab: getDefaultRequestPaneTab(item)
+        focusTab({
+          uid: item.uid
         })
       );
       return;
     }
+    dispatch(
+      addTab({
+        uid: item.uid,
+        collectionUid: collection.uid,
+        requestPaneTab: getDefaultRequestPaneTab(item)
+      })
+    );
   };
 
   return (
-    <StyledWrapper className="w-full card my-2">
+    <StyledWrapper className="w-full card my-2" data-testid="collection-requests-not-loaded">
       <div className="flex items-center gap-2 px-3 py-2 title">
         <IconAlertTriangle size={16} className="warning-icon" />
         <span className="font-medium">Following requests were not loaded</span>
@@ -66,7 +74,7 @@ const RequestsNotLoaded = ({
         </thead>
         <tbody>
           {flattenedItems?.map((item: any, index: any) => (
-            item?.partial && !item?.loading ? (
+            isItemARequest(item) && item?.error ? (
               <tr key={index} className="cursor-pointer" onClick={handleRequestClick(item)}>
                 <td className="py-1.5 px-3">
                   {item?.pathname?.split(`${collection?.pathname}/`)?.[1]}

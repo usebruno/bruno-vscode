@@ -1,0 +1,8 @@
+info:
+  name: graphql-request
+  type: graphql
+  seq: 4
+
+graphql:
+  method: POST
+  url: https://example.com/graphql

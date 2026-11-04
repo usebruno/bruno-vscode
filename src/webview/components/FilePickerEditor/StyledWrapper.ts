@@ -70,10 +70,35 @@ const StyledWrapper = styled.div`
       cursor: default;
     }
 
+    /* The selected file is missing on disk — tint the chip so it reads as a warning. */
+    &.has-warning {
+      background-color: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.15));
+      border-radius: ${(props) => props.theme.border.radius.sm};
+      font-weight: 500;
+      padding: 4px;
+    }
+
     .file-icon {
       flex-shrink: 0;
       color: ${(props) => props.theme.colors.text.muted};
       margin-right: 4px;
+    }
+
+    .warning-icon {
+      flex-shrink: 0;
+      color: ${(props) => props.theme.status.warning.text};
+      margin-right: 4px;
+    }
+
+    .warning-tooltip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+
+      svg {
+        color: ${(props) => props.theme.status.warning.text};
+        flex-shrink: 0;
+      }
     }
 
     .file-name {

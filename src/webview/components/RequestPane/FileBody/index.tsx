@@ -160,7 +160,7 @@ const FileBody = ({
         </tbody>
       </table>
       <div>
-        <button className="btn-add-param text-link pr-2 pt-3 select-none" onClick={addFile}>
+        <button className="btn-add-param text-link pr-2 pt-3 select-none" data-testid="body-file-add" onClick={addFile}>
           + Add File
         </button>
       </div>

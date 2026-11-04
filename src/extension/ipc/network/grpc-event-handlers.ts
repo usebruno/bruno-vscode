@@ -8,6 +8,7 @@ import { interpolateVars } from './interpolate-vars';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeHeaders, mergeScripts, mergeVars, mergeAuth } from '../../utils/collection';
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getPreferences } from '../../store/preferences';
+import { getRuntimeVariables } from '../../store/runtime-variables';
 import { setAuthHeaders } from './prepare-request';
 import { interpolateString } from './interpolate-string';
 
@@ -32,10 +33,10 @@ interface GrpcRequestData {
   headers?: Array<{ name: string; value: string; enabled?: boolean }>;
   body?: GrpcBody;
   vars?: unknown;
-  collectionVariables?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
-  globalEnvironmentVariables?: Record<string, string>;
+  collectionVariables?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
+  globalEnvironmentVariables?: Record<string, unknown>;
   oauth2CredentialVariables?: Record<string, string>;
   auth?: unknown;
   script?: unknown;
@@ -80,16 +81,16 @@ interface PreparedGrpcRequest {
   url: string;
   headers: Record<string, string>;
   processEnvVars: Record<string, string>;
-  envVars: Record<string, string>;
-  runtimeVariables: Record<string, string>;
+  envVars: Record<string, unknown>;
+  runtimeVariables: Record<string, unknown>;
   promptVariables: Record<string, string>;
   body?: GrpcBody;
   protoPath?: string;
   vars?: unknown;
-  collectionVariables?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
-  globalEnvironmentVariables?: Record<string, string>;
+  collectionVariables?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
+  globalEnvironmentVariables?: Record<string, unknown>;
   oauth2CredentialVariables?: Record<string, string>;
   oauth2?: unknown;
   oauth2Credentials?: unknown;
@@ -107,7 +108,7 @@ const prepareGrpcRequest = async (
   item: GrpcRequestItem,
   collection: Collection,
   environment: Environment | null,
-  runtimeVariables: Record<string, string>
+  runtimeVariables: Record<string, unknown>
 ): Promise<PreparedGrpcRequest> => {
   const request = item.draft ? item.draft.request : item.request;
   if (!request) {
@@ -185,8 +186,8 @@ const configureRequest = async (
   grpcRequest: PreparedGrpcRequest,
   _request: GrpcRequestItem,
   _collection: Collection,
-  _envVars: Record<string, string>,
-  _runtimeVariables: Record<string, string>,
+  _envVars: Record<string, unknown>,
+  _runtimeVariables: Record<string, unknown>,
   _processEnvVars: Record<string, string>,
   _promptVariables: Record<string, string>,
   _certsAndProxyConfig: Record<string, unknown>
@@ -234,7 +235,8 @@ const registerGrpcEventHandlers = (): void => {
       runtimeVariables: Record<string, string>;
     }];
 
-    const { request, collection, environment, runtimeVariables } = params;
+    const { request, collection, environment } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);
@@ -378,7 +380,8 @@ const registerGrpcEventHandlers = (): void => {
       runtimeVariables: Record<string, string>;
     }];
 
-    const { request, collection, environment, runtimeVariables } = params;
+    const { request, collection, environment } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);
@@ -423,6 +426,15 @@ const registerGrpcEventHandlers = (): void => {
       const passphrase = httpsAgentRequestFields.passphrase;
       const pfx = httpsAgentRequestFields.pfx;
 
+      // Reflection is method discovery, not an invocation. Its failures are
+      // returned via { success: false, error } (shown as a toast), so suppress
+      // `grpc:error` here — otherwise it paints a bogus status on the response
+      // pane that lingers until a real invocation overwrites it.
+      const reflectionSendEvent = (eventName: string, ...eventArgs: unknown[]) => {
+        if (eventName === 'grpc:error') return;
+        sendEvent(eventName, ...eventArgs);
+      };
+
       const methods = await grpcClient?.loadMethodsFromReflection({
         request: preparedRequest as never,
         collectionUid: collection.uid,
@@ -432,7 +444,7 @@ const registerGrpcEventHandlers = (): void => {
         passphrase,
         pfx,
         verifyOptions,
-        sendEvent
+        sendEvent: reflectionSendEvent
       });
 
       return { success: true, methods: safeParseJSON(safeStringifyJSON(methods)) };
@@ -498,7 +510,8 @@ const registerGrpcEventHandlers = (): void => {
       runtimeVariables: Record<string, string>;
     }];
 
-    const { request, collection, environment, runtimeVariables } = params;
+    const { request, collection, environment } = params;
+    const runtimeVariables = getRuntimeVariables(collection.uid);
 
     try {
       const requestCopy = cloneDeep(request);

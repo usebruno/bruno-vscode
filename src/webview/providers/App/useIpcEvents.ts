@@ -15,9 +15,11 @@ import {
   collectionUnlinkEnvFileEvent,
   collectionUnlinkFileEvent,
   processEnvUpdateEvent,
+  setDotEnvVariables,
   requestCancelled,
   runFolderEvent,
   runRequestEvent,
+  runtimeVariablesUpdateEvent,
   scriptEnvironmentUpdateEvent,
   streamDataReceived,
   addTransientRequest,
@@ -29,6 +31,7 @@ import {
   openCollectionEvent,
   hydrateCollectionWithUiStateSnapshot,
   mergeAndPersistEnvironment,
+  collectionVariablesUpdateEvent,
   hydrateCollectionSecurityConfig
 } from 'providers/ReduxStore/slices/collections/actions';
 import { workspaceOpenedEvent, workspaceConfigUpdatedEvent } from 'providers/ReduxStore/slices/workspaces/actions';
@@ -46,7 +49,7 @@ import {
   postResponseTestResultsReceived
 } from 'providers/ReduxStore/slices/collections/index';
 import { addLog } from 'providers/ReduxStore/slices/logs';
-import { addTab } from 'providers/ReduxStore/slices/tabs';
+import { addTab, focusTab } from 'providers/ReduxStore/slices/tabs';
 import { findItemInCollectionByPathname, findCollectionByUid, getDefaultRequestPaneTab } from 'utils/collections';
 import { uuid } from 'utils/common';
 import type { Preferences } from '@bruno-types';
@@ -60,6 +63,7 @@ import type {
   CollectionRenamedEventPayload,
   ScriptEnvironmentUpdateEventPayload,
   ProcessEnvUpdateEventPayload,
+  SetDotEnvVariablesPayload,
   BrunoConfigUpdateEventPayload,
   RunFolderEventPayload,
   RunRequestEventPayload,
@@ -304,12 +308,21 @@ const useIpcEvents = () => {
       dispatch(scriptEnvironmentUpdateEvent(val as ScriptEnvironmentUpdateEventPayload));
     });
 
+    const removeRuntimeVariablesUpdateListener = ipcRenderer.on('main:runtime-variables-update', (val: unknown) => {
+      const payload = val as { collectionUid: string; runtimeVariables: Record<string, unknown> };
+      dispatch(runtimeVariablesUpdateEvent(payload));
+    });
+
     const removePersistentEnvVariablesUpdateListener = ipcRenderer.on('main:persistent-env-variables-update', (val: unknown) => {
       dispatch(mergeAndPersistEnvironment(val));
     });
 
     const removeGlobalEnvironmentVariablesUpdateListener = ipcRenderer.on('main:global-environment-variables-update', (val: unknown) => {
       dispatch(globalEnvironmentsUpdateEvent(val));
+    });
+
+    const removeCollectionVariablesUpdateListener = ipcRenderer.on('main:collection-variables-update', (val: unknown) => {
+      dispatch(collectionVariablesUpdateEvent(val));
     });
 
     const removeCollectionRenamedListener = ipcRenderer.on('main:collection-renamed', (val: unknown) => {
@@ -351,6 +364,10 @@ const useIpcEvents = () => {
 
     const removeProcessEnvUpdatesListener = ipcRenderer.on('main:process-env-update', (val: unknown) => {
       dispatch(processEnvUpdateEvent(val as ProcessEnvUpdateEventPayload));
+    });
+
+    const removeDotEnvFileUpdateListener = ipcRenderer.on('main:dotenv-file-update', (val: unknown) => {
+      dispatch(setDotEnvVariables(val as SetDotEnvVariablesPayload));
     });
 
     const removeConsoleLogListener = ipcRenderer.on('main:console-log', (val: unknown) => {
@@ -421,6 +438,12 @@ const useIpcEvents = () => {
       }
     });
 
+    // Highlight the sidebar item whose request/folder/collection is open in the
+    // active editor. The extension sends the item's uid (or null to clear).
+    const removeActiveItemListener = ipcRenderer.on('main:set-active-item', (itemUid: unknown) => {
+      dispatch(focusTab({ uid: (itemUid as string) ?? null }));
+    });
+
 
     const removeGlobalEnvironmentsUpdatesListener = ipcRenderer.on('main:load-global-environments', (val: unknown) => {
       dispatch(updateGlobalEnvironments(val));
@@ -442,7 +465,8 @@ const useIpcEvents = () => {
         folderUid: credData.folderUid || null,
         url: credData.url || '',
         credentialsId: credData.credentialsId || 'credentials',
-        credentials: credData.credentials || {}
+        credentials: credData.credentials || {},
+        debugInfo: credData.debugInfo
       };
       dispatch(collectionAddOauth2CredentialsByUrl(payload));
     });
@@ -645,6 +669,7 @@ const useIpcEvents = () => {
       removeDisplayErrorListener();
       removeToastSuccessListener();
       removeScriptEnvUpdateListener();
+      removeRuntimeVariablesUpdateListener();
       removeGlobalEnvironmentVariablesUpdateListener();
       removeCollectionRenamedListener();
       removeCollectionFolderRenamedListener();
@@ -655,6 +680,7 @@ const useIpcEvents = () => {
       removePreRequestTestResultsListener();
       removePostResponseTestResultsListener();
       removeProcessEnvUpdatesListener();
+      removeDotEnvFileUpdateListener();
       removeConsoleLogListener();
       removeConfigUpdatesListener();
       removePreferencesUpdatesListener();
@@ -662,6 +688,7 @@ const useIpcEvents = () => {
       removeSystemProxyEnvUpdatesListener();
       removeAddTransientRequestListener();
       removeTransientRequestClosedListener();
+      removeActiveItemListener();
       removeGlobalEnvironmentsUpdatesListener();
       removeSnapshotHydrationListener();
       removeSecurityConfigUpdatedListener();
@@ -670,6 +697,7 @@ const useIpcEvents = () => {
       removeHttpStreamEndListener();
       removeCollectionLoadingStateListener();
       removePersistentEnvVariablesUpdateListener();
+      removeCollectionVariablesUpdateListener();
       removeOpenRequestTabListener();
       removeOpenCollectionTabListener();
       removeOpenFolderTabListener();

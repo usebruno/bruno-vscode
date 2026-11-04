@@ -18,7 +18,7 @@ interface EditableTableProps {
   reorderable?: unknown;
   onReorder?: (...args: unknown[]) => void;
   showAddRow?: boolean;
-  testId?: string;
+  testId: string;
   resizableColumns?: boolean;
 }
 
@@ -37,7 +37,7 @@ const EditableTable = ({
   reorderable = false,
   onReorder,
   showAddRow = true,
-  testId = 'editable-table',
+  testId,
   resizableColumns = true
 }: any) => {
   const tableRef = useRef<HTMLDivElement>(null);
@@ -395,7 +395,7 @@ const EditableTable = ({
                         <input
                           type="checkbox"
                           className="mousetrap"
-                          data-testid="column-checkbox"
+                          data-testid={`column-checkbox-${rowIndex}`}
                           checked={row[checkboxKey] ?? true}
                           disabled={disableCheckbox}
                           onChange={(e) => handleCheckboxChange(row.uid, e.target.checked)}
@@ -403,14 +403,14 @@ const EditableTable = ({
                       )}
                     </td>
                   )}
-                  {columns.map((column: any) => <td key={column.key} data-testid={`column-${column.key}`}>
+                  {columns.map((column: any) => <td key={column.key} data-testid={`column-${column.key}-${rowIndex}`}>
                     {renderCell(column, row, rowIndex)}
                   </td>)}
                   {showDelete && (
                     <td>
                       {!isEmpty && (
                         <button
-                          data-testid="column-delete"
+                          data-testid={`column-delete-${rowIndex}`}
                           onClick={() => handleRemoveRow(row.uid)}
                         >
                           <IconTrash strokeWidth={1.5} size={18} />

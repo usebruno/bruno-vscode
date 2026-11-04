@@ -4,11 +4,9 @@ import { IconSettings, IconCookie, IconTool, IconSearch, IconBrandGithub } from 
 import Mousetrap from 'mousetrap';
 import { getKeyBindingsForActionAllOS } from 'providers/Hotkeys/keyMappings';
 import ToolHint from 'components/ToolHint';
-import Preferences from 'components/Preferences';
 import Cookies from 'components/Cookies';
 import Notifications from 'components/Notifications';
 import Portal from 'components/Portal';
-import { showPreferences } from 'providers/ReduxStore/slices/app';
 import { openConsole } from 'providers/ReduxStore/slices/logs';
 import { useApp } from 'providers/App';
 import { RootState } from 'providers/ReduxStore';
@@ -16,7 +14,6 @@ import StyledWrapper from './StyledWrapper';
 
 const StatusBar = () => {
   const dispatch = useDispatch();
-  const preferencesOpen = useSelector((state: RootState) => state.app.showPreferences);
   const logs = useSelector((state: RootState) => state.logs.logs);
   const [cookiesOpen, setCookiesOpen] = useState(false);
   const { version } = useApp();
@@ -36,21 +33,6 @@ const StatusBar = () => {
 
   return (
     <StyledWrapper>
-      {preferencesOpen && (
-        <Portal>
-          <Preferences
-            onClose={() => {
-              dispatch(showPreferences(false));
-              (document.querySelector('[data-trigger="preferences"]') as HTMLElement)?.focus();
-            }}
-            aria-modal="true"
-            role="dialog"
-            aria-labelledby="preferences-title"
-            aria-describedby="preferences-description"
-          />
-        </Portal>
-      )}
-
       {cookiesOpen && (
         <Portal>
           <Cookies
@@ -73,7 +55,7 @@ const StatusBar = () => {
               <button
                 className="status-bar-button preferences-button"
                 data-trigger="preferences"
-                onClick={() => dispatch(showPreferences(true))}
+                onClick={() => window?.ipcRenderer?.send('sidebar:open-preferences')}
                 tabIndex={0}
                 aria-label="Open Preferences"
               >

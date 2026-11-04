@@ -8,6 +8,7 @@ interface HttpMethodSelectorProps {
   method?: string;
   showCaret?: boolean;
   onMethodSelect: (method: string) => void;
+  dropdownTestId: string;
 }
 
 interface TriggerButtonProps {
@@ -50,7 +51,8 @@ const TriggerButton = ({
 const HttpMethodSelector = ({
   method = DEFAULT_METHOD,
   onMethodSelect,
-  showCaret = false
+  showCaret = false,
+  dropdownTestId
 }: HttpMethodSelectorProps) => {
   const [isCustomMode, setIsCustomMode] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +193,7 @@ const HttpMethodSelector = ({
           items={menuItems}
           placement="bottom-start"
           selectedItemId={selectedItemId}
+          data-testid={dropdownTestId}
         >
           <TriggerButton method={method} showCaret={showCaret} methodSpanRef={methodSpanRef} />
         </MenuDropdown>

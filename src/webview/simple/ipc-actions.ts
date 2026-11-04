@@ -22,11 +22,16 @@ export const cloneCollection = (
 ): Promise<unknown> =>
   ipcRenderer.invoke('renderer:clone-collection', name, folderName, location, previousPath);
 
+export interface ImportCollectionResult {
+  success: { count: number; items: Array<{ uid: string; name: string; path: string }> };
+  failures: Array<{ uid: string; name: string; message: string }>;
+}
+
 export const importCollection = (
-  collection: unknown,
+  collection: unknown | unknown[],
   location: string,
   format: string
-): Promise<string> =>
+): Promise<ImportCollectionResult> =>
   ipcRenderer.invoke('renderer:import-collection', collection, location, format);
 
 export const importCollectionFromZip = (

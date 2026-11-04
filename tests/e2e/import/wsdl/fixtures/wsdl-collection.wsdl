@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<definitions
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:tns="http://example.com/customer"
+    targetNamespace="http://example.com/customer"
+    name="WSDL Collection">
+
+    <types>
+        <xsd:schema
+            targetNamespace="http://example.com/customer"
+            elementFormDefault="qualified">
+
+            <xsd:element name="GetCustomerRequest">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <xsd:element name="customerId" type="xsd:int"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+
+            <xsd:element name="GetCustomerResponse">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <xsd:element name="customerId" type="xsd:int"/>
+                        <xsd:element name="name" type="xsd:string"/>
+                        <xsd:element name="email" type="xsd:string"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+
+        </xsd:schema>
+    </types>
+
+    <message name="GetCustomerInput">
+        <part name="parameters"
+              element="tns:GetCustomerRequest"/>
+    </message>
+
+    <message name="GetCustomerOutput">
+        <part name="parameters"
+              element="tns:GetCustomerResponse"/>
+    </message>
+
+    <portType name="CustomerServicePortType">
+        <operation name="GetCustomer">
+            <input message="tns:GetCustomerInput"/>
+            <output message="tns:GetCustomerOutput"/>
+        </operation>
+    </portType>
+
+    <binding
+        name="CustomerServiceSoapBinding"
+        type="tns:CustomerServicePortType">
+
+        <soap:binding
+            style="document"
+            transport="http://schemas.xmlsoap.org/soap/http"/>
+
+        <operation name="GetCustomer">
+            <soap:operation
+                soapAction="http://example.com/customer/GetCustomer"/>
+
+            <input>
+                <soap:body use="literal"/>
+            </input>
+
+            <output>
+                <soap:body use="literal"/>
+            </output>
+        </operation>
+    </binding>
+
+    <service name="CustomerService">
+        <port
+            name="CustomerServicePort"
+            binding="tns:CustomerServiceSoapBinding">
+
+            <soap:address
+                location="https://example.com/customer"/>
+        </port>
+    </service>
+
+</definitions>

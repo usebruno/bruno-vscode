@@ -1,13 +1,9 @@
 import React from 'react';
+import { useTheme } from 'providers/Theme';
+import { formatSize } from 'utils/common/index';
 import BodyBlock from '../Common/Body/index';
 import Headers from '../Common/Headers/index';
-import Status from '../Common/Status/index';
-
-interface safeStringifyJSONIfNotStringProps {
-  collection?: React.ReactNode;
-  response: unknown;
-  item?: React.ReactNode;
-}
+import { getStatusColor, toNumericStatus } from '../Common/Status/index';
 
 const safeStringifyJSONIfNotString = (obj: any) => {
   if (obj === null || obj === undefined) return '';
@@ -23,28 +19,61 @@ const safeStringifyJSONIfNotString = (obj: any) => {
   }
 };
 
+const ResponseMeta = ({
+  code,
+  statusText,
+  duration,
+  size
+}: any) => {
+  const { theme } = useTheme();
+  const sizeLabel = typeof size === 'number' ? formatSize(size) : null;
+  const hasCode = code != null;
+  const hasAny = hasCode || statusText || (typeof duration === 'number') || sizeLabel;
+  if (!hasAny) return null;
+  return (
+    <div className="tl-response-meta">
+      {(hasCode || statusText) && (
+        <span className="tl-response-meta-status" style={{ color: getStatusColor(theme, code) }}>
+          {code} {statusText || ''}
+        </span>
+      )}
+      {typeof duration === 'number' && (
+        <span className="tl-response-meta-item">{Math.round(duration)}ms</span>
+      )}
+      {sizeLabel && <span className="tl-response-meta-item">{sizeLabel}</span>}
+    </div>
+  );
+};
+
 const Response = ({
   collection,
   response,
   item
 }: any) => {
-  let { status, statusCode, statusText, dataBuffer, headers, data, error } = response || {};
+  let { status, statusCode, statusText, dataBuffer, headers, data, error, duration, size } = response || {};
   if (!dataBuffer) {
     dataBuffer = Buffer.from(safeStringifyJSONIfNotString(data))?.toString('base64');
   }
 
   return (
-    <div>
-      <div className="mb-1">
-        <Status statusCode={status || statusCode} statusText={statusText} />
-        {response.duration && <span className="timeline-item-metadata">{response.duration}ms</span>}
-        {response.size && <span className="timeline-item-metadata">{response.size}B</span>}
-      </div>
-
-      <Headers headers={headers} type="response" />
-
-      <BodyBlock collection={collection} data={data} dataBuffer={dataBuffer} error={error} headers={headers} item={item} type="response" />
-    </div>
+    <>
+      <ResponseMeta
+        code={toNumericStatus(statusCode) ?? toNumericStatus(status)}
+        statusText={statusText}
+        duration={duration}
+        size={size}
+      />
+      <Headers headers={headers} />
+      <BodyBlock
+        collection={collection}
+        data={data}
+        dataBuffer={dataBuffer}
+        error={error}
+        headers={headers}
+        item={item}
+        type="response"
+      />
+    </>
   );
 };
 

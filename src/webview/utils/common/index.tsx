@@ -340,11 +340,11 @@ export const formatResponse = (
       return typeof data === 'string' ? data : safeStringifyJSON(data, false) ?? '';
     }
 
-    const parsed = safeParseXML(typeof data === 'string' ? data : '', { collapseContent: true });
-    if (typeof parsed === 'string') {
-      return parsed;
+    if (typeof data !== 'string') {
+      return safeStringifyJSON(data, true) ?? '';
     }
-    return safeStringifyJSON(parsed, true) ?? '';
+
+    return safeParseXML(data, { collapseContent: true });
   }
 
   if (mode.includes('html')) {

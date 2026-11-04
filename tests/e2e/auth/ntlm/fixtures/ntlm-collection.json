@@ -1,0 +1,288 @@
+{
+  "name": "NTLM",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "api",
+      "filename": "api.yml",
+      "seq": 1,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "http://127.0.0.1:8091/api",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": [],
+          "mode": "none"
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "ntlm",
+          "ntlm": {
+            "username": "ntlmtest",
+            "password": "Br!unoNtlm",
+            "domain": ""
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "wrong-password",
+      "filename": "wrong-password.yml",
+      "seq": 2,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "http://127.0.0.1:8091/api",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": [],
+          "mode": "none"
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "ntlm",
+          "ntlm": {
+            "username": "ntlmtest",
+            "password": "notThePassword",
+            "domain": ""
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "inherited",
+      "filename": "inherited.yml",
+      "seq": 3,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "http://127.0.0.1:8091/api",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": [],
+          "mode": "none"
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "inherit"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "body",
+      "filename": "body.yml",
+      "seq": 4,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "http://127.0.0.1:8091/api",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json",
+            "enabled": true
+          }
+        ],
+        "params": [],
+        "body": {
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": [],
+          "mode": "json",
+          "json": "{\"hello\":\"world\"}"
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "ntlm",
+          "ntlm": {
+            "username": "ntlmtest",
+            "password": "Br!unoNtlm",
+            "domain": ""
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "redirect",
+      "filename": "redirect.yml",
+      "seq": 5,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "http://127.0.0.1:8091/redirect?to=http://127.0.0.1:8091/landing",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": [],
+          "mode": "none"
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "ntlm",
+          "ntlm": {
+            "username": "ntlmtest",
+            "password": "Br!unoNtlm",
+            "domain": ""
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "timeline",
+      "filename": "timeline.yml",
+      "seq": 6,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "http://127.0.0.1:8091/api",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": [],
+          "mode": "none"
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "ntlm",
+          "ntlm": {
+            "username": "ntlmtest",
+            "password": "Br!unoNtlm",
+            "domain": ""
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "https",
+      "filename": "https.yml",
+      "seq": 7,
+      "settings": {
+        "encodeUrl": true
+      },
+      "tags": [],
+      "request": {
+        "url": "https://127.0.0.1:8091/api",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "formUrlEncoded": [],
+          "multipartForm": [],
+          "file": [],
+          "mode": "none"
+        },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": {
+          "mode": "ntlm",
+          "ntlm": {
+            "username": "ntlmtest",
+            "password": "Br!unoNtlm",
+            "domain": ""
+          }
+        }
+      }
+    }
+  ],
+  "environments": [],
+  "root": {
+    "meta": {
+      "name": "NTLM"
+    },
+    "request": {
+      "headers": [],
+      "auth": {
+        "mode": "ntlm",
+        "ntlm": {
+          "username": "ntlmtest",
+          "password": "Br!unoNtlm",
+          "domain": ""
+        }
+      },
+      "vars": {
+        "req": [],
+        "res": []
+      },
+      "script": {
+        "req": "",
+        "res": ""
+      },
+      "tests": ""
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "NTLM",
+    "type": "collection",
+    "ignore": [
+      "node_modules",
+      ".git"
+    ]
+  }
+}

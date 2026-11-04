@@ -1,0 +1,24 @@
+# Keycloak for the OAuth2 e2e specs in tests/e2e/auth/oauth2/.
+# Start with `npm run test:keycloak:up`; the realm in realm-bruno.json is imported on boot.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm --http-port=8080
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./realm-bruno.json:/opt/keycloak/data/import/realm-bruno.json:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /realms/bruno/.well-known/openid-configuration HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3 && grep -q "200 OK" <&3',
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 120s

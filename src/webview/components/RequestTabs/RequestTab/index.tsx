@@ -561,6 +561,7 @@ function RequestTabMenu({
 
   const menuDropdown = (
     <MenuDropdown
+      data-testid={`request-tab-menu-${currentTabUid}`}
       ref={menuDropdownRef}
       items={menuItems}
       placement="bottom-start"

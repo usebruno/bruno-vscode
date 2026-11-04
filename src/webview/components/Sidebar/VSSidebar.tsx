@@ -7,7 +7,8 @@ import {
   IconPlus,
   IconFolder,
   IconDownload,
-  IconSearch
+  IconSearch,
+  IconSettings
 } from '@tabler/icons';
 import { ipcRenderer } from 'utils/ipc';
 import { openCollection } from 'providers/ReduxStore/slices/collections/actions';
@@ -167,6 +168,10 @@ const VSSidebar = () => {
     ipcRenderer.send('sidebar:open-global-environments');
   };
 
+  const handleOpenPreferences = () => {
+    ipcRenderer.send('sidebar:open-preferences');
+  };
+
   const handleCreateCollection = () => {
     ipcRenderer.send('sidebar:open-create-collection');
   };
@@ -237,6 +242,9 @@ const VSSidebar = () => {
             </ActionIcon>
           </MenuDropdown>
 
+          <ActionIcon onClick={handleOpenPreferences} label="Preferences">
+            <IconSettings size={14} stroke={1.5} aria-hidden="true" />
+          </ActionIcon>
         </div>
       </div>
 

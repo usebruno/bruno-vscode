@@ -6,27 +6,29 @@ import {
   hasRequestExtension,
   sizeInMB,
   getCollectionFormat,
-  posixifyPath
+  posixifyPath,
+  isDotEnvFile,
+  isDotEnvFilename
 } from '../utils/filesystem';
 
-const {
-  parseEnvironment: parseEnvFile,
-  parseRequest: parseRequestFile,
-  parseRequestViaWorker,
-  parseCollection: parseCollectionFile,
-  parseFolder: parseFolderFile
-} = require('@usebruno/filestore');
 const { dotenvToJson } = require('@usebruno/lang');
 
 import { uuid } from '../utils/common';
 import { getRequestUid } from '../cache/requestUids';
 import { decryptStringSafe } from '../utils/encryption';
-import { setDotEnvVars, getProcessEnvVars } from '../store/process-env';
+import { parseValueByDataType, BrunoVariableDataType } from '@usebruno/common/utils';
+import { setDotEnvVars, clearDotEnvVars, getProcessEnvVars } from '../store/process-env';
 import { setBrunoConfig } from '../store/bruno-config';
 import EnvironmentSecretsStore from '../store/env-secrets';
 import UiStateSnapshot from '../store/ui-state-snapshot';
 import { parseFileMeta, hydrateRequestWithUuid } from '../utils/collection';
-import { parseLargeRequestWithRedaction } from '../utils/parse';
+import {
+  parseLargeRequestWithRedaction,
+  parseRequest,
+  parseCollection,
+  parseFolder,
+  parseEnvironment
+} from '../utils/parse';
 import { transformBrunoConfigAfterRead } from '../utils/transformBrunoConfig';
 
 // Message sender type - will be set by the extension (variadic args)
@@ -42,30 +44,15 @@ export function setMessageSender(sender: MessageSender): void {
   messageSender = sender;
 }
 
-const parseEnvironment = async (content: string, options: { format: string }) => {
-  return parseEnvFile(content, { format: options.format });
-};
-
-const parseRequest = async (content: string, options: { format: string }) => {
-  return parseRequestFile(content, { format: options.format });
-};
-
-const parseCollection = async (content: string, options: { format: string }) => {
-  return parseCollectionFile(content, { format: options.format });
-};
-
-const parseFolder = async (content: string, options: { format: string }) => {
-  return parseFolderFile(content, { format: options.format });
-};
-
 const parseDotEnv = (content: string): Record<string, string> => {
   return dotenvToJson(content);
 };
 
-const isDotEnvFile = (pathname: string, collectionPath: string): boolean => {
-  const dirname = path.dirname(pathname);
-  const basename = path.basename(pathname);
-  return path.normalize(dirname) === path.normalize(collectionPath) && basename === '.env';
+const dotEnvVariablesToArray = (envObject: Record<string, string>) => {
+  return Object.entries(envObject).map(([name, value]) => ({
+    name,
+    value
+  }));
 };
 
 const isBrunoConfigFile = (pathname: string, collectionPath: string): boolean => {
@@ -80,7 +67,7 @@ const isEnvironmentsFolder = (pathname: string, collectionPath: string): boolean
   return path.normalize(dirname) === path.normalize(envDirectory);
 };
 
-const isFolderRootFile = (pathname: string, collectionPath: string): boolean => {
+export const isFolderRootFile = (pathname: string, collectionPath: string): boolean => {
   const basename = path.basename(pathname);
   const format = getCollectionFormat(collectionPath);
 
@@ -92,7 +79,7 @@ const isFolderRootFile = (pathname: string, collectionPath: string): boolean => 
   return false;
 };
 
-const isCollectionRootFile = (pathname: string, collectionPath: string): boolean => {
+export const isCollectionRootFile = (pathname: string, collectionPath: string): boolean => {
   const dirname = path.dirname(pathname);
   const basename = path.basename(pathname);
 
@@ -102,11 +89,29 @@ const isCollectionRootFile = (pathname: string, collectionPath: string): boolean
   return basename === 'collection.bru' || basename === 'opencollection.yml';
 };
 
+const isNestedCollectionRootFile = (pathname: string, collectionPath: string): boolean => {
+  const basename = path.basename(pathname);
+  if (basename !== 'collection.bru' && basename !== 'opencollection.yml') {
+    return false;
+  }
+  return path.normalize(path.dirname(pathname)) !== path.normalize(collectionPath);
+};
+
+const markAsNestedCollectionFile = (file: FileData, pathname: string, size: number): void => {
+  file.data = { name: path.basename(pathname), type: 'http-request' };
+  file.error = { message: 'This is a nested collection, not a request.' };
+  file.partial = true;
+  file.loading = false;
+  file.size = sizeInMB(size);
+  hydrateRequestWithUuid(file.data, pathname);
+};
+
 interface EnvironmentVariable {
   name: string;
-  value: string;
+  value: string | number | boolean | Record<string, unknown> | null;
   secret?: boolean;
   uid?: string;
+  dataType?: BrunoVariableDataType;
 }
 
 interface Environment {
@@ -219,7 +224,8 @@ const addEnvironmentFile = async (
         const variable = _.find(parsedEnv.variables, (v: EnvironmentVariable) => v.name === secret.name);
         if (variable && secret.value) {
           const decryptionResult = decryptStringSafe(secret.value);
-          variable.value = decryptionResult.value;
+          // Coerce back to the recorded data type so typed secrets round-trip like non-secret vars.
+          variable.value = parseValueByDataType(decryptionResult.value, variable.dataType);
         }
       });
     }
@@ -396,20 +402,83 @@ class CollectionWatcher {
   }
 
   private async handleDotEnvChangeWithSender(pathname: string, collectionUid: string, sender: MessageSender | null): Promise<void> {
+    const filename = path.basename(pathname);
+
     try {
       const content = fs.readFileSync(pathname, 'utf8');
       const jsonData = parseDotEnv(content);
 
-      setDotEnvVars(collectionUid, jsonData);
+      if (filename === '.env') {
+        setDotEnvVars(collectionUid, jsonData);
+      }
 
       if (sender) {
-        sender('main:process-env-update', {
+        sender('main:dotenv-file-update', {
           collectionUid,
-          processEnvVariables: getProcessEnvVars(collectionUid)
+          filename,
+          variables: dotEnvVariablesToArray(jsonData),
+          content,
+          exists: true
         });
+        this.sendProcessEnvUpdate(collectionUid, sender, filename);
       }
     } catch (err) {
       console.error('Error handling .env change:', err);
+    }
+  }
+
+  private handleDotEnvUnlinkWithSender(pathname: string, collectionUid: string, sender: MessageSender | null): void {
+    const filename = path.basename(pathname);
+
+    if (filename === '.env') {
+      clearDotEnvVars(collectionUid);
+    }
+
+    if (sender) {
+      sender('main:dotenv-file-update', {
+        collectionUid,
+        filename,
+        variables: [],
+        content: '',
+        exists: false
+      });
+      this.sendProcessEnvUpdate(collectionUid, sender, filename);
+    }
+  }
+
+  private sendProcessEnvUpdate(collectionUid: string, sender: MessageSender, filename?: string): void {
+    if (filename && filename !== '.env') {
+      return;
+    }
+
+    sender('main:process-env-update', {
+      collectionUid,
+      processEnvVariables: getProcessEnvVars(collectionUid)
+    });
+  }
+
+  /**
+   * Dotenv files are not picked up by the recursive scan (it only collects request files),
+   * so they are read explicitly whenever a collection is loaded.
+   */
+  private async loadDotEnvFiles(collectionPath: string, collectionUid: string, sender: MessageSender | null): Promise<void> {
+    let filenames: string[] = [];
+
+    try {
+      filenames = fs
+        .readdirSync(collectionPath, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && isDotEnvFilename(entry.name))
+        .map((entry) => entry.name);
+    } catch (err) {
+      console.error('[Watcher] Error reading dotenv files:', err);
+    }
+
+    for (const filename of filenames) {
+      await this.handleDotEnvChangeWithSender(path.join(collectionPath, filename), collectionUid, sender);
+    }
+
+    if (sender && !filenames.includes('.env')) {
+      this.sendProcessEnvUpdate(collectionUid, sender);
     }
   }
 
@@ -506,7 +575,8 @@ class CollectionWatcher {
           const variable = _.find(parsedEnv.variables, (v: EnvironmentVariable) => v.name === secret.name);
           if (variable && secret.value) {
             const decryptionResult = decryptStringSafe(secret.value);
-            variable.value = decryptionResult.value;
+            // Coerce back to the recorded data type so typed secrets round-trip like non-secret vars.
+            variable.value = parseValueByDataType(decryptionResult.value, variable.dataType);
           }
         });
       }
@@ -629,6 +699,14 @@ class CollectionWatcher {
         return;
       }
 
+      if (isNestedCollectionRootFile(pathname, collectionPath)) {
+        markAsNestedCollectionFile(file, pathname, fileStats?.size);
+        if (sender) {
+          sender('main:collection-tree-updated', 'addFile', file);
+        }
+        return;
+      }
+
       const format = getCollectionFormat(collectionPath);
 
       file.data = await parseRequest(content, { format });
@@ -680,44 +758,7 @@ class CollectionWatcher {
     this.initializeLoadingState(collectionUid);
     this.startCollectionDiscovery(collectionUid);
 
-    const format = getCollectionFormat(watchPath);
-    const watchers: vscode.FileSystemWatcher[] = [];
-
-    const requestPattern = format === 'yml'
-      ? new vscode.RelativePattern(watchPath, '**/*.yml')
-      : new vscode.RelativePattern(watchPath, '**/*.bru');
-
-    const envExt = format === 'yml' ? 'yml' : 'bru';
-    const envPattern = new vscode.RelativePattern(watchPath, `environments/*.${envExt}`);
-    const configPattern = new vscode.RelativePattern(watchPath, 'bruno.json');
-    const ocYmlPattern = new vscode.RelativePattern(watchPath, 'opencollection.yml');
-    const dotEnvPattern = new vscode.RelativePattern(watchPath, '.env');
-
-    const requestWatcher = vscode.workspace.createFileSystemWatcher(requestPattern);
-    requestWatcher.onDidCreate(uri => this.handleFileAdd(uri.fsPath, collectionUid, watchPath));
-    requestWatcher.onDidChange(uri => this.handleFileChange(uri.fsPath, collectionUid, watchPath));
-    requestWatcher.onDidDelete(uri => this.handleFileUnlink(uri.fsPath, collectionUid, watchPath));
-    watchers.push(requestWatcher);
-
-    const envWatcher = vscode.workspace.createFileSystemWatcher(envPattern);
-    envWatcher.onDidCreate(uri => addEnvironmentFile(uri.fsPath, collectionUid, watchPath));
-    envWatcher.onDidChange(uri => changeEnvironmentFile(uri.fsPath, collectionUid, watchPath));
-    envWatcher.onDidDelete(uri => unlinkEnvironmentFile(uri.fsPath, collectionUid));
-    watchers.push(envWatcher);
-
-    const configWatcher = vscode.workspace.createFileSystemWatcher(configPattern);
-    configWatcher.onDidChange(uri => this.handleBrunoConfigChange(uri.fsPath, collectionUid, watchPath));
-    watchers.push(configWatcher);
-
-    // Watch for opencollection.yml (YML format config changes are handled via collection root file handler)
-    const ocYmlWatcher = vscode.workspace.createFileSystemWatcher(ocYmlPattern);
-    ocYmlWatcher.onDidChange(uri => this.handleFileChange(uri.fsPath, collectionUid, watchPath));
-    watchers.push(ocYmlWatcher);
-
-    const dotEnvWatcher = vscode.workspace.createFileSystemWatcher(dotEnvPattern);
-    dotEnvWatcher.onDidCreate(uri => this.handleDotEnvChange(uri.fsPath, collectionUid));
-    dotEnvWatcher.onDidChange(uri => this.handleDotEnvChange(uri.fsPath, collectionUid));
-    watchers.push(dotEnvWatcher);
+    const watchers = this.createWatchers(watchPath, collectionUid);
 
     this.watchers.set(watchPath, watchers);
     this.pathToCollectionUid.set(watchPath, collectionUid);
@@ -749,11 +790,14 @@ class CollectionWatcher {
       const requestFiles: string[] = [];
 
       for (const filePath of files) {
+        if (isDotEnvFile(filePath, watchPath)) {
+          continue;
+        }
+
         if (isBrunoConfigFile(filePath, watchPath) ||
-            isDotEnvFile(filePath, watchPath) ||
-            isEnvironmentsFolder(filePath, watchPath) ||
-            isCollectionRootFile(filePath, watchPath) ||
-            isFolderRootFile(filePath, watchPath)) {
+          isEnvironmentsFolder(filePath, watchPath) ||
+          isCollectionRootFile(filePath, watchPath) ||
+          isFolderRootFile(filePath, watchPath)) {
           priorityFiles.push(filePath);
         } else {
           requestFiles.push(filePath);
@@ -761,19 +805,11 @@ class CollectionWatcher {
       }
 
       // Process config/env/root files first (sequential - sets up collection state)
-      const hasDotEnv = priorityFiles.some(f => isDotEnvFile(f, watchPath));
       for (const filePath of priorityFiles) {
         await this.handleFileAdd(filePath, collectionUid, watchPath);
       }
 
-      // If no .env file was found, still send system process.env variables
-      // so {{process.env.VAR}} highlights correctly in the editor
-      if (!hasDotEnv && messageSender) {
-        messageSender('main:process-env-update', {
-          collectionUid,
-          processEnvVariables: getProcessEnvVars(collectionUid)
-        });
-      }
+      await this.loadDotEnvFiles(watchPath, collectionUid, messageSender);
 
       // Parse request files in parallel but emit them to the webview in
       // larger batches via a single 'addFiles' event. Thousands of individual
@@ -976,6 +1012,11 @@ class CollectionWatcher {
     collectionUid: string,
     collectionPath: string
   ): void {
+    if (isDotEnvFile(pathname, collectionPath)) {
+      this.handleDotEnvUnlink(pathname, collectionUid);
+      return;
+    }
+
     if (isEnvironmentsFolder(pathname, collectionPath)) {
       unlinkEnvironmentFile(pathname, collectionUid);
       return;
@@ -1025,21 +1066,11 @@ class CollectionWatcher {
   }
 
   private async handleDotEnvChange(pathname: string, collectionUid: string): Promise<void> {
-    try {
-      const content = fs.readFileSync(pathname, 'utf8');
-      const jsonData = parseDotEnv(content);
+    await this.handleDotEnvChangeWithSender(pathname, collectionUid, messageSender);
+  }
 
-      setDotEnvVars(collectionUid, jsonData);
-
-      if (messageSender) {
-        messageSender('main:process-env-update', {
-          collectionUid,
-          processEnvVariables: getProcessEnvVars(collectionUid)
-        });
-      }
-    } catch (err) {
-      console.error('Error handling .env change:', err);
-    }
+  private handleDotEnvUnlink(pathname: string, collectionUid: string): void {
+    this.handleDotEnvUnlinkWithSender(pathname, collectionUid, messageSender);
   }
 
   private async handleCollectionRootFile(
@@ -1154,6 +1185,11 @@ class CollectionWatcher {
         return null;
       }
 
+      if (isNestedCollectionRootFile(pathname, collectionPath)) {
+        markAsNestedCollectionFile(file, pathname, fileStats?.size);
+        return file;
+      }
+
       const format = getCollectionFormat(collectionPath);
       const metaData = parseFileMeta(content, format);
       if (!metaData) {
@@ -1203,6 +1239,14 @@ class CollectionWatcher {
       if (!content.trim()) {
         console.log('[Watcher] Skipping empty file:', pathname);
         this.markFileAsProcessed(collectionUid, pathname);
+        return;
+      }
+
+      if (isNestedCollectionRootFile(pathname, collectionPath)) {
+        markAsNestedCollectionFile(file, pathname, fileStats?.size);
+        if (messageSender) {
+          messageSender('main:collection-tree-updated', 'addFile', file);
+        }
         return;
       }
 
@@ -1369,17 +1413,7 @@ class CollectionWatcher {
       }
     }
 
-    const dotEnvPath = path.join(collectionPath, '.env');
-    if (fs.existsSync(dotEnvPath)) {
-      await this.handleDotEnvChangeWithSender(dotEnvPath, collectionUid, sender);
-    } else if (sender) {
-      // Even without a .env file, send system process.env variables
-      // so {{process.env.VAR}} highlights correctly in the editor
-      sender('main:process-env-update', {
-        collectionUid,
-        processEnvVariables: getProcessEnvVars(collectionUid)
-      });
-    }
+    await this.loadDotEnvFiles(collectionPath, collectionUid, sender);
 
     const brunoJsonPath = path.join(collectionPath, 'bruno.json');
     if (fs.existsSync(brunoJsonPath)) {
@@ -1434,16 +1468,19 @@ class CollectionWatcher {
     targetSender: MessageSender
   ): Promise<void> {
     const envDirPath = path.join(collectionPath, 'environments');
-    if (!fs.existsSync(envDirPath)) return;
 
-    const format = getCollectionFormat(collectionPath);
-    const ext = format === 'yml' ? '.yml' : '.bru';
-    const files = fs.readdirSync(envDirPath).filter(f => f.endsWith(ext));
+    if (fs.existsSync(envDirPath)) {
+      const format = getCollectionFormat(collectionPath);
+      const ext = format === 'yml' ? '.yml' : '.bru';
+      const files = fs.readdirSync(envDirPath).filter(f => f.endsWith(ext));
 
-    for (const file of files) {
-      const filePath = path.join(envDirPath, file);
-      await this.addEnvironmentFileWithSender(filePath, collectionUid, collectionPath, targetSender);
+      for (const file of files) {
+        const filePath = path.join(envDirPath, file);
+        await this.addEnvironmentFileWithSender(filePath, collectionUid, collectionPath, targetSender);
+      }
     }
+
+    await this.loadDotEnvFiles(collectionPath, collectionUid, targetSender);
   }
 
   /**
@@ -1459,45 +1496,46 @@ class CollectionWatcher {
       existingWatchers.forEach(w => w.dispose());
     }
 
+    this.watchers.set(watchPath, this.createWatchers(watchPath, collectionUid));
+  }
+
+  private createWatchers(watchPath: string, collectionUid: string): vscode.FileSystemWatcher[] {
     const format = getCollectionFormat(watchPath);
-    const watchers: vscode.FileSystemWatcher[] = [];
-
-    const requestPattern = format === 'yml'
-      ? new vscode.RelativePattern(watchPath, '**/*.yml')
-      : new vscode.RelativePattern(watchPath, '**/*.bru');
-
     const envExt = format === 'yml' ? 'yml' : 'bru';
-    const envPattern = new vscode.RelativePattern(watchPath, `environments/*.${envExt}`);
-    const configPattern = new vscode.RelativePattern(watchPath, 'bruno.json');
-    const ocYmlPattern = new vscode.RelativePattern(watchPath, 'opencollection.yml');
-    const dotEnvPattern = new vscode.RelativePattern(watchPath, '.env');
 
-    const requestWatcher = vscode.workspace.createFileSystemWatcher(requestPattern);
+    const requestWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(watchPath, format === 'yml' ? '**/*.yml' : '**/*.bru')
+    );
     requestWatcher.onDidCreate(uri => this.handleFileAdd(uri.fsPath, collectionUid, watchPath));
     requestWatcher.onDidChange(uri => this.handleFileChange(uri.fsPath, collectionUid, watchPath));
     requestWatcher.onDidDelete(uri => this.handleFileUnlink(uri.fsPath, collectionUid, watchPath));
-    watchers.push(requestWatcher);
 
-    const envWatcher = vscode.workspace.createFileSystemWatcher(envPattern);
+    const envWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(watchPath, `environments/*.${envExt}`)
+    );
     envWatcher.onDidCreate(uri => addEnvironmentFile(uri.fsPath, collectionUid, watchPath));
     envWatcher.onDidChange(uri => changeEnvironmentFile(uri.fsPath, collectionUid, watchPath));
     envWatcher.onDidDelete(uri => unlinkEnvironmentFile(uri.fsPath, collectionUid));
-    watchers.push(envWatcher);
 
-    const configWatcher = vscode.workspace.createFileSystemWatcher(configPattern);
+    const configWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(watchPath, 'bruno.json')
+    );
     configWatcher.onDidChange(uri => this.handleBrunoConfigChange(uri.fsPath, collectionUid, watchPath));
 
-    const ocYmlWatcher = vscode.workspace.createFileSystemWatcher(ocYmlPattern);
+    // YML format config changes are handled via the collection root file handler
+    const ocYmlWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(watchPath, 'opencollection.yml')
+    );
     ocYmlWatcher.onDidChange(uri => this.handleFileChange(uri.fsPath, collectionUid, watchPath));
-    watchers.push(ocYmlWatcher);
-    watchers.push(configWatcher);
 
-    const dotEnvWatcher = vscode.workspace.createFileSystemWatcher(dotEnvPattern);
+    const dotEnvWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(watchPath, '{.env,.env.*}')
+    );
     dotEnvWatcher.onDidCreate(uri => this.handleDotEnvChange(uri.fsPath, collectionUid));
     dotEnvWatcher.onDidChange(uri => this.handleDotEnvChange(uri.fsPath, collectionUid));
-    watchers.push(dotEnvWatcher);
+    dotEnvWatcher.onDidDelete(uri => this.handleDotEnvUnlink(uri.fsPath, collectionUid));
 
-    this.watchers.set(watchPath, watchers);
+    return [requestWatcher, envWatcher, configWatcher, ocYmlWatcher, dotEnvWatcher];
   }
 
   /**
@@ -1529,11 +1567,14 @@ class CollectionWatcher {
       const requestFiles: string[] = [];
 
       for (const filePath of files) {
+        if (isDotEnvFile(filePath, collectionPath)) {
+          continue;
+        }
+
         if (isBrunoConfigFile(filePath, collectionPath) ||
-            isDotEnvFile(filePath, collectionPath) ||
-            isEnvironmentsFolder(filePath, collectionPath) ||
-            isCollectionRootFile(filePath, collectionPath) ||
-            isFolderRootFile(filePath, collectionPath)) {
+          isEnvironmentsFolder(filePath, collectionPath) ||
+          isCollectionRootFile(filePath, collectionPath) ||
+          isFolderRootFile(filePath, collectionPath)) {
           priorityFiles.push(filePath);
         } else {
           requestFiles.push(filePath);
@@ -1541,18 +1582,11 @@ class CollectionWatcher {
       }
 
       // Process priority files first
-      const hasDotEnv = priorityFiles.some(f => isDotEnvFile(f, collectionPath));
       for (const filePath of priorityFiles) {
         await this.handleFileAddWithSender(filePath, collectionUid, collectionPath, sender);
       }
 
-      // If no .env file, still send process.env variables
-      if (!hasDotEnv && sender) {
-        sender('main:process-env-update', {
-          collectionUid,
-          processEnvVariables: getProcessEnvVars(collectionUid)
-        });
-      }
+      await this.loadEnvironments(collectionPath, collectionUid, sender);
 
       // Same batched-emit strategy as performInitialScan — one IPC +
       // Redux dispatch per ~500 files instead of one per file.
@@ -1625,7 +1659,7 @@ class CollectionWatcher {
     const posixPath = posixifyPath(nativePath);
     const effectivePath = this.watchers.has(nativePath) ? nativePath
       : this.watchers.has(posixPath) ? posixPath
-      : watchPath;
+        : watchPath;
 
     if (this.watchers.has(effectivePath)) {
       const watchers = this.watchers.get(effectivePath)!;

@@ -287,7 +287,8 @@ export const createVSCodeTheme = (mode: 'light' | 'dark') => {
       },
       collection: {
         item: {
-          bg: colors.sidebarBg,
+          bg: colors.listActiveBg,
+          activeColor: colors.listActiveFg,
           hoverBg: colors.listHoverBg,
           focusBorder: colors.focusBorder,
           indentBorder: `solid 1px ${colors.widgetBorder}`,

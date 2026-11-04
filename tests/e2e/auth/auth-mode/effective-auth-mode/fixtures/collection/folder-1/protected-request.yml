@@ -1,0 +1,8 @@
+info:
+  name: protected-request
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: https://testbench-sanity.usebruno.com/api/auth/basic/protected

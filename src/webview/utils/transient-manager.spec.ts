@@ -1,13 +1,9 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { transientManager, type CollectionInfo } from './transient-manager';
+import { describe, test, expect, vi } from 'vitest';
 
-vi.mock('utils/common/index', () => {
-  let counter = 0;
-  return {
-    uuid: () => `mock-uid-${++counter}`,
-    sortByNameThenSequence: vi.fn()
-  };
-});
+// Stub vscode for the node test env; the real utils/collections helpers are used.
+vi.mock('vscode', () => ({}));
+
+import { transientManager, type CollectionInfo } from './transient-manager';
 
 const bruCollection: CollectionInfo = {
   uid: 'col-1',
@@ -32,12 +28,15 @@ const windowsCollection: CollectionInfo = {
   format: 'bru'
 };
 
-beforeEach(() => {
-  transientManager.resetCounter(bruCollection.uid);
-  transientManager.resetCounter(ymlCollection.uid);
-  transientManager.resetCounter(noFormatCollection.uid);
-  transientManager.resetCounter(windowsCollection.uid);
+// An open transient request as it appears in collection.items.
+const transientUntitled = (n: number) => ({
+  name: `Untitled ${n}`,
+  type: 'http-request',
+  request: {},
+  isTransient: true
 });
+// A saved (persisted) request — has no isTransient flag.
+const savedRequest = (name: string) => ({ name, type: 'http-request', request: {} });
 
 // ─── Common fields shared by all request types ──────────────────────────────
 
@@ -58,34 +57,49 @@ describe('common transient item fields', () => {
 
 // ─── Auto-incrementing names ────────────────────────────────────────────────
 
-describe('auto-incrementing names', () => {
-  test('first item is named "Untitled 1"', () => {
+describe('transient request names', () => {
+  test('first item is named "Untitled 1" when the collection is empty', () => {
     const item = transientManager.createHttpRequest(bruCollection);
     expect(item.name).toBe('Untitled 1');
   });
 
-  test('sequential items increment the counter', () => {
-    const first = transientManager.createHttpRequest(bruCollection);
-    const second = transientManager.createGraphQLRequest(bruCollection);
-    const third = transientManager.createGrpcRequest(bruCollection);
-    expect(first.name).toBe('Untitled 1');
-    expect(second.name).toBe('Untitled 2');
-    expect(third.name).toBe('Untitled 3');
+  test('increments above the highest existing open transient', () => {
+    const item = transientManager.createGraphQLRequest({ ...bruCollection, items: [transientUntitled(1)] });
+    expect(item.name).toBe('Untitled 2');
+
+    const item2 = transientManager.createGrpcRequest({
+      ...bruCollection,
+      items: [transientUntitled(1), transientUntitled(2)]
+    });
+    expect(item2.name).toBe('Untitled 3');
   });
 
-  test('different collections have independent counters', () => {
-    const a = transientManager.createHttpRequest(bruCollection);
-    const b = transientManager.createHttpRequest(ymlCollection);
+  test('resets to "Untitled 1" once transients are saved/closed', () => {
+    const item = transientManager.createHttpRequest({ ...bruCollection, items: [] });
+    expect(item.name).toBe('Untitled 1');
+  });
+
+  test('ignores saved (non-transient) requests when numbering', () => {
+    const item = transientManager.createHttpRequest({
+      ...bruCollection,
+      items: [savedRequest('Untitled 3'), transientUntitled(1)]
+    });
+    expect(item.name).toBe('Untitled 2');
+  });
+
+  test('counts transients nested inside folders (flattenItems)', () => {
+    const items = [
+      { name: 'My Folder', type: 'folder', items: [transientUntitled(1), transientUntitled(2)] }
+    ];
+    const item = transientManager.createHttpRequest({ ...bruCollection, items });
+    expect(item.name).toBe('Untitled 3');
+  });
+
+  test('different collections are numbered independently', () => {
+    const a = transientManager.createHttpRequest({ ...bruCollection, items: [] });
+    const b = transientManager.createHttpRequest({ ...ymlCollection, items: [transientUntitled(1)] });
     expect(a.name).toBe('Untitled 1');
-    expect(b.name).toBe('Untitled 1');
-  });
-
-  test('resetCounter resets the naming sequence', () => {
-    transientManager.createHttpRequest(bruCollection);
-    transientManager.createHttpRequest(bruCollection);
-    transientManager.resetCounter(bruCollection.uid);
-    const item = transientManager.createHttpRequest(bruCollection);
-    expect(item.name).toBe('Untitled 1');
+    expect(b.name).toBe('Untitled 2');
   });
 });
 
@@ -223,5 +237,50 @@ describe('createWebSocketRequest', () => {
   test('settings has timeout and keepAliveInterval', () => {
     const item = transientManager.createWebSocketRequest(bruCollection);
     expect(item.settings).toEqual({ timeout: 0, keepAliveInterval: 0 });
+  });
+});
+
+// ─── Collection-level inheritance ───────────────────────────────────────────
+
+describe('collection presets', () => {
+  const presetUrl = 'https://api.example.com';
+  const draftPresetUrl = 'https://draft.example.com';
+
+  const withPresets: CollectionInfo = {
+    uid: 'col-5',
+    pathname: '/Users/test/preset-collection',
+    format: 'bru',
+    brunoConfig: { presets: { requestType: 'http', requestUrl: presetUrl } }
+  };
+
+  const withDraftPresets: CollectionInfo = {
+    ...withPresets,
+    uid: 'col-6',
+    draft: { brunoConfig: { presets: { requestUrl: draftPresetUrl } } }
+  };
+
+  test('base URL preset seeds the url of every request type', () => {
+    expect(transientManager.createHttpRequest(withPresets).request.url).toBe(presetUrl);
+    expect(transientManager.createGraphQLRequest(withPresets).request.url).toBe(presetUrl);
+    expect(transientManager.createGrpcRequest(withPresets).request.url).toBe(presetUrl);
+    expect(transientManager.createWebSocketRequest(withPresets).request.url).toBe(presetUrl);
+  });
+
+  test('unsaved preset edits on the draft win over the saved config', () => {
+    const item = transientManager.createHttpRequest(withDraftPresets);
+    expect(item.request.url).toBe(draftPresetUrl);
+  });
+
+  test('collections without presets still produce an empty url', () => {
+    expect(transientManager.createHttpRequest(bruCollection).request.url).toBe('');
+  });
+
+  test('the requestType preset does not override the type picked from the menu', () => {
+    const graphqlPreset: CollectionInfo = {
+      uid: 'col-7',
+      pathname: '/Users/test/graphql-preset',
+      brunoConfig: { presets: { requestType: 'graphql' } }
+    };
+    expect(transientManager.createHttpRequest(graphqlPreset).type).toBe('http-request');
   });
 });

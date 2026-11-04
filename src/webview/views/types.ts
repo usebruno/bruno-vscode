@@ -19,6 +19,7 @@ export type Folder = any;
  */
 export type ViewType =
   | 'request'              // HTTP, GraphQL, gRPC, WebSocket requests
+  | 'app-unsupported'      // App item — desktop-only, placeholder in VS Code
   | 'collection-settings'  // Collection configuration
   | 'folder-settings'      // Folder configuration
   | 'collection-runner'    // Runner results view
@@ -31,6 +32,7 @@ export type ViewType =
   | 'export-collection'
   | 'clone-collection'     // Clone collection
   | 'import-collection'    // Import collection
+  | 'preferences'          // App preferences
   | 'empty';               // No content (blank state)
 
 /**
@@ -43,6 +45,7 @@ export interface ViewData {
   folderUid?: string;
   collectionPath?: string;
   itemPath?: string;
+  focusScriptError?: { scriptPhase: string; line?: number };
 }
 
 /**
@@ -72,6 +75,10 @@ export const VIEW_CONFIGS: Record<ViewType, ViewConfig> = {
     viewType: 'request',
     requiresCollection: true,
     requiresItem: true,
+  },
+  'app-unsupported': {
+    viewType: 'app-unsupported',
+    requiresCollection: false,
   },
   'collection-settings': {
     viewType: 'collection-settings',
@@ -120,6 +127,10 @@ export const VIEW_CONFIGS: Record<ViewType, ViewConfig> = {
   },
   'import-collection': {
     viewType: 'import-collection',
+    requiresCollection: false,
+  },
+  'preferences': {
+    viewType: 'preferences',
     requiresCollection: false,
   },
   'empty': {

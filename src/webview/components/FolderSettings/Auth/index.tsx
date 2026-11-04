@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import get from 'lodash/get';
 import StyledWrapper from './StyledWrapper';
 import { saveFolderRoot } from 'providers/ReduxStore/slices/collections/actions';
@@ -17,7 +17,8 @@ import NTLMAuth from 'components/RequestPane/Auth/NTLMAuth';
 import WsseAuth from 'components/RequestPane/Auth/WsseAuth';
 import ApiKeyAuth from 'components/RequestPane/Auth/ApiKeyAuth';
 import AwsV4Auth from 'components/RequestPane/Auth/AwsV4Auth';
-import { humanizeRequestAuthMode, getTreePathFromCollectionToItem } from 'utils/collections/index';
+import { humanizeRequestAuthMode } from 'utils/collections/index';
+import { getEffectiveAuthSource } from 'utils/auth';
 import Button from 'ui/Button';
 
 interface GrantTypeComponentMapProps {
@@ -76,42 +77,14 @@ const Auth = ({
     });
   };
 
-  const getEffectiveAuthSource = () => {
-    if (authMode !== 'inherit') return null;
-
-    const collectionRoot = collection?.draft?.root || collection?.root || {};
-    const collectionAuth = get(collectionRoot, 'request.auth');
-    let effectiveSource = {
-      type: 'collection',
-      name: 'Collection',
-      auth: collectionAuth
-    };
-
-    const folderTreePath = getTreePathFromCollectionToItem(collection, folder);
-
-    // Skip the last item which is the current folder
-    for (let i = 0; i < folderTreePath.length - 1; i++) {
-      const parentFolder = folderTreePath[i];
-      if (parentFolder.type === 'folder') {
-        const parentFolderRoot = parentFolder?.draft?.root || parentFolder?.root;
-        const folderAuth = get(parentFolderRoot, 'request.auth');
-        if (folderAuth && folderAuth.mode && folderAuth.mode !== 'inherit') {
-          effectiveSource = {
-            type: 'folder',
-            name: parentFolder.name,
-            auth: folderAuth
-          };
-          break;
-        }
-      }
-    }
-
-    return effectiveSource;
-  };
-
   const handleSave = () => {
     dispatch(saveFolderRoot(collection.uid, folder.uid));
   };
+
+  const inheritedSource = useMemo(
+    () => (authMode === 'inherit' ? getEffectiveAuthSource(collection, folder) : null),
+    [authMode, folder, collection]
+  );
 
   const getAuthView = () => {
     switch (authMode) {
@@ -206,12 +179,11 @@ const Auth = ({
         );
       }
       case 'inherit': {
-        const source = getEffectiveAuthSource();
         return (
           <>
             <div className="flex flex-row w-full mt-2 gap-2">
-              <div>Auth inherited from {source.name}: </div>
-              <div className="inherit-mode-text">{humanizeRequestAuthMode(source.auth?.mode)}</div>
+              <div>Auth inherited from {inheritedSource?.name}: </div>
+              <div className="inherit-mode-text">{humanizeRequestAuthMode(inheritedSource?.auth?.mode)}</div>
             </div>
           </>
         );

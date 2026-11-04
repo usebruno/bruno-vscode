@@ -14,14 +14,22 @@ export interface HttpResponse {
   responseTime?: number;
 }
 
-export interface ResponseTimeline {
-  startTime?: number;
-  dnsTime?: number;
-  tcpTime?: number;
-  tlsTime?: number;
-  firstByteTime?: number;
-  downloadTime?: number;
-  endTime?: number;
+export type ResponseTimeline = NetworkLogEntry[];
+
+/** One line of the network log. Written as a `Date`; the webview sees the serialized form. */
+export interface NetworkLogEntry {
+  timestamp: Date | string;
+  type:
+    | 'separator'
+    | 'info'
+    | 'request'
+    | 'requestData'
+    | 'requestHeader'
+    | 'response'
+    | 'responseHeader'
+    | 'error'
+    | 'tls';
+  message?: string;
 }
 
 export interface GrpcResponse {

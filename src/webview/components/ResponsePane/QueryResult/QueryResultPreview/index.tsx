@@ -101,7 +101,9 @@ const QueryResultPreview = ({
 
   switch (previewMode) {
     case 'preview-web': {
-      const baseUrl = item.requestSent?.url || '';
+      // Prefer the interpolated URL that was actually sent so relative assets resolve when the
+      // request URL uses variables; requestSent.url still holds the raw {{var}} form.
+      const baseUrl = (item.response as { requestUrl?: string })?.requestUrl || item.requestSent?.url || '';
       return <HtmlPreview data={data} baseUrl={baseUrl} />;
     }
     case 'preview-image': {

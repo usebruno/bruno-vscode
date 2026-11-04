@@ -31,7 +31,7 @@ import {
 } from 'providers/ReduxStore/slices/collections/actions';
 import { toggleCollectionItem } from 'providers/ReduxStore/slices/collections';
 import { copyRequest } from 'providers/ReduxStore/slices/app';
-import { isItemARequest, isItemAFolder } from 'utils/tabs';
+import { isItemARequest, isItemAFolder, isItemAnApp } from 'utils/tabs';
 import { doesRequestMatchSearchText, doesFolderHaveItemsMatchSearchText } from 'utils/collections/search';
 import { getDefaultRequestPaneTab } from 'utils/collections';
 import toast from 'react-hot-toast';
@@ -47,7 +47,8 @@ import { getRevealInFolderLabel } from 'utils/common/platform';
 import ActionIcon from 'ui/ActionIcon';
 import MenuDropdown from 'ui/MenuDropdown';
 import { useSidebarAccordion } from 'components/Sidebar/SidebarAccordionContext';
-import { isSidebarMode, openRequestInVSCodeEditor } from 'utils/webviewMode';
+import useSearchCollapse from 'hooks/useSearchCollapse';
+import { isSidebarMode, openRequestInVSCodeEditor, openAppInVSCodeEditor } from 'utils/webviewMode';
 import { ipcRenderer } from 'utils/ipc';
 
 interface CollectionItemProps {
@@ -86,9 +87,13 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
   const [isKeyboardFocused, setIsKeyboardFocused] = useState(false);
   const [dropType, setDropType] = useState<string | null>(null);
 
-  const hasSearchText = searchText && searchText?.trim?.()?.length;
-  const itemIsCollapsed = hasSearchText ? false : item.collapsed;
+  const hasSearchText = !!(searchText && searchText?.trim?.()?.length);
   const isFolder = isItemAFolder(item);
+  const { collapsed: itemIsCollapsed, toggleCollapsed } = useSearchCollapse(
+    hasSearchText,
+    item.collapsed,
+    () => dispatch(toggleCollectionItem({ itemUid: item.uid, collectionUid }))
+  );
 
   const [{ isDragging }, drag, dragPreview] = useDrag({
     type: 'collection-item',
@@ -121,14 +126,18 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     if (!hoverBoundingRect || !clientOffset) return null;
 
     const clientY = clientOffset.y - hoverBoundingRect.top;
-    const folderUpperThreshold = hoverBoundingRect.height * 0.35;
-    const fileUpperThreshold = hoverBoundingRect.height * 0.5;
 
     if (isItemAFolder(item)) {
-      return clientY < folderUpperThreshold ? 'adjacent' : 'inside';
-    } else {
-      return clientY < fileUpperThreshold ? 'adjacent' : null;
+      const folderUpperThreshold = hoverBoundingRect.height * 0.3;
+      const folderLowerThreshold = hoverBoundingRect.height * 0.7;
+
+      if (clientY < folderUpperThreshold) return 'above';
+      if (clientY > folderLowerThreshold) return 'below';
+      return 'inside';
     }
+
+    const midpoint = hoverBoundingRect.height * 0.5;
+    return clientY < midpoint ? 'above' : 'below';
   };
 
   const canItemBeDropped = ({ draggedItem, targetItem, dropType }: any) => {
@@ -187,7 +196,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     'item-focused-in-tab': isTabForItemActive,
     'item-hovered': isOver,
     'drop-target': isOver && dropType === 'inside',
-    'drop-target-above': isOver && dropType === 'adjacent',
+    'drop-target-above': isOver && dropType === 'above',
+    'drop-target-below': isOver && dropType === 'below',
     'item-keyboard-focused': isKeyboardFocused
   });
 
@@ -203,13 +213,19 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     if (event && event.detail !== 1) return;
     setTimeout(scrollToTheActiveTab, 50);
     const isRequest = isItemARequest(item);
+    const isApp = isItemAnApp(item);
 
     if (isSidebarMode() && isRequest) {
       openRequestInVSCodeEditor(item.pathname);
       return;
     }
 
-    if (isRequest) {
+    if (isSidebarMode() && isApp) {
+      openAppInVSCodeEditor(item.pathname);
+      return;
+    }
+
+    if (isRequest || isApp) {
       if (isTabForItemPresent) {
         dispatch(focusTab({ uid: item.uid }));
         return;
@@ -218,8 +234,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         addTab({
           uid: item.uid,
           collectionUid: collectionUid,
-          requestPaneTab: getDefaultRequestPaneTab(item),
-          type: 'request'
+          ...(isRequest ? { requestPaneTab: getDefaultRequestPaneTab(item) } : {}),
+          type: isApp ? 'app' : 'request'
         })
       );
     } else {
@@ -264,12 +280,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
   const handleFolderCollapse = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    dispatch(
-      toggleCollectionItem({
-        itemUid: item.uid,
-        collectionUid: collectionUid
-      })
-    );
+    toggleCollapsed();
   };
 
   const handleFolderDoubleClick = (e: React.MouseEvent) => {
@@ -543,8 +554,18 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     'is-sidebar-dragging': isSidebarDragging
   });
 
+  const { folderItems, appItems, requestItems } = useMemo(() => {
+    const children = item.items || [];
+    const folders = sortByNameThenSequence(filter(children, (i: any) => isItemAFolder(i)));
+    const apps = filter(children, (i: any) => isItemAnApp(i)).sort((a: any, b: any) => a.seq - b.seq);
+    const requests = filter(children, (i: any) => isItemARequest(i)).sort((a: any, b: any) => a.seq - b.seq);
+    return { folderItems: folders, appItems: apps, requestItems: requests };
+  }, [item.items]);
+  const indents = useMemo(() => range(item.depth), [item.depth]);
+  const showEmptyFolderMessage = isFolder && !hasSearchText && !folderItems?.length && !appItems?.length && !requestItems?.length;
+
   if (searchText && searchText.length) {
-    if (isItemARequest(item)) {
+    if (isItemARequest(item) || isItemAnApp(item)) {
       if (!doesRequestMatchSearchText(item, searchText)) {
         return null;
       }
@@ -554,15 +575,6 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
       }
     }
   }
-
-  const { folderItems, requestItems } = useMemo(() => {
-    const children = item.items || [];
-    const folders = sortByNameThenSequence(filter(children, (i: any) => isItemAFolder(i)));
-    const requests = filter(children, (i: any) => isItemARequest(i)).sort((a: any, b: any) => a.seq - b.seq);
-    return { folderItems: folders, requestItems: requests };
-  }, [item.items]);
-  const indents = useMemo(() => range(item.depth), [item.depth]);
-  const showEmptyFolderMessage = isFolder && !hasSearchText && !folderItems?.length && !requestItems?.length;
 
   return (
     <StyledWrapper className={className}>
@@ -577,7 +589,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         onFocus={handleFocus}
         onBlur={handleBlur}
         onContextMenu={handleContextMenu}
-        data-testid="sidebar-collection-item-row"
+        data-testid={`sidebar-collection-item-row-${item.name}`}
       >
         <div className="flex items-center h-full w-full">
           {indents && indents.length
@@ -608,14 +620,14 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
                   style={{  }}
                   onClick={handleFolderCollapse}
                   onDoubleClick={handleFolderDoubleClick}
-                  data-testid="folder-chevron"
+                  data-testid={`folder-chevron-${item.name}`}
                 />
               </ActionIcon>
             ) : null}
 
             <div className="ml-1 flex w-full h-full items-center overflow-hidden">
               <CollectionItemIcon item={item} />
-              <span className="item-name" title={item.name}>
+              <span className="item-name" title={item.name} data-testid={`collection-item-label-${item.name}`}>
                 {item.name}
               </span>
             </div>
@@ -625,7 +637,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
               ref={menuDropdownRef}
               items={menuItems}
               placement="bottom-start"
-              data-testid="collection-item-menu"
+              data-testid={`collection-item-menu-${item.name}`}
               popperOptions={{ strategy: 'fixed' }}
               appendTo={dropdownContainerRef?.current || document.body}
             >
@@ -640,6 +652,11 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         <div>
           {folderItems && folderItems.length
             ? folderItems.map((i: any) => {
+                return <CollectionItem key={i.uid} item={i} collectionUid={collectionUid} collectionPathname={collectionPathname} searchText={searchText} />;
+              })
+            : null}
+          {appItems && appItems.length
+            ? appItems.map((i: any) => {
                 return <CollectionItem key={i.uid} item={i} collectionUid={collectionUid} collectionPathname={collectionPathname} searchText={searchText} />;
               })
             : null}

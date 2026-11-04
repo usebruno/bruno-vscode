@@ -2,6 +2,7 @@ import path from 'path';
 import * as vscode from 'vscode';
 import { each, find, remove } from 'lodash';
 import { encryptStringSafe } from '../utils/encryption';
+import { valueToString } from '@usebruno/common/utils';
 
 interface Secret {
   name: string;
@@ -22,7 +23,7 @@ interface Environment {
   name: string;
   variables: Array<{
     name: string;
-    value: string;
+    value: string | number | boolean | Record<string, unknown> | null;
     secret?: boolean;
   }>;
 }
@@ -55,7 +56,9 @@ class EnvironmentSecretsStore {
       if (v.secret) {
         envVars.push({
           name: v.name,
-          value: encryptStringSafe(v.value).value
+          // Serialize non-string (typed) secret values before encryption so they round-trip;
+          // hydration coerces back via parseValueByDataType using the variable's dataType.
+          value: encryptStringSafe(valueToString(v.value)).value
         });
       }
     });

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { WebviewHelper } from '../webview/helper';
 import { stateManager } from '../webview/state-manager';
 import { findCollectionRoot } from '../utils/path';
@@ -8,17 +9,26 @@ import {
   setCurrentWebview,
   clearCurrentWebview,
   handleInvoke,
-  hasHandler
+  hasHandler,
+  registerHandler
 } from '../ipc/handlers';
 import {
   openCollection,
   openCollectionForSingleRequest,
   setMessageSender as setCollectionsMessageSender
 } from '../app/collections';
-import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
+import {
+  setMessageSender as setWatcherMessageSender,
+  isCollectionRootFile,
+  isFolderRootFile
+} from '../app/collection-watcher';
 import collectionWatcher from '../app/collection-watcher';
+import { parseFileMeta } from '../utils/collection';
+import { getCollectionFormat } from '../utils/filesystem';
 import { defaultWorkspaceManager } from '../store/default-workspace';
+import { getRuntimeVariables } from '../store/runtime-variables';
 import { registerDocument, unregisterDocument } from './dirty-state-manager';
+import { notifyActiveItemToSidebar, clearActiveItemFromSidebar } from '../ipc/collection';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -31,15 +41,104 @@ interface CollectionLoadParams {
   filePath: string;
   collectionRoot: string;
   isVariablesMode: boolean;
+  notLoadedParentRoot: string | null;
   webviewPanel: vscode.WebviewPanel;
 }
 
+interface ScriptErrorFocus {
+  scriptPhase: string;
+  line?: number;
+}
+
 const pendingVariablesModeRequests = new Map<string, { collectionRoot: string }>();
+const pendingNotLoadedRequests = new Map<string, { parentCollectionRoot: string }>();
+const pendingScriptErrorFocus = new Map<string, ScriptErrorFocus>();
 // Stores view data per webview so renderer:ready can re-send as fallback
 const viewDataByWebview = new Map<vscode.Webview, Record<string, unknown>>();
+const webviewByFilePath = new Map<string, vscode.Webview>();
+
+function syncTabTitleWithRequestName(
+  webviewPanel: vscode.WebviewPanel,
+  document: vscode.TextDocument,
+  collectionRoot: string
+): vscode.Disposable {
+  const applyTitle = (): void => {
+    try {
+      const meta = parseFileMeta(document.getText(), getCollectionFormat(collectionRoot));
+      const name = typeof meta?.name === 'string' ? meta.name.trim() : '';
+      if (name) {
+        webviewPanel.title = name;
+      }
+    } catch {
+    }
+  };
+
+  applyTitle();
+
+  return vscode.workspace.onDidChangeTextDocument((e) => {
+    if (e.document.uri.toString() === document.uri.toString()) {
+      applyTitle();
+    }
+  });
+}
 
 export function setPendingVariablesMode(filePath: string, collectionRoot: string): void {
   pendingVariablesModeRequests.set(filePath, { collectionRoot });
+}
+
+export function setPendingNotLoadedRequest(filePath: string, parentCollectionRoot: string): void {
+  pendingNotLoadedRequests.set(filePath, { parentCollectionRoot });
+}
+
+export function registerScriptErrorSourceHandler(): void {
+  registerHandler('renderer:reveal-script-error-source', async (args: unknown[]) => {
+    const [payload] = args as [{ filePath?: string; scriptPhase?: string; line?: number }];
+
+    if (!payload?.filePath || !payload.scriptPhase || !fs.existsSync(payload.filePath)) {
+      return { success: false };
+    }
+
+    const focus: ScriptErrorFocus = { scriptPhase: payload.scriptPhase, line: payload.line };
+    const key = path.normalize(payload.filePath);
+    pendingScriptErrorFocus.set(key, focus);
+
+    await ensureBrunoEditorIntent(payload.filePath, 'default');
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      vscode.Uri.file(payload.filePath),
+      BrunoEditorProvider.viewType
+    );
+
+    const webview = webviewByFilePath.get(key);
+    const viewData = webview && viewDataByWebview.get(webview);
+    if (webview && viewData && pendingScriptErrorFocus.delete(key)) {
+      stateManager.sendTo(webview, 'main:set-view', { ...viewData, focusScriptError: focus });
+    }
+
+    return { success: true };
+  });
+}
+
+const currentIntentByFilePath = new Map<string, string>();
+
+export async function ensureBrunoEditorIntent(filePath: string, intent: string): Promise<void> {
+  const key = vscode.Uri.file(filePath).fsPath;
+  const current = currentIntentByFilePath.get(key);
+  if (current === undefined || current === intent) {
+    return;
+  }
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      const input = tab.input;
+      if (input && typeof input === 'object' && 'uri' in input) {
+        const uri = (input as { uri: vscode.Uri }).uri;
+        if (uri.fsPath === key) {
+          await vscode.window.tabGroups.close(tab);
+        }
+      }
+    }
+  }
+  currentIntentByFilePath.delete(key);
 }
 
 export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
@@ -72,27 +171,62 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
     stateManager.addWebview(webviewPanel.webview);
 
     registerDocument(document);
+    webviewByFilePath.set(path.normalize(filePath), webviewPanel.webview);
+
+    const collectionRoot = findCollectionRoot(filePath);
+
+    // The sidebar item this editor represents, so the sidebar can highlight it
+    // (collection.bru → collection, folder.bru → folder, otherwise the request).
+    // Reuses the collection-watcher detection helpers, which apply the
+    // collection-root check and collection-format awareness, so the editor and
+    // the watcher agree on what a given file represents.
+    let activeItemUid: string;
+    let titleSubscription: vscode.Disposable | undefined;
+    if (collectionRoot && isCollectionRootFile(filePath, collectionRoot)) {
+      activeItemUid = generateUidBasedOnHash(collectionRoot);
+    } else if (collectionRoot && isFolderRootFile(filePath, collectionRoot)) {
+      activeItemUid = generateUidBasedOnHash(path.dirname(filePath));
+    } else {
+      activeItemUid = generateUidBasedOnHash(filePath);
+      if (collectionRoot) {
+        titleSubscription = syncTabTitleWithRequestName(webviewPanel, document, collectionRoot);
+      }
+    }
 
     stateManager.setActiveEditorWebview(webviewPanel.webview);
+    notifyActiveItemToSidebar(activeItemUid);
     webviewPanel.onDidChangeViewState((e) => {
       if (e.webviewPanel.active) {
         stateManager.setActiveEditorWebview(webviewPanel.webview);
+        notifyActiveItemToSidebar(activeItemUid);
+      } else {
+        clearActiveItemFromSidebar(activeItemUid);
       }
     });
 
     webviewPanel.onDidDispose(() => {
+      titleSubscription?.dispose();
+      clearActiveItemFromSidebar(activeItemUid);
       stateManager.removeWebview(webviewPanel.webview);
       unregisterDocument(document.uri.fsPath);
       viewDataByWebview.delete(webviewPanel.webview);
+      webviewByFilePath.delete(path.normalize(document.uri.fsPath));
+      currentIntentByFilePath.delete(document.uri.fsPath);
     });
-
-    const collectionRoot = findCollectionRoot(filePath);
 
     const pendingVariables = pendingVariablesModeRequests.get(filePath);
     if (pendingVariables) {
       pendingVariablesModeRequests.delete(filePath);
     }
     const isVariablesMode = !!pendingVariables;
+
+    const pendingNotLoaded = pendingNotLoadedRequests.get(filePath);
+    if (pendingNotLoaded) {
+      pendingNotLoadedRequests.delete(filePath);
+    }
+    const notLoadedParentRoot = pendingNotLoaded?.parentCollectionRoot ?? null;
+
+    currentIntentByFilePath.set(filePath, notLoadedParentRoot ? 'not-loaded' : 'default');
 
     webviewPanel.webview.onDidReceiveMessage((message: IpcMessage) => {
       this._handleMessage(webviewPanel.webview, document, message);
@@ -104,13 +238,29 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
         filePath,
         collectionRoot,
         isVariablesMode,
+        notLoadedParentRoot,
         webviewPanel
       });
     }
   }
 
   private async _loadCollection(pending: CollectionLoadParams): Promise<void> {
-    const { filePath, collectionRoot, isVariablesMode, webviewPanel } = pending;
+    const { filePath, collectionRoot, isVariablesMode, notLoadedParentRoot, webviewPanel } = pending;
+
+    const fileName = path.basename(filePath);
+    const isCollectionFile = fileName === 'collection.bru' || fileName === 'opencollection.yml';
+    const isFolderFile = fileName === 'folder.bru' || fileName === 'folder.yml';
+
+    const isNestedCollectionConfig = !isVariablesMode && !!notLoadedParentRoot;
+
+    let effectiveRoot: string;
+    if (isNestedCollectionConfig) {
+      effectiveRoot = notLoadedParentRoot as string;
+    } else if (isFolderFile && !isVariablesMode) {
+      effectiveRoot = findCollectionRoot(path.dirname(filePath)) || collectionRoot;
+    } else {
+      effectiveRoot = collectionRoot;
+    }
 
     const webviewSender = (channel: string, ...args: unknown[]) => {
       stateManager.sendTo(webviewPanel.webview, channel, ...args);
@@ -136,7 +286,7 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
       } else {
         collectionUid = await openCollectionForSingleRequest(
           collectionWatcher,
-          collectionRoot,
+          effectiveRoot,
           filePath,
           {},
           webviewSender
@@ -144,11 +294,21 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
       }
 
       if (collectionUid) {
-        await defaultWorkspaceManager.addCollectionToWorkspace(collectionRoot);
+        await defaultWorkspaceManager.addCollectionToWorkspace(effectiveRoot);
 
-        const fileName = path.basename(filePath);
-        const isCollectionFile = fileName === 'collection.bru' || fileName === 'opencollection.yml';
-        const isFolderFile = fileName === 'folder.bru' || fileName === 'folder.yml';
+        let isAppFile = false;
+        if (!isCollectionFile && !isFolderFile && !isVariablesMode) {
+          try {
+            const format = getCollectionFormat(collectionRoot);
+            const fileContent = await fs.promises.readFile(filePath, 'utf8');
+            const meta = parseFileMeta(fileContent, format);
+            if (meta && meta.type === 'app') {
+              isAppFile = true;
+            }
+          } catch (err) {
+            // If we can't read/parse, fall through to the default request view.
+          }
+        }
 
         let viewData: {
           viewType: string;
@@ -162,33 +322,75 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
           viewData = {
             viewType: 'variables',
             collectionUid,
-            collectionPath: collectionRoot
+            collectionPath: effectiveRoot
+          };
+        } else if (isNestedCollectionConfig) {
+          // Nested collection config file → not-loaded request of the parent.
+          viewData = {
+            viewType: 'request',
+            collectionUid,
+            collectionPath: effectiveRoot,
+            itemUid: generateUidBasedOnHash(filePath)
           };
         } else if (isCollectionFile) {
           viewData = {
             viewType: 'collection-settings',
             collectionUid,
-            collectionPath: collectionRoot
+            collectionPath: effectiveRoot
           };
         } else if (isFolderFile) {
           const folderPath = path.dirname(filePath);
           viewData = {
             viewType: 'folder-settings',
             collectionUid,
-            collectionPath: collectionRoot,
+            collectionPath: effectiveRoot,
             folderUid: generateUidBasedOnHash(folderPath)
+          };
+        } else if (isAppFile) {
+          viewData = {
+            viewType: 'app-unsupported',
+            collectionUid,
+            collectionPath: collectionRoot,
+            itemUid: generateUidBasedOnHash(filePath)
           };
         } else {
           viewData = {
             viewType: 'request',
             collectionUid,
-            collectionPath: collectionRoot,
+            collectionPath: effectiveRoot,
             itemUid: generateUidBasedOnHash(filePath)
           };
         }
 
         viewDataByWebview.set(webviewPanel.webview, viewData);
-        stateManager.sendTo(webviewPanel.webview, 'main:set-view', viewData);
+
+        const focusKey = path.normalize(filePath);
+        const focusScriptError = pendingScriptErrorFocus.get(focusKey);
+        pendingScriptErrorFocus.delete(focusKey);
+
+        stateManager.sendTo(
+          webviewPanel.webview,
+          'main:set-view',
+          focusScriptError ? { ...viewData, focusScriptError } : viewData
+        );
+
+        const runtimeVariables = getRuntimeVariables(collectionUid);
+        if (Object.keys(runtimeVariables).length > 0) {
+          stateManager.sendTo(webviewPanel.webview, 'main:runtime-variables-update', {
+            collectionUid,
+            runtimeVariables
+          });
+        }
+
+        // Collection/folder settings dashboards need the full request tree (e.g.
+        // the Overview shows request counts). The single-request open above only
+        // loaded the clicked root file, so this webview's store has items: [] and
+        // would show "0 requests". Stream the rest of the tree to this webview.
+        // Unlike the shared watcher scan, loadFullCollection targets this webview
+        // and has no already-scanned guard, so it works regardless of prior opens.
+        if (!isVariablesMode && !isNestedCollectionConfig && (isCollectionFile || isFolderFile)) {
+          await collectionWatcher.loadFullCollection(effectiveRoot, collectionUid, webviewSender);
+        }
       }
     } catch (error) {
       console.error('BrunoEditorProvider: Error opening collection:', error);
@@ -309,6 +511,10 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
 
       case 'sidebar:open-global-environments':
         vscode.commands.executeCommand('bruno.openGlobalEnvironments');
+        break;
+
+      case 'open-in-text-editor':
+        vscode.commands.executeCommand('bruno.switchToTextEditor');
         break;
     }
   }

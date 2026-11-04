@@ -83,6 +83,7 @@ const CreateEnvironment = ({
             <div className="flex items-center mt-2">
               <input
                 id="environment-name"
+                data-testid="create-environment-name"
                 type="text"
                 name="name"
                 ref={inputRef}

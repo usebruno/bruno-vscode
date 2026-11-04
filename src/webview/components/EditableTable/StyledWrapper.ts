@@ -65,6 +65,8 @@ const StyledWrapper = styled.div`
 
   tbody {
     tr {
+      height: 35px;
+      max-height: 35px;
       transition: background 0.1s ease;
 
       &:last-child td {
@@ -72,16 +74,77 @@ const StyledWrapper = styled.div`
       }
 
       td {
+        height: 35px;
+        max-height: 35px;
         padding: 1px 10px !important;
         border-top: none !important;
         border-left: none !important;
         border-bottom: solid 1px ${(props) => props.theme.border.border0};
         border-right: solid 1px ${(props) => props.theme.border.border0};
         vertical-align: middle;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        box-sizing: border-box;
 
         &:last-child {
           border-right: none;
         }
+
+        > div:not(.drag-handle) {
+          height: 33px;
+          max-height: 33px;
+          overflow: hidden;
+        }
+
+        /* Single-line editors must clip to one row; a value with newlines
+           surfaces a validation warning rather than expanding the cell. */
+        .single-line-editor .CodeMirror {
+          max-width: 100%;
+          height: 33px !important;
+          max-height: 33px !important;
+
+          .CodeMirror-scroll {
+            overflow: hidden !important;
+            max-height: 33px;
+          }
+
+          .CodeMirror-vscrollbar,
+          .CodeMirror-hscrollbar,
+          .CodeMirror-scrollbar-filler {
+            display: none;
+          }
+
+          .CodeMirror-lines {
+            max-width: 100%;
+          }
+
+          .CodeMirror-line {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+        }
+
+        &:has(.multi-line-editor) {
+          height: auto;
+          max-height: none;
+          overflow: visible;
+          white-space: normal;
+          text-overflow: clip;
+
+          > div:not(.drag-handle) {
+            height: auto;
+            max-height: none;
+            overflow: visible;
+          }
+        }
+      }
+
+      &:has(.multi-line-editor) {
+        height: auto;
+        max-height: calc(35px * 3);
+        overflow: auto;
       }
     }
   }
@@ -92,6 +155,7 @@ const StyledWrapper = styled.div`
     text-align: center;
     vertical-align: middle;
     line-height: 1;
+    text-overflow: clip;
 
     input[type='checkbox'] {
       vertical-align: baseline;

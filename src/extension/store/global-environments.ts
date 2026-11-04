@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import { encryptStringSafe, decryptStringSafe } from '../utils/encryption';
+import { valueToString, parseValueByDataType, BrunoVariableDataType } from '@usebruno/common/utils';
 const { environmentSchema } = require('@usebruno/schema');
 
 interface EnvironmentVariable {
   name: string;
-  value: string;
+  value: string | number | boolean | Record<string, unknown> | null;
   secret?: boolean;
   type?: string;
+  dataType?: BrunoVariableDataType;
 }
 
 interface GlobalEnvironment {
@@ -58,7 +60,8 @@ class GlobalEnvironmentsStore {
     return globalEnvironments?.map((env) => {
       const variables = env.variables?.map((v) => ({
         ...v,
-        value: v?.secret ? encryptStringSafe(v.value).value : v?.value
+        // Secrets are encrypted as text; serialize non-string values first so typed secrets survive.
+        value: v?.secret ? encryptStringSafe(valueToString(v.value)).value : v?.value
       })) || [];
 
       return {
@@ -70,10 +73,14 @@ class GlobalEnvironmentsStore {
 
   decryptGlobalEnvironmentVariables({ globalEnvironments }: { globalEnvironments: GlobalEnvironment[] }): GlobalEnvironment[] {
     return globalEnvironments?.map((env) => {
-      const variables = env.variables?.map((v) => ({
-        ...v,
-        value: v?.secret ? decryptStringSafe(v.value).value : v?.value
-      })) || [];
+      const variables = env.variables?.map((v) => {
+        if (!v?.secret) {
+          return { ...v };
+        }
+        // Decrypt to text, then coerce back to the recorded data type so typed secrets round-trip.
+        const decrypted = decryptStringSafe(v.value as string).value;
+        return { ...v, value: parseValueByDataType(decrypted, v.dataType) };
+      }) || [];
 
       return {
         ...env,
@@ -89,6 +96,10 @@ class GlobalEnvironmentsStore {
       env?.variables?.forEach((v) => {
         if (!v.type) {
           v.type = 'text';
+        }
+        // These live in globalState, so they never pass through the filestore layer that coerces.
+        if (v.dataType && v.dataType !== 'string' && !v.secret) {
+          v.value = parseValueByDataType(v.value, v.dataType);
         }
       });
     });

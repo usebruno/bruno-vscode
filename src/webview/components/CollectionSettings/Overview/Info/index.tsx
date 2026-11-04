@@ -87,7 +87,7 @@ const Info = ({
             </div>
             <div className="ml-4">
               <div className="font-medium">Requests</div>
-              <div className="mt-1 text-muted">
+              <div className="mt-1 text-muted" data-testid="collection-requests-count">
                 {
                   isCollectionLoading ? `${totalItems - itemsLoadingCount} out of ${totalItems} requests in the collection loaded` : `${totalRequestsInCollection} request${totalRequestsInCollection !== 1 ? 's' : ''} in collection`
                 }

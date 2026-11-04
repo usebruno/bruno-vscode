@@ -1,7 +1,9 @@
-import axios, { AxiosError, AxiosRequestConfig, ResponseType } from 'axios';
+import { AxiosError, AxiosRequestConfig, ResponseType } from 'axios';
 import crypto from 'crypto';
 import qs from 'qs';
 import Oauth2Store from '../store/oauth2';
+import { createAxiosInstance, axiosOptionsFromCertsAndProxyConfig } from '../ipc/network/axios-instance';
+import type { CertsAndProxyConfigResult } from '../ipc/network/cert-utils';
 import type { OAuth2, OAuthAdditionalParameter } from '@bruno-types/common/auth';
 import {
   getOAuth2AuthorizationCode,
@@ -22,6 +24,9 @@ export interface OAuth2TokenResult {
   error?: string;
   debugInfo?: { data: unknown[] };
 }
+
+/** Resolves the TLS and proxy settings for a token request's URL. */
+export type ResolveCertsAndProxyConfig = (url: string) => Promise<CertsAndProxyConfigResult>;
 
 interface TokenRequestConfig {
   method: string;
@@ -83,6 +88,12 @@ export const generateCodeVerifier = (): string => {
   return crypto.randomBytes(22).toString('hex');
 };
 
+// Uses the user-configured state as-is if set, otherwise a cryptographically random value.
+export const generateOAuthState = (userState?: string): string => {
+  const trimmedUserState = userState?.trim();
+  return trimmedUserState ? trimmedUserState : crypto.randomBytes(16).toString('hex')
+};
+
 export const generateCodeChallenge = (codeVerifier: string): string => {
   const hash = crypto.createHash('sha256');
   hash.update(codeVerifier);
@@ -132,12 +143,20 @@ const safeParseJSONBuffer = (data: unknown): Record<string, unknown> | null => {
 };
 
 
-const fetchTokenFromUrl = async (requestConfig: TokenRequestConfig): Promise<{ credentials: Record<string, unknown> | null; requestDetails: Record<string, unknown> }> => {
+const fetchTokenFromUrl = async (
+  requestConfig: TokenRequestConfig,
+  resolveCertsAndProxyConfig?: ResolveCertsAndProxyConfig
+): Promise<{ credentials: Record<string, unknown> | null; requestDetails: Record<string, unknown> }> => {
   let requestDetails: Record<string, unknown> = { request: {}, response: {} };
   let parsedResponseData: Record<string, unknown> | null = null;
 
   try {
-    const response = await axios(requestConfig as AxiosRequestConfig);
+    const certsAndProxyConfig = resolveCertsAndProxyConfig && await resolveCertsAndProxyConfig(requestConfig.url);
+    const instance = createAxiosInstance({
+      ...(certsAndProxyConfig && axiosOptionsFromCertsAndProxyConfig(certsAndProxyConfig)),
+      disableCookies: true
+    });
+    const response = await instance(requestConfig as AxiosRequestConfig);
     parsedResponseData = safeParseJSONBuffer(response.data);
     requestDetails = {
       request: {
@@ -205,6 +224,16 @@ const fetchTokenFromUrl = async (requestConfig: TokenRequestConfig): Promise<{ c
 };
 
 
+// The authorize redirect and callback happen in the system browser, so there is no real
+// response to record — only what Bruno opened and what it got back. It's used for showing in timeline
+const buildBrowserStepDetails = (url: string, statusText: string, data: Record<string, unknown> | null = null): Record<string, unknown> => ({
+  request: { url, method: 'GET', headers: {} },
+  response: { status: '-', statusText, headers: {}, data },
+  requestId: Date.now().toString(),
+  fromCache: false,
+  completed: true
+});
+
 const buildBaseRequestConfig = (url: string): TokenRequestConfig => ({
   method: 'POST',
   url,
@@ -243,7 +272,8 @@ const resolveStoredCredentials = async ({
   autoRefreshToken,
   autoFetchToken,
   requestCopy,
-  forceFetch
+  forceFetch,
+  resolveCertsAndProxyConfig
 }: {
   collectionUid: string;
   url: string;
@@ -252,6 +282,7 @@ const resolveStoredCredentials = async ({
   autoFetchToken?: boolean;
   requestCopy?: Record<string, unknown>;
   forceFetch: boolean;
+  resolveCertsAndProxyConfig?: ResolveCertsAndProxyConfig;
 }): Promise<{ shouldFetch: boolean; result?: OAuth2TokenResult }> => {
   if (forceFetch) return { shouldFetch: true };
 
@@ -265,7 +296,7 @@ const resolveStoredCredentials = async ({
     // Token is expired
     if (autoRefreshToken && storedCredentials.refresh_token && requestCopy) {
       try {
-        const refreshed = await refreshOauth2Token({ requestCopy, collectionUid });
+        const refreshed = await refreshOauth2Token({ requestCopy, collectionUid, resolveCertsAndProxyConfig });
         return { shouldFetch: false, result: { collectionUid, url, credentials: refreshed.credentials, credentialsId } };
       } catch {
         clearOauth2Credentials({ collectionUid, url, credentialsId });
@@ -291,10 +322,11 @@ const resolveStoredCredentials = async ({
   return { shouldFetch: false, result: { collectionUid, url, credentials: null, credentialsId } };
 };
 
-export const getOAuth2TokenUsingClientCredentials = async ({ request, collectionUid, forceFetch = false }: {
+export const getOAuth2TokenUsingClientCredentials = async ({ request, collectionUid, forceFetch = false, resolveCertsAndProxyConfig }: {
   request: Record<string, unknown>;
   collectionUid: string;
   forceFetch?: boolean;
+  resolveCertsAndProxyConfig?: ResolveCertsAndProxyConfig;
 }): Promise<OAuth2TokenResult> => {
   const oAuth = (request.oauth2 || {}) as OAuth2;
   const {
@@ -320,7 +352,7 @@ export const getOAuth2TokenUsingClientCredentials = async ({ request, collection
     collectionUid, url, credentialsId: credentialsId || 'default',
     autoRefreshToken: autoRefreshToken ?? undefined,
     autoFetchToken: autoFetchToken ?? undefined,
-    requestCopy: request, forceFetch
+    requestCopy: request, forceFetch, resolveCertsAndProxyConfig
   });
   if (!resolved.shouldFetch && resolved.result) return resolved.result;
 
@@ -340,7 +372,7 @@ export const getOAuth2TokenUsingClientCredentials = async ({ request, collection
   requestConfig.data = qs.stringify(data);
 
   const debugInfo: { data: unknown[] } = { data: [] };
-  const { credentials, requestDetails } = await fetchTokenFromUrl(requestConfig);
+  const { credentials, requestDetails } = await fetchTokenFromUrl(requestConfig, resolveCertsAndProxyConfig);
   debugInfo.data.push(requestDetails);
 
   if (credentials) {
@@ -349,10 +381,11 @@ export const getOAuth2TokenUsingClientCredentials = async ({ request, collection
   return { collectionUid, url, credentials, credentialsId: credentialsId || 'default', debugInfo };
 };
 
-export const getOAuth2TokenUsingPasswordCredentials = async ({ request, collectionUid, forceFetch = false }: {
+export const getOAuth2TokenUsingPasswordCredentials = async ({ request, collectionUid, forceFetch = false, resolveCertsAndProxyConfig }: {
   request: Record<string, unknown>;
   collectionUid: string;
   forceFetch?: boolean;
+  resolveCertsAndProxyConfig?: ResolveCertsAndProxyConfig;
 }): Promise<OAuth2TokenResult> => {
   const oAuth = (request.oauth2 || {}) as OAuth2;
   const {
@@ -386,7 +419,7 @@ export const getOAuth2TokenUsingPasswordCredentials = async ({ request, collecti
     collectionUid, url, credentialsId: credentialsId || 'default',
     autoRefreshToken: autoRefreshToken ?? undefined,
     autoFetchToken: autoFetchToken ?? undefined,
-    requestCopy: request, forceFetch
+    requestCopy: request, forceFetch, resolveCertsAndProxyConfig
   });
   if (!resolved.shouldFetch && resolved.result) return resolved.result;
 
@@ -410,7 +443,7 @@ export const getOAuth2TokenUsingPasswordCredentials = async ({ request, collecti
   requestConfig.data = qs.stringify(data);
 
   const debugInfo: { data: unknown[] } = { data: [] };
-  const { credentials, requestDetails } = await fetchTokenFromUrl(requestConfig);
+  const { credentials, requestDetails } = await fetchTokenFromUrl(requestConfig, resolveCertsAndProxyConfig);
   debugInfo.data.push(requestDetails);
 
   if (credentials) {
@@ -420,10 +453,11 @@ export const getOAuth2TokenUsingPasswordCredentials = async ({ request, collecti
 };
 
 
-export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collectionUid, forceFetch = false }: {
+export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collectionUid, forceFetch = false, resolveCertsAndProxyConfig }: {
   request: Record<string, unknown>;
   collectionUid: string;
   forceFetch?: boolean;
+  resolveCertsAndProxyConfig?: ResolveCertsAndProxyConfig;
 }): Promise<OAuth2TokenResult> => {
   const oAuth = (request.oauth2 || {}) as OAuth2;
   const {
@@ -440,7 +474,7 @@ export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collection
     autoFetchToken,
     additionalParameters
   } = oAuth;
-  // VS Code always uses Bruno's callback URL with source=vscode param
+  // Bruno's hosted callback page.
   const effectiveCallbackUrl = BRUNO_OAUTH2_CALLBACK_URL;
   const url = oAuth.accessTokenUrl;
 
@@ -458,7 +492,7 @@ export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collection
     collectionUid, url, credentialsId: credentialsId || 'default',
     autoRefreshToken: autoRefreshToken ?? undefined,
     autoFetchToken: autoFetchToken ?? undefined,
-    requestCopy: request, forceFetch
+    requestCopy: request, forceFetch, resolveCertsAndProxyConfig
   });
   if (!resolved.shouldFetch && resolved.result) return resolved.result;
 
@@ -476,14 +510,23 @@ export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collection
     callbackUrl: effectiveCallbackUrl,
     clientId,
     scope: scope || undefined,
-    state: state || undefined,
+    state: generateOAuthState(state),
     pkce: pkce || false,
     codeChallenge,
     additionalParameters: additionalParameters?.authorization as OAuthAdditionalParameter[] || undefined
   });
 
+  const debugInfo: { data: unknown[] } = { data: [] };
+  if (authResult.authorizeUrl) {
+    debugInfo.data.push(buildBrowserStepDetails(authResult.authorizeUrl, ''));
+  }
+  if (authResult.callbackUri) {
+    const callbackParams = Object.fromEntries(new URL(authResult.callbackUri).searchParams);
+    debugInfo.data.push(buildBrowserStepDetails(authResult.callbackUri, '', callbackParams));
+  }
+
   if (!authResult.authorizationCode) {
-    return { error: 'No authorization code received', credentials: null, url, credentialsId: credentialsId || 'default', collectionUid };
+    return { error: 'No authorization code received', credentials: null, url, credentialsId: credentialsId || 'default', collectionUid, debugInfo };
   }
 
   // Exchange authorization code for token
@@ -507,8 +550,7 @@ export const getOAuth2TokenUsingAuthorizationCode = async ({ request, collection
   }
   requestConfig.data = qs.stringify(data);
 
-  const debugInfo: { data: unknown[] } = { data: [] };
-  const { credentials, requestDetails } = await fetchTokenFromUrl(requestConfig);
+  const { credentials, requestDetails } = await fetchTokenFromUrl(requestConfig, resolveCertsAndProxyConfig);
   debugInfo.data.push(requestDetails);
 
   if (credentials) {
@@ -565,7 +607,7 @@ export const getOAuth2TokenUsingImplicitGrant = async ({ request, collectionUid,
     callbackUrl: effectiveCallbackUrl,
     clientId: clientId || '',
     scope: scope || undefined,
-    state: state || undefined,
+    state: generateOAuthState(state),
     additionalParameters: additionalParameters?.authorization as OAuthAdditionalParameter[] || undefined
   });
 
@@ -587,9 +629,10 @@ export const getOAuth2TokenUsingImplicitGrant = async ({ request, collectionUid,
 };
 
 
-export const refreshOauth2Token = async ({ requestCopy, collectionUid }: {
+export const refreshOauth2Token = async ({ requestCopy, collectionUid, resolveCertsAndProxyConfig }: {
   requestCopy: Record<string, unknown>;
   collectionUid: string;
+  resolveCertsAndProxyConfig?: ResolveCertsAndProxyConfig;
 }): Promise<OAuth2TokenResult> => {
   const oAuth = (requestCopy.oauth2 || {}) as OAuth2;
   const { clientId, clientSecret, credentialsId = 'default', credentialsPlacement, additionalParameters } = oAuth;
@@ -624,7 +667,7 @@ export const refreshOauth2Token = async ({ requestCopy, collectionUid }: {
   requestConfig.data = qs.stringify(data);
 
   const debugInfo: { data: unknown[] } = { data: [] };
-  const { credentials: newCredentials, requestDetails } = await fetchTokenFromUrl(requestConfig);
+  const { credentials: newCredentials, requestDetails } = await fetchTokenFromUrl(requestConfig, resolveCertsAndProxyConfig);
   debugInfo.data.push(requestDetails);
 
   if (!newCredentials || newCredentials.error) {

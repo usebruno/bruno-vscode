@@ -11,6 +11,9 @@ import ResponseTime from './ResponseTime';
 import ResponseSize from './ResponseSize';
 import TestResults from './TestResults';
 import TestResultsLabel from './TestResultsLabel';
+import Timeline from './Timeline';
+import ClearTimeline from './ClearTimeline';
+import { useTimelineEntries } from './timeline-utils';
 import ScriptError from './ScriptError';
 import ScriptErrorIcon from './ScriptErrorIcon';
 import StyledWrapper from './StyledWrapper';
@@ -22,6 +25,7 @@ import HeightBoundContainer from 'ui/HeightBoundContainer';
 import ResponseStopWatch from 'components/ResponsePane/ResponseStopWatch';
 import WSMessagesList from './WsResponsePane/WSMessagesList';
 import ResponsiveTabs from 'ui/ResponsiveTabs';
+import { hasScriptError, isScriptSourcedError } from '@bruno-types';
 
 interface RIGHT_CONTENT_EXPANDED_WIDTHProps {
   item?: React.ReactNode;
@@ -76,11 +80,13 @@ const ResponsePane = ({
     dispatch(updateResponseViewTab({ uid: item.uid, responseViewTab: newViewTab }));
   }, [dispatch, item.uid]);
 
+  const requestFailed = Boolean(response.error) && !isScriptSourcedError(item);
+
+  // Keyed on the item because this pane instance is reused as the selection changes. A request that
+  // failed on its own terms is the actionable error, so the card waits behind its icon.
   useEffect(() => {
-    if (item?.preRequestScriptErrorMessage || item?.postResponseScriptErrorMessage || item?.testScriptErrorMessage) {
-      setShowScriptErrorCard(true);
-    }
-  }, [item?.preRequestScriptErrorMessage, item?.postResponseScriptErrorMessage, item?.testScriptErrorMessage]);
+    setShowScriptErrorCard(hasScriptError(item) && !requestFailed);
+  }, [item?.uid, hasScriptError(item), requestFailed]);
 
   const selectTab = (tab: any) => {
     dispatch(
@@ -107,7 +113,9 @@ const ResponsePane = ({
   }, [response.size, response.dataBuffer]);
   const responseHeadersCount = typeof response.headers === 'object' ? Object.entries(response.headers).length : 0;
 
-  const hasScriptError = item?.preRequestScriptErrorMessage || item?.postResponseScriptErrorMessage || item?.testScriptErrorMessage;
+  const showScriptError = hasScriptError(item);
+
+  const timelineCount = useTimelineEntries(collection, item).length;
 
   const allTabs = useMemo((): Array<{ key: string; label: React.ReactNode; indicator: React.ReactNode }> => {
     return [
@@ -122,6 +130,11 @@ const ResponsePane = ({
         indicator: responseHeadersCount > 0 ? <sup className="ml-1 font-medium">{responseHeadersCount}</sup> : null
       },
       {
+        key: 'timeline',
+        label: 'Timeline',
+        indicator: timelineCount > 0 ? <sup className="ml-1 font-medium">{timelineCount}</sup> : null
+      },
+      {
         key: 'tests',
         label: (
           <TestResultsLabel
@@ -134,7 +147,7 @@ const ResponsePane = ({
         indicator: null
       }
     ];
-  }, [responseHeadersCount, item.testResults, item.assertionResults, item.preRequestTestResults, item.postResponseTestResults]);
+  }, [responseHeadersCount, timelineCount, item.testResults, item.assertionResults, item.preRequestTestResults, item.postResponseTestResults]);
 
   const getTabPanel = (tab: any) => {
     switch (tab) {
@@ -159,6 +172,9 @@ const ResponsePane = ({
       }
       case 'headers': {
         return <ResponseHeaders headers={response.headers} />;
+      }
+      case 'timeline': {
+        return <Timeline item={item} collection={collection} />;
       }
       case 'tests': {
         return (
@@ -193,7 +209,7 @@ const ResponsePane = ({
     );
   }
 
-  if (!item.response) {
+  if (!item.response && !timelineCount) {
     return (
       <HeightBoundContainer>
         <Placeholder />
@@ -211,7 +227,7 @@ const ResponsePane = ({
 
   const rightContent = !isLoading ? (
     <div ref={rightContentRef} className="flex justify-end items-center right-side-container gap-3">
-      {hasScriptError && !showScriptErrorCard && (
+      {showScriptError && !showScriptErrorCard && (
         <ScriptErrorIcon
           itemUid={item.uid}
           onClick={() => setShowScriptErrorCard(true)}
@@ -236,16 +252,23 @@ const ResponsePane = ({
           </div>
         </>
       ) : null}
+      {/* Stays mounted: ResponsiveTabs measures rightContent's children to lay out the tabs. */}
       <div className="flex items-center response-pane-status">
-        <StatusCode status={response.status} isStreaming={item.response?.stream?.running} />
-        {item.response?.stream?.running
-          ? <ResponseStopWatch startMillis={response.duration} />
-          : <ResponseTime duration={response.duration} />}
-        <ResponseSize size={responseSize} />
+        {item?.response ? (
+          <>
+            <StatusCode status={response.status} isStreaming={item.response?.stream?.running} />
+            {item.response?.stream?.running
+              ? <ResponseStopWatch startMillis={response.duration} />
+              : <ResponseTime duration={response.duration} />}
+            <ResponseSize size={responseSize} />
+          </>
+        ) : null}
       </div>
 
       <div className="flex items-center response-pane-actions">
-        {item?.response && !item?.response?.error ? (
+        {focusedTab?.responsePaneTab === 'timeline' ? (
+          <ClearTimeline item={item} collection={collection} />
+        ) : item?.response && !item?.response?.error ? (
           <ResponsePaneActions
             item={item}
             collection={collection}
@@ -262,8 +285,9 @@ const ResponsePane = ({
 
   return (
     <StyledWrapper className="flex flex-col h-full relative">
-      <div className="px-4">
+      <div className="px-4" data-testid="response-pane-tabs">
         <ResponsiveTabs
+          testId="response-pane-tabs"
           tabs={allTabs}
           activeTab={focusedTab.responsePaneTab}
           onTabSelect={selectTab}
@@ -279,15 +303,18 @@ const ResponsePane = ({
         }}
       >
         {isLoading ? <Overlay item={item} collection={collection} /> : null}
-        {hasScriptError && showScriptErrorCard && (
+        {showScriptError && showScriptErrorCard && (
           <ScriptError
             item={item}
+            collection={collection}
             onClose={() => setShowScriptErrorCard(false)}
           />
         )}
         <div className="flex-1 min-h-0 min-w-0 overflow-auto">
           {item?.response ? (
             <>{getTabPanel(focusedTab.responsePaneTab)}</>
+          ) : focusedTab.responsePaneTab === 'timeline' && timelineCount ? (
+            <Timeline item={item} collection={collection} />
           ) : null}
         </div>
       </section>

@@ -27,6 +27,7 @@ const CollectionOverview = lazy(() => import('components/CollectionSettings/Over
 const FolderSettings = lazy(() => import('components/FolderSettings'));
 const EnvironmentSettings = lazy(() => import('components/Environments/EnvironmentSettings'));
 const GlobalEnvironmentSettings = lazy(() => import('components/Environments/GlobalEnvironmentSettings'));
+const Preferences = lazy(() => import('components/Preferences'));
 
 // Simple form-only views stay eager — they're small and are the primary target
 // of the "open panel fast" optimization.
@@ -40,6 +41,7 @@ import RequestNotFound from 'components/RequestTabPanel/RequestNotFound';
 import RequestNotLoaded from 'components/RequestTabPanel/RequestNotLoaded';
 import RequestIsLoading from 'components/RequestTabPanel/RequestIsLoading';
 import FolderNotFound from 'components/RequestTabPanel/FolderNotFound';
+import AppUnsupported from 'components/RequestTabPanel/AppUnsupported';
 
 import { findItemInCollection, findCollectionByUid } from 'utils/collections';
 import { getGlobalEnvironmentVariables, getGlobalEnvironmentVariablesMasked } from 'utils/collections/index';
@@ -253,8 +255,16 @@ const ViewContainer: React.FC<ViewContainerProps> = ({ viewData }) => {
     return <EmptyView />;
   }
 
+  if (viewType === 'app-unsupported') {
+    return <AppUnsupported />;
+  }
+
   if (viewType === 'global-environments') {
     return <GlobalEnvironmentSettings />;
+  }
+
+  if (viewType === 'preferences') {
+    return <Preferences />;
   }
 
   if (viewType === 'create-collection') {

@@ -6,6 +6,7 @@ import path, { normalizePath } from 'utils/common/path';
 // @ts-expect-error - isRequestTagsIncluded may not be exported in type definitions
 import { isRequestTagsIncluded } from '@usebruno/common';
 import type { AppCollection, AppItem, Environment, UID } from '@bruno-types';
+import { SCRIPT_ERROR_FIELDS } from '@bruno-types';
 
 const replaceTabsWithSpaces = (str: string | null | undefined, numSpaces = 2): string => {
   if (!str || !str.length || !isString(str)) {
@@ -671,7 +672,8 @@ export const transformRequestToSaveToFilesystem = (item: any) => {
     uid: _item.uid,
     type: _item.type,
     name: _item.name,
-    seq: _item.seq ?? item.seq ?? 1,
+    // item.seq is the current position: a reorder updates it but not the draft, so the draft's seq can be stale.
+    seq: item.seq ?? _item.seq ?? 1,
     settings: _item.settings,
     tags: _item.tags,
     examples: _item.examples || [],
@@ -856,6 +858,15 @@ export const isItemARequest = (item: AppItem): boolean => {
 export const isItemAFolder = (item: AppItem): boolean => {
   if (!item) return false;
   return !('request' in item) && item.type === 'folder';
+};
+
+export const isItemAnApp = (item: AppItem): boolean => {
+  if (!item) return false;
+  return item.type === 'app';
+};
+
+export const isItemTransientRequest = (item: AppItem): boolean => {
+  return isItemARequest(item) && !!(item as any)?.isTransient;
 };
 
 export const humanizeRequestBodyMode = (mode: string | null | undefined): string => {
@@ -1063,9 +1074,7 @@ export const hasRequestChanges = (item: AppItem | null | undefined): boolean => 
       'assertionResults',
       'preRequestTestResults',
       'postResponseTestResults',
-      'preRequestScriptErrorMessage',
-      'postResponseScriptErrorMessage',
-      'testScriptErrorMessage'
+      ...SCRIPT_ERROR_FIELDS
     ]);
 
     // Deep clone helper that excludes certain properties
@@ -1192,7 +1201,8 @@ export const getEnvironmentVariables = (collection: AppCollection | null | undef
     const environment = findEnvironmentInCollection(collection, collection.activeEnvironmentUid as UID);
     if (environment) {
       each(environment.variables, (variable) => {
-        if (variable.name && variable.value && variable.enabled) {
+        // Enabled is the only gate; a typed value can legitimately be 0, false or ''.
+        if (variable.name && variable.enabled) {
           variables[variable.name] = variable.value;
         }
       });
@@ -1439,40 +1449,27 @@ export const resetSequencesInFolder = (folderItems: any) => {
   });
 };
 
-export const isItemBetweenSequences = (itemSequence: any, sourceItemSequence: any, targetItemSequence: any) => {
-  if (targetItemSequence > sourceItemSequence) {
-    return itemSequence > sourceItemSequence && itemSequence < targetItemSequence;
-  }
-  return itemSequence < sourceItemSequence && itemSequence >= targetItemSequence;
-};
-
-export const calculateNewSequence = (isDraggedItem: any, targetSequence: any, draggedSequence: any) => {
-  if (!isDraggedItem) {
-    return null;
-  }
-  return targetSequence > draggedSequence ? targetSequence - 1 : targetSequence;
-};
-
 export const getReorderedItemsInTargetDirectory = ({
   items,
   targetItemUid,
-  draggedItemUid
+  draggedItemUid,
+  dropType
 }: any) => {
   const itemsWithFixedSequences = resetSequencesInFolder(cloneDeep(items));
-  const targetItem = findItem(itemsWithFixedSequences, targetItemUid);
-  const draggedItem = findItem(itemsWithFixedSequences, draggedItemUid);
-  const targetSequence = targetItem?.seq;
-  const draggedSequence = draggedItem?.seq;
-  itemsWithFixedSequences?.forEach((item: any) => {
-    const isDraggedItem = item?.uid === draggedItemUid;
-    const isBetween = isItemBetweenSequences(item?.seq, draggedSequence, targetSequence);
-    if (isBetween) {
-      item.seq += targetSequence > draggedSequence ? -1 : 1;
-    }
-    const newSequence = calculateNewSequence(isDraggedItem, targetSequence, draggedSequence);
-    if (newSequence !== null) {
-      item.seq = newSequence;
-    }
+  const targetIndex = itemsWithFixedSequences.findIndex((i) => i.uid === targetItemUid);
+  const draggedIndex = itemsWithFixedSequences.findIndex((i) => i.uid === draggedItemUid);
+  if (targetIndex === -1 || draggedIndex === -1) {
+    return [];
+  }
+
+  let newIndex = dropType === 'below' ? targetIndex + 1 : targetIndex;
+  if (draggedIndex < newIndex) {
+    newIndex -= 1;
+  }
+  const [draggedItem] = itemsWithFixedSequences.splice(draggedIndex, 1);
+  itemsWithFixedSequences.splice(newIndex, 0, draggedItem);
+  itemsWithFixedSequences.forEach((item, index) => {
+    item.seq = index + 1;
   });
   // only return items that have been reordered
   return itemsWithFixedSequences.filter((item: any) => items?.find((originalItem: any) => originalItem?.uid === item?.uid)?.seq !== item?.seq
@@ -1501,7 +1498,7 @@ export const calculateDraggedItemNewPathname = ({
 
   if (dropType === 'inside' && (isTargetItemAFolder || isTargetTheCollection)) {
     return path.join(targetItemPathname, draggedItemFilename);
-  } else if (dropType === 'adjacent') {
+  } else if (dropType === 'above' || dropType === 'below') {
     return path.join(targetItemDirname, draggedItemFilename);
   }
   return null;

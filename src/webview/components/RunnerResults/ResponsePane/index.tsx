@@ -13,6 +13,7 @@ import SkippedRequest from 'components/ResponsePane/SkippedRequest';
 import RunnerTimeline from 'components/ResponsePane/RunnerTimeline';
 import ScriptError from 'components/ResponsePane/ScriptError';
 import ScriptErrorIcon from 'components/ResponsePane/ScriptErrorIcon';
+import { hasScriptError, isScriptSourcedError } from '@bruno-types';
 
 interface ResponsePaneProps {
   rightPaneWidth?: number;
@@ -31,18 +32,20 @@ const ResponsePane = ({
 
   const { requestSent, responseReceived, testResults, assertionResults, preRequestTestResults, postResponseTestResults, error } = item;
 
+  // A request that failed on its own terms is the actionable error, so the card stands aside.
+  const requestFailed = Boolean(error) && !isScriptSourcedError(item);
+
+  // Keyed on the item because this pane instance is reused as the selection changes.
   useEffect(() => {
-    if (item?.preRequestScriptErrorMessage || item?.postResponseScriptErrorMessage || item?.testScriptErrorMessage) {
-      setShowScriptErrorCard(true);
-    }
-  }, [item?.preRequestScriptErrorMessage, item?.postResponseScriptErrorMessage, item?.testScriptErrorMessage]);
+    setShowScriptErrorCard(hasScriptError(item) && !requestFailed);
+  }, [item?.uid, hasScriptError(item), requestFailed]);
 
   const headers = get(item, 'responseReceived.headers', []);
   const status = get(item, 'responseReceived.status', 0);
   const size = get(item, 'responseReceived.size', 0);
   const duration = get(item, 'responseReceived.duration', 0);
 
-  const hasScriptError = item?.preRequestScriptErrorMessage || item?.postResponseScriptErrorMessage || item?.testScriptErrorMessage;
+  const showScriptError = hasScriptError(item) && !requestFailed;
 
   const selectTab = (tab: any) => setSelectedTab(tab);
 
@@ -129,7 +132,7 @@ const ResponsePane = ({
           />
         </div>
         <div className="flex flex-grow justify-end items-center">
-          {hasScriptError && !showScriptErrorCard && (
+          {showScriptError && !showScriptErrorCard && (
             <ScriptErrorIcon
               itemUid={item.uid}
               onClick={() => setShowScriptErrorCard(true)}
@@ -141,9 +144,10 @@ const ResponsePane = ({
         </div>
       </div>
       <section className="flex flex-col pt-3 flex-grow overflow-auto">
-        {hasScriptError && showScriptErrorCard && (
+        {showScriptError && showScriptErrorCard && (
           <ScriptError
             item={item}
+            collection={collection}
             onClose={() => setShowScriptErrorCard(false)}
           />
         )}

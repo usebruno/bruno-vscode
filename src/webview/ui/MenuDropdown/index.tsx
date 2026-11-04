@@ -36,7 +36,7 @@ interface MenuDropdownProps {
   showGroupDividers?: boolean;
   groupStyle?: 'action' | 'select';
   autoFocusFirstOption?: boolean;
-  'data-testid'?: string;
+  'data-testid': string;
 }
 
 interface TippyInstance {
@@ -79,7 +79,7 @@ const MenuDropdown = forwardRef<MenuDropdownRef, MenuDropdownProps & Record<stri
   showGroupDividers = true,
   groupStyle = 'action',
   autoFocusFirstOption = false,
-  'data-testid': testId = 'menu-dropdown',
+  'data-testid': testId,
   ...dropdownProps
 }, ref) => {
   const tippyRef = useRef<TippyInstance | undefined>(undefined);

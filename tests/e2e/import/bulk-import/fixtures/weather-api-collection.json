@@ -1,0 +1,55 @@
+{
+  "name": "Weather API",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "Current Conditions",
+      "filename": "current-conditions.bru",
+      "seq": 1,
+      "settings": { "encodeUrl": true },
+      "tags": [],
+      "request": {
+        "url": "https://echo.usebruno.com/weather/current",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": { "mode": "none" }
+      }
+    },
+    {
+      "type": "http",
+      "name": "Five Day Forecast",
+      "filename": "five-day-forecast.bru",
+      "seq": 2,
+      "settings": { "encodeUrl": true },
+      "tags": [],
+      "request": {
+        "url": "https://echo.usebruno.com/weather/forecast",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": { "mode": "none" }
+      }
+    }
+  ],
+  "environments": [],
+  "brunoConfig": {
+    "version": "1",
+    "name": "Weather API",
+    "type": "collection",
+    "ignore": ["node_modules", ".git"]
+  }
+}

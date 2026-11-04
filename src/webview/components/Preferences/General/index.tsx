@@ -1,27 +1,21 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import get from 'lodash/get';
+import isEqual from 'lodash/isEqual';
 import debounce from 'lodash/debounce';
 import { useFormik } from 'formik';
 import { useSelector, useDispatch } from 'react-redux';
 import { savePreferences } from 'providers/ReduxStore/slices/app';
-import { browseDirectory } from 'providers/ReduxStore/slices/collections/actions';
+import { browseFiles } from 'providers/ReduxStore/slices/collections/actions';
 import StyledWrapper from './StyledWrapper';
+import SettingCheckbox from '../SettingCheckbox';
 import * as Yup from 'yup';
 import toast from 'react-hot-toast';
 import path from 'utils/common/path';
-import { IconTrash } from '@tabler/icons';
+import { IconFileCertificate, IconTrash } from '@tabler/icons';
 
-interface GeneralProps {
-  close?: React.ReactNode;
-}
-
-
-const General = ({
-  close
-}: any) => {
+const General = () => {
   const preferences = useSelector((state: any) => state.app.preferences);
   const dispatch = useDispatch();
-  const inputFileCaCertificateRef = useRef<HTMLInputElement>(null);
 
   const preferencesSchema = Yup.object().shape({
     sslVerification: Yup.boolean(),
@@ -63,11 +57,7 @@ const General = ({
         return false;
       }
       return true;
-    }),
-    oauth2: Yup.object({
-      useSystemBrowser: Yup.boolean()
-    }),
-    defaultCollectionLocation: Yup.string().max(1024)
+    })
   });
 
   const formik = useFormik({
@@ -86,11 +76,7 @@ const General = ({
       autoSave: {
         enabled: get(preferences, 'autoSave.enabled', false),
         interval: get(preferences, 'autoSave.interval', 1000)
-      },
-      oauth2: {
-        useSystemBrowser: get(preferences, 'request.oauth2.useSystemBrowser', false)
-      },
-      defaultCollectionLocation: get(preferences, 'general.defaultCollectionLocation', '')
+      }
     },
     validationSchema: preferencesSchema,
     onSubmit: async (values) => {
@@ -104,7 +90,7 @@ const General = ({
   });
 
   const handleSave = useCallback((newPreferences: any) => {
-    dispatch(
+    return (dispatch(
       savePreferences({
         ...preferences,
         request: {
@@ -119,26 +105,35 @@ const General = ({
           timeout: newPreferences.timeout,
           storeCookies: newPreferences.storeCookies,
           sendCookies: newPreferences.sendCookies,
-          oauth2: {
-            useSystemBrowser: newPreferences.oauth2.useSystemBrowser
-          }
+          oauth2: get(preferences, 'request.oauth2', { useSystemBrowser: true })
         },
         autoSave: {
           enabled: newPreferences.autoSave.enabled,
           interval: newPreferences.autoSave.interval
         },
-        general: {
-          defaultCollectionLocation: newPreferences.defaultCollectionLocation
-        }
-      }) as unknown as Promise<void>)
-      .catch((err: any) => { toast.error('Failed to update preferences'); });
+        general: get(preferences, 'general', { defaultCollectionLocation: '' })
+      })) as unknown as Promise<void>)
+      .then(() => true)
+      .catch((err: any) => {
+        toast.error('Failed to update preferences');
+        return false;
+      });
   }, [dispatch, preferences]);
+
+  const lastSavedValues = useRef(formik.initialValues);
 
   const debouncedSave = useCallback(
     debounce((values) => {
       preferencesSchema.validate(values, { abortEarly: true })
         .then((validatedValues) => {
-          handleSave(validatedValues);
+          // Record before saving: the save updates the store (re-running the effect below) before it resolves.
+          const previous = lastSavedValues.current;
+          lastSavedValues.current = values;
+          return handleSave(validatedValues).then((saved) => {
+            if (!saved) {
+              lastSavedValues.current = previous;
+            }
+          });
         })
         .catch((error) => {
         });
@@ -147,251 +142,171 @@ const General = ({
   );
 
   useEffect(() => {
-    if (formik.dirty && formik.isValid) {
+    if (formik.isValid && !isEqual(formik.values, lastSavedValues.current)) {
       debouncedSave(formik.values);
     }
     return () => {
       debouncedSave.cancel();
     };
-  }, [formik.values, formik.dirty, formik.isValid, debouncedSave]);
+  }, [formik.values, formik.isValid, debouncedSave]);
 
-  const addCaCertificate = (e: any) => {
-    const filePath = window?.ipcRenderer?.getFilePath(e?.target?.files?.[0]);
-    if (filePath) {
-      formik.setFieldValue('customCaCertificate.filePath', filePath);
-    }
+  const addCaCertificate = () => {
+    (dispatch(browseFiles([], ['openFile'])) as unknown as Promise<string[]>)
+      .then((filePaths) => {
+        const filePath = filePaths?.[0];
+        if (filePath) {
+          formik.setFieldValue('customCaCertificate.filePath', filePath);
+        }
+      })
+      .catch((error: any) => console.error(error));
   };
 
   const deleteCaCertificate = () => {
     formik.setFieldValue('customCaCertificate.filePath', null);
   };
 
-  const browseDefaultLocation = () => {
-    (dispatch(browseDirectory()) as unknown as Promise<string>)
-      .then((dirPath: any) => {
-        if (typeof dirPath === 'string') {
-          formik.setFieldValue('defaultCollectionLocation', dirPath);
-        }
-      })
-      .catch((error: any) => {
-        formik.setFieldValue('defaultCollectionLocation', '');
-        console.error(error);
-      });
-  };
+  const caEnabled = formik.values.customCaCertificate.enabled;
+  const caFilePath = formik.values.customCaCertificate.filePath;
+  const canKeepDefaultCas = caEnabled && !!caFilePath;
+  const autoSaveError =
+    (typeof formik.errors.autoSave === 'string' && formik.errors.autoSave)
+    || (formik.errors.autoSave as any)?.interval;
 
   return (
     <StyledWrapper className="w-full">
       <form className="bruno-form" onSubmit={formik.handleSubmit}>
-        <div className="flex items-center my-2">
-          <input
+        <div className="settings-section">
+          <div className="section-title">Requests</div>
+          <SettingCheckbox
             id="sslVerification"
-            type="checkbox"
             name="sslVerification"
+            label="SSL/TLS Certificate Verification"
+            description="Verify server certificates when sending HTTPS requests."
             checked={formik.values.sslVerification}
             onChange={formik.handleChange}
-            className="mousetrap mr-0"
           />
-          <label className="block ml-2 select-none" htmlFor="sslVerification">
-            SSL/TLS Certificate Verification
-          </label>
-        </div>
-        <div className="flex items-center mt-2">
-          <input
-            id="customCaCertificateEnabled"
-            type="checkbox"
-            name="customCaCertificate.enabled"
-            checked={formik.values.customCaCertificate.enabled}
-            onChange={formik.handleChange}
-            className="mousetrap mr-0"
-          />
-          <label className="block ml-2 select-none" htmlFor="customCaCertificateEnabled">
-            Use Custom CA Certificate
-          </label>
-        </div>
-        {formik.values.customCaCertificate.filePath ? (
-          <div
-            className={`flex items-center mt-2 pl-6 ${formik.values.customCaCertificate.enabled ? '' : 'opacity-25'}`}
-          >
-            <span className="flex items-center border px-2 rounded-md">
-              {path.basename(formik.values.customCaCertificate.filePath)}
-              <button
-                type="button"
-                tabIndex={-1}
-                className="pl-1"
-                disabled={formik.values.customCaCertificate.enabled ? false : true}
-                onClick={deleteCaCertificate}
-              >
-                <IconTrash strokeWidth={1.5} size={14} />
-              </button>
-            </span>
-          </div>
-        ) : (
-          <div
-            className={`flex items-center mt-2 pl-6 ${formik.values.customCaCertificate.enabled ? '' : 'opacity-25'}`}
-          >
-            <button
-              type="button"
-              tabIndex={-1}
-              className="flex items-center border px-2 rounded-md"
-              disabled={formik.values.customCaCertificate.enabled ? false : true}
-              onClick={() => inputFileCaCertificateRef.current?.click()}
-            >
-              select file
+          <div className="setting">
+            <label className="setting-label" htmlFor="timeout">Request Timeout (ms)</label>
+            <div className="setting-description">Maximum time to wait for a response. Use 0 for no timeout.</div>
+            <div className="setting-control">
               <input
-                id="caCertFilePath"
-                type="file"
-                name="customCaCertificate.filePath"
-                className="hidden"
-                ref={inputFileCaCertificateRef}
-                disabled={formik.values.customCaCertificate.enabled ? false : true}
-                onChange={addCaCertificate}
+                id="timeout"
+                type="text"
+                name="timeout"
+                className={`form-input input-sm ${formik.errors.timeout ? 'error' : ''}`}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                value={formik.values.timeout}
               />
-            </button>
+            </div>
+            {formik.touched.timeout && formik.errors.timeout ? (
+              <div className="form-error">{formik.errors.timeout as string}</div>
+            ) : null}
           </div>
-        )}
-        <div className="flex items-center mt-2">
-          <input
-            id="keepDefaultCaCertificatesEnabled"
-            type="checkbox"
-            name="keepDefaultCaCertificates.enabled"
-            checked={formik.values.keepDefaultCaCertificates.enabled}
-            onChange={formik.handleChange}
-            className={`mousetrap mr-0 ${formik.values.customCaCertificate.enabled && formik.values.customCaCertificate.filePath ? '' : 'opacity-25'}`}
-            disabled={formik.values.customCaCertificate.enabled && formik.values.customCaCertificate.filePath ? false : true}
-          />
-          <label
-            className={`block ml-2 select-none ${formik.values.customCaCertificate.enabled && formik.values.customCaCertificate.filePath ? '' : 'opacity-25'}`}
-            htmlFor="keepDefaultCaCertificatesEnabled"
-          >
-            Keep Default CA Certificates
-          </label>
         </div>
-        <div className="flex items-center mt-2">
-          <input
+
+        <div className="settings-section">
+          <div className="section-title">Certificates</div>
+          <SettingCheckbox
+            id="customCaCertificateEnabled"
+            name="customCaCertificate.enabled"
+            label="Use Custom CA Certificate"
+            description="Trust an additional certificate authority, e.g. for internal or self-signed servers."
+            checked={caEnabled}
+            onChange={formik.handleChange}
+          />
+          <div className={`setting setting-nested ${caEnabled ? '' : 'disabled'}`}>
+            <div className="setting-control">
+              {caFilePath ? (
+                <span className="file-chip" title={caFilePath}>
+                  <span className="file-name">{path.basename(caFilePath)}</span>
+                  <button
+                    type="button"
+                    aria-label="Remove CA certificate"
+                    disabled={!caEnabled}
+                    onClick={deleteCaCertificate}
+                  >
+                    <IconTrash strokeWidth={1.5} size={14} />
+                  </button>
+                </span>
+              ) : (
+                <button type="button" className="btn-secondary" disabled={!caEnabled} onClick={addCaCertificate}>
+                  <IconFileCertificate size={16} strokeWidth={1.5} />
+                  Select Certificate File
+                </button>
+              )}
+            </div>
+          </div>
+          <SettingCheckbox
+            id="keepDefaultCaCertificatesEnabled"
+            name="keepDefaultCaCertificates.enabled"
+            label="Keep Default CA Certificates"
+            description="Continue trusting the system CA certificates alongside the custom one."
+            checked={formik.values.keepDefaultCaCertificates.enabled}
+            disabled={!canKeepDefaultCas}
+            onChange={formik.handleChange}
+          />
+        </div>
+
+        <div className="settings-section">
+          <div className="section-title">Cookies</div>
+          <SettingCheckbox
             id="storeCookies"
-            type="checkbox"
             name="storeCookies"
+            label="Store Cookies Automatically"
+            description="Save cookies received in responses."
             checked={formik.values.storeCookies}
             onChange={formik.handleChange}
-            className="mousetrap mr-0"
           />
-          <label className="block ml-2 select-none" htmlFor="storeCookies">
-            Store Cookies automatically
-          </label>
-        </div>
-        <div className="flex items-center mt-2">
-          <input
+          <SettingCheckbox
             id="sendCookies"
-            type="checkbox"
             name="sendCookies"
+            label="Send Cookies Automatically"
+            description="Attach stored cookies to matching requests."
             checked={formik.values.sendCookies}
             onChange={formik.handleChange}
-            className="mousetrap mr-0"
-          />
-          <label className="block ml-2 select-none" htmlFor="sendCookies">
-            Send Cookies automatically
-          </label>
-        </div>
-        <div className="flex items-center mt-2">
-          <input
-            id="oauth2.useSystemBrowser"
-            type="checkbox"
-            name="oauth2.useSystemBrowser"
-            checked={formik.values.oauth2.useSystemBrowser}
-            onChange={formik.handleChange}
-            className="mousetrap mr-0"
-          />
-          <label className="block ml-2 select-none" htmlFor="oauth2.useSystemBrowser">
-            Use System Browser for OAuth2 Authorization
-          </label>
-        </div>
-        <div className="flex flex-col mt-6">
-          <label className="block select-none" htmlFor="timeout">
-            Request Timeout (in ms)
-          </label>
-          <input
-            type="text"
-            name="timeout"
-            className="block textbox mt-2 w-16"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck="false"
-            onChange={formik.handleChange}
-            value={formik.values.timeout}
           />
         </div>
-        {formik.touched.timeout && formik.errors.timeout ? (
-          <div className="text-red-500">{formik.errors.timeout as string}</div>
-        ) : null}
-        <div className="flex items-center mt-6">
-          <input
+
+        <div className="settings-section">
+          <div className="section-title">Auto Save</div>
+          <SettingCheckbox
             id="autoSaveEnabled"
-            type="checkbox"
             name="autoSave.enabled"
+            label="Enable Auto Save"
+            description="Save request changes automatically after you stop editing."
             checked={formik.values.autoSave.enabled}
             onChange={formik.handleChange}
-            className="mousetrap mr-0"
           />
-          <label className="block ml-2 select-none" htmlFor="autoSaveEnabled">
-            Enable Auto Save
-          </label>
-        </div>
-        <div className={`flex flex-col mt-2 ${!formik.values.autoSave.enabled ? 'opacity-50' : ''}`}>
-          <label className="block select-none" htmlFor="autoSaveInterval">
-            Save Delay (in ms)
-          </label>
-          <input
-            type="text"
-            name="autoSave.interval"
-            id="autoSaveInterval"
-            className="block textbox mt-2 w-24"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck="false"
-            onChange={formik.handleChange}
-            value={formik.values.autoSave.interval}
-            disabled={!formik.values.autoSave.enabled}
-          />
-        </div>
-        {formik.touched.autoSave && formik.errors.autoSave && typeof formik.errors.autoSave === 'string' && (
-          <div className="text-red-500">{formik.errors.autoSave}</div>
-        )}
-        {formik.touched.autoSave?.interval && formik.errors.autoSave?.interval && (
-          <div className="text-red-500">{formik.errors.autoSave.interval as string}</div>
-        )}
-        <div className="flex flex-col mt-6">
-          <label className="block select-none default-collection-location-label" htmlFor="defaultCollectionLocation">
-            Default Collection Location
-          </label>
-          <input
-            type="text"
-            name="defaultCollectionLocation"
-            id="defaultCollectionLocation"
-            className="block textbox mt-2 w-full cursor-pointer default-collection-location-input"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck="false"
-            readOnly={true}
-            onChange={formik.handleChange}
-            value={formik.values.defaultCollectionLocation || ''}
-            onClick={browseDefaultLocation}
-            placeholder="Click to browse for default location"
-          />
-          <div className="mt-1">
-            <span
-              className="text-link cursor-pointer hover:underline default-collection-location-browse"
-              onClick={browseDefaultLocation}
-            >
-              Browse
-            </span>
+          <div className={`setting setting-nested ${formik.values.autoSave.enabled ? '' : 'disabled'}`}>
+            <label className="setting-label" htmlFor="autoSaveInterval">Save Delay (ms)</label>
+            <div className="setting-description">How long to wait after the last change before saving.</div>
+            <div className="setting-control">
+              <input
+                type="text"
+                name="autoSave.interval"
+                id="autoSaveInterval"
+                className={`form-input input-sm ${autoSaveError ? 'error' : ''}`}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                value={formik.values.autoSave.interval}
+                disabled={!formik.values.autoSave.enabled}
+              />
+            </div>
+            {formik.touched.autoSave && autoSaveError ? (
+              <div className="form-error">{autoSaveError as string}</div>
+            ) : null}
           </div>
         </div>
-        {formik.touched.defaultCollectionLocation && formik.errors.defaultCollectionLocation ? (
-          <div className="text-red-500">{formik.errors.defaultCollectionLocation as string}</div>
-        ) : null}
+
       </form>
     </StyledWrapper>
   );

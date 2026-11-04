@@ -5,10 +5,12 @@ import { saveFolderRoot } from 'providers/ReduxStore/slices/collections/actions'
 import MultiLineEditor from 'components/MultiLineEditor';
 import InfoTip from 'components/InfoTip';
 import EditableTable from 'components/EditableTable';
+import VarsDataTypeSelector from 'components/DataTypeSelector/VarsDataTypeSelector';
 import StyledWrapper from './StyledWrapper';
 import toast from 'react-hot-toast';
 import { variableNameRegex } from 'utils/common/regex';
 import { setFolderVars } from 'providers/ReduxStore/slices/collections/index';
+import { valueToString } from '@usebruno/common/utils';
 
 interface VarsTableProps {
   folder: React.ReactNode;
@@ -70,15 +72,20 @@ const VarsTable = ({
         onChange,
         isLastEmptyRow
       }: any) => (
-        <MultiLineEditor
-          value={value || ''}
-          theme={storedTheme}
-          onSave={onSave}
-          onChange={onChange}
-          collection={collection}
-          item={folder}
-          placeholder={isLastEmptyRow ? (varType === 'request' ? 'Value' : 'Expr') : ''}
-        />
+        <div className="flex items-center w-full gap-2">
+          <div className="flex-1 min-w-0">
+            <MultiLineEditor
+              value={valueToString(value)}
+              theme={storedTheme}
+              onSave={onSave}
+              onChange={onChange}
+              collection={collection}
+              item={folder}
+              placeholder={isLastEmptyRow ? (varType === 'request' ? 'Value' : 'Expr') : ''}
+            />
+          </div>
+          <VarsDataTypeSelector row={row} vars={vars} isLastEmptyRow={isLastEmptyRow} varType={varType} onVarsChange={handleVarsChange} />
+        </div>
       )
     }
   ];
@@ -92,6 +99,7 @@ const VarsTable = ({
   return (
     <StyledWrapper className="w-full">
       <EditableTable
+        testId={`folder-vars-${varType === 'request' ? 'req' : 'res'}`}
         columns={columns}
         rows={vars}
         onChange={handleVarsChange}

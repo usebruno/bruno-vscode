@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package echo;
+
+// Minimal echo service used by the e2e gRPC prompt-variable test.
+// The unary Echo method returns whatever `message` it receives, so a test can
+// assert that a `{{?prompt}}` in the request message was interpolated before send.
+service EchoService {
+  rpc Echo (EchoRequest) returns (EchoReply);
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoReply {
+  string message = 1;
+}

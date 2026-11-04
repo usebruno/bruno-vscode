@@ -11,15 +11,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { WebviewHelper } from '../webview/helper';
 import { showSaveRequestPicker } from '../utils/folder-picker';
+import { posixifyPath } from '../utils/filesystem';
+import { parseRequest } from '../utils/parse';
+import { hydrateRequestWithUuid } from '../utils/collection';
 import { stateManager } from '../webview/state-manager';
 import {
+  broadcastToAllWebviews,
   setCurrentWebview,
   clearCurrentWebview,
   handleInvoke,
   hasHandler
 } from '../ipc/handlers';
-import { openCollection, loadCollectionMetadata, setMessageSender as setCollectionsMessageSender } from '../app/collections';
-import { setMessageSender as setWatcherMessageSender } from '../app/collection-watcher';
+import { loadCollectionMetadata } from '../app/collections';
+import { notifyActiveItemToSidebar, clearActiveItemFromSidebar } from '../ipc/collection';
 import collectionWatcher from '../app/collection-watcher';
 import { AppItem } from '@bruno-types';
 
@@ -78,19 +82,25 @@ export async function openTransientRequestPanel(
   stateManager.addWebview(panel.webview);
   stateManager.setActiveEditorWebview(panel.webview);
 
+  notifyActiveItemToSidebar(itemUid);
   panel.onDidChangeViewState((e) => {
     if (e.webviewPanel.active) {
       stateManager.setActiveEditorWebview(panel.webview);
+      notifyActiveItemToSidebar(itemUid);
+    } else {
+      clearActiveItemFromSidebar(itemUid);
     }
   });
 
   panel.onDidDispose(() => {
+    stateManager.broadcast('main:transient-request-closed', { collectionUid, itemUid });
+
+    clearActiveItemFromSidebar(itemUid);
     if (savedPanels.has(itemUid)) {
       savedPanels.delete(itemUid);
       stateManager.removeWebview(panel.webview);
       transientPanels.delete(itemUid);
       transientItems.delete(itemUid);
-      stateManager.broadcast('main:transient-request-closed', { collectionUid, itemUid });
       return;
     }
 
@@ -100,7 +110,6 @@ export async function openTransientRequestPanel(
       stateManager.removeWebview(panel.webview);
       transientPanels.delete(itemUid);
       transientItems.delete(itemUid);
-      stateManager.broadcast('main:transient-request-closed', { collectionUid, itemUid });
     }, GRACE_MS);
 
     vscode.window.showInformationMessage(
@@ -124,28 +133,26 @@ export async function openTransientRequestPanel(
     stateManager.sendTo(panel.webview, channel, ...args);
   };
 
-  const originalBroadcastSender = (channel: string, ...args: unknown[]) => {
-    stateManager.broadcast(channel, ...args);
-  };
-
   let collectionLoaded = false;
 
   // Render the transient request as soon as the webview is ready. We send the
   // collection metadata + the transient item + the view type in a single
   // burst so the UI shows the request immediately. The full collection tree
-  // (environments, siblings, watchers) is populated in the background via
-  // openCollection so scripts/vars eventually resolve, but the user does not
-  // wait for a full scan to see the request pane.
+  // (environments, siblings, watchers) is populated in the background so
+  // scripts/vars eventually resolve, but the user does not wait for a full
+  // scan to see the request pane.
   const loadCollection = async () => {
     if (collectionLoaded) return;
     collectionLoaded = true;
 
     // 1) Seed collection metadata and the transient item in Redux immediately.
-    await loadCollectionMetadata(collectionPath, webviewSender);
+    const loadedUid = await loadCollectionMetadata(collectionPath, webviewSender);
+    const uid = loadedUid || collectionUid;
 
     const item = transientItems.get(itemUid);
     if (item) {
-      stateManager.sendTo(panel.webview, 'main:add-transient-request', {
+      // Broadcast so the sidebar store also tracks the transient request.
+      stateManager.broadcast('main:add-transient-request', {
         collectionUid,
         item
       });
@@ -160,16 +167,17 @@ export async function openTransientRequestPanel(
       });
     }
 
-    // 3) Kick off the full collection load in the background for env/tree.
-    setCollectionsMessageSender(webviewSender);
-    setWatcherMessageSender(webviewSender);
+    // 3) Stream the whole collection into THIS webview's store.
     try {
-      await openCollection(collectionWatcher, collectionPath);
+      // Register watcher if not already present.
+      const nativePath = path.normalize(collectionPath);
+      const posixPath = posixifyPath(collectionPath);
+      if (!collectionWatcher.hasWatcher(nativePath) && !collectionWatcher.hasWatcher(posixPath)) {
+        collectionWatcher.setupWatchersOnly(nativePath, uid);
+      }
+      await collectionWatcher.loadFullCollection(collectionPath, uid, webviewSender);
     } catch (error) {
-      console.error('TransientRequestPanel: Error opening collection:', error);
-    } finally {
-      setCollectionsMessageSender(originalBroadcastSender);
-      setWatcherMessageSender(originalBroadcastSender);
+      console.error('TransientRequestPanel: Error loading collection:', error);
     }
   };
 
@@ -243,7 +251,7 @@ export async function openTransientRequestPanel(
         }
         // Handle save transient request — args[0] is the serialized item data
         if (channel === 'transient:save-request' && args?.[0]) {
-          await saveTransientRequest(panel, itemUid, collectionPath, args[0] as Record<string, unknown>);
+          await saveTransientRequest(panel, itemUid, collectionUid, collectionPath, args[0] as Record<string, unknown>);
         }
         if (channel === 'transient:item-updated' && args?.[0]) {
           const { itemUid: updatedUid, item } = args[0] as { itemUid: string; item: Record<string, unknown> };
@@ -266,7 +274,6 @@ export async function openTransientRequestPanel(
       }
     }
   });
-  
 }
 
 export function closeTransientPanel(itemUid: string): void {
@@ -285,6 +292,7 @@ export function closeTransientPanel(itemUid: string): void {
 async function saveTransientRequest(
   panel: vscode.WebviewPanel,
   itemUid: string,
+  collectionUid: string,
   collectionPath: string,
   itemData: Record<string, unknown>
 ): Promise<void> {
@@ -315,16 +323,31 @@ async function saveTransientRequest(
   }
 
   try {
-    // Write the file using the stringify worker (same as renderer:new-request)
     const { stringifyRequestViaWorker } = require('@usebruno/filestore');
     const content = await stringifyRequestViaWorker({ ...itemData, name, filename }, { format });
     fs.writeFileSync(fullPath, content, 'utf-8');
 
-    savedPanels.add(itemUid);
-    panel.dispose();
+    const requestData = await parseRequest(content, { format });
+    hydrateRequestWithUuid(requestData, fullPath);
+    broadcastToAllWebviews('main:collection-tree-updated', 'addFile', {
+      meta: {
+        collectionUid,
+        pathname: posixifyPath(fullPath),
+        name: filename
+      },
+      data: requestData
+    });
 
-    // Open the saved file in the regular editor
-    await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(fullPath), 'bruno.requestEditor');
+    savedPanels.add(itemUid);
+
+    const targetViewColumn = panel.viewColumn ?? vscode.ViewColumn.Active;
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      vscode.Uri.file(fullPath),
+      'bruno.requestEditor',
+      { viewColumn: targetViewColumn, preview: false }
+    );
+    panel.dispose();
 
     vscode.window.showInformationMessage(`Request saved as "${name}"`);
   } catch (err: any) {

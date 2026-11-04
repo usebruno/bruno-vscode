@@ -283,7 +283,12 @@ const GlobalStyle = createGlobalStyle`
   }
 
   // Autocomplete hints dropdown container
-  .CodeMirror-hints {
+  ul.CodeMirror-hints {
+    position: absolute;
+    overflow-y: auto;
+    max-height: 20em;
+    margin: 0;
+    list-style: none;
     z-index: 50 !important;
     background: ${(props) => props.theme.dropdown.bg};
     ${(props) =>
@@ -298,14 +303,24 @@ const GlobalStyle = createGlobalStyle`
     padding: 0.25rem;
     font-size: ${(props) => props.theme.font.size.sm};
     font-family: inherit;
+    color: ${(props) => props.theme.dropdown.color};
   }
 
-  .CodeMirror-hint {
+  // graphiql colours this sidebar from a palette globals.css pins to black in every theme.
+  ul.CodeMirror-hints .CodeMirror-hint-information,
+  ul.CodeMirror-hints .CodeMirror-hint-information * {
+    color: ${(props) => props.theme.dropdown.color};
+  }
+
+  li.CodeMirror-hint {
     color: ${(props) => props.theme.dropdown.color};
     border-radius: ${(props) => props.theme.border.radius.base};
     line-height: 1.5rem;
     font-size: ${(props) => props.theme.font.size.sm};
     cursor: pointer;
+    margin: 0;
+    padding: 0 0.5rem;
+    white-space: nowrap;
   }
 
   .CodeMirror-brunoVarInfo :first-child {
@@ -368,6 +383,7 @@ const GlobalStyle = createGlobalStyle`
     font-family: Inter, sans-serif;
     font-weight: 400;
     word-break: break-word;
+    white-space: pre-wrap;
     line-height: 1.25rem;
     color: ${(props) => props.theme.dropdown.color};
     min-height: 1.75rem;

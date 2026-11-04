@@ -3,7 +3,7 @@ import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
 
-interface MultipartField {
+export interface MultipartField {
   name: string;
   type?: 'text' | 'file' | string;
   value: string | string[] | Buffer;

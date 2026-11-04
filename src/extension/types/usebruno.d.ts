@@ -56,10 +56,10 @@ declare module '@usebruno/common' {
 
 declare module '@usebruno/js' {
   export interface ScriptResult {
-    envVariables?: Record<string, unknown>;
-    runtimeVariables?: Record<string, unknown>;
-    persistentEnvVariables?: Record<string, unknown>;
-    globalEnvironmentVariables?: Record<string, unknown>;
+    envVariables?: Record<string, unknown> | null;
+    runtimeVariables?: Record<string, unknown> | null;
+    collectionVariables?: Record<string, unknown> | null;
+    globalEnvironmentVariables?: Record<string, unknown> | null;
     nextRequestName?: string;
     skipRequest?: boolean;
     error?: string;
@@ -74,13 +74,17 @@ declare module '@usebruno/js' {
       passed: boolean;
       error?: string;
     }>;
+    envVariables?: Record<string, unknown> | null;
+    runtimeVariables?: Record<string, unknown> | null;
+    collectionVariables?: Record<string, unknown> | null;
+    globalEnvironmentVariables?: Record<string, unknown> | null;
   }
 
   export interface VarsResult {
-    envVariables?: Record<string, unknown>;
-    runtimeVariables?: Record<string, unknown>;
-    persistentEnvVariables?: Record<string, unknown>;
-    globalEnvironmentVariables?: Record<string, unknown>;
+    envVariables?: Record<string, unknown> | null;
+    runtimeVariables?: Record<string, unknown> | null;
+    collectionVariables?: Record<string, unknown> | null;
+    globalEnvironmentVariables?: Record<string, unknown> | null;
     error?: string;
   }
 
@@ -175,6 +179,14 @@ declare module '@usebruno/js' {
       status: 'pass' | 'fail';
     }>;
   }
+
+  // Inline imports: a top-level one would make this a module and reinterpret every `declare module`.
+  export function formatErrorWithContextV2(
+    error: unknown,
+    scriptType: 'pre-request' | 'post-response' | 'test',
+    scriptMetadata?: import('@bruno-types').ScriptMetadata | null,
+    collectionPath?: string
+  ): import('@bruno-types').ScriptErrorContext | null;
 }
 
 declare module 'is-valid-path' {

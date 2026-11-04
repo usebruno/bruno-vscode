@@ -111,6 +111,10 @@ const Oauth2ActionButtons = ({
       const err = error as { message?: string };
       console.error(error);
       toggleRefreshingToken(false);
+      // Don't show error toast for user cancellation
+      if (err?.message && err.message.includes('cancelled by user')) {
+        return;
+      }
       toast.error(err?.message || 'An error occurred while refreshing token!');
     }
   };

@@ -1,0 +1,90 @@
+{
+  "name": "Transient Inheritance",
+  "version": "1",
+  "items": [
+    {
+      "type": "http",
+      "name": "Saved Request",
+      "filename": "saved-request.bru",
+      "seq": 1,
+      "settings": { "encodeUrl": true },
+      "tags": [],
+      "request": {
+        "url": "http://127.0.0.1:8081/ping",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": { "mode": "none", "formUrlEncoded": [], "multipartForm": [], "file": [] },
+        "script": {},
+        "vars": {},
+        "assertions": [],
+        "tests": "",
+        "docs": "",
+        "auth": { "mode": "inherit" }
+      }
+    }
+  ],
+  "environments": [
+    {
+      "name": "Local",
+      "variables": [
+        {
+          "name": "envHost",
+          "value": "local-env-value",
+          "type": "text",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "name": "Staging",
+      "variables": [
+        {
+          "name": "envHost",
+          "value": "staging-env-value",
+          "type": "text",
+          "enabled": true,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "root": {
+    "meta": { "name": "Transient Inheritance" },
+    "request": {
+      "headers": [
+        {
+          "uid": "collectionHeader1xxxx",
+          "name": "x-prompt-header",
+          "value": "from-collection-root",
+          "enabled": true
+        }
+      ],
+      "auth": { "mode": "bearer", "bearer": { "token": "collection-root-token" } },
+      "vars": {
+        "req": [
+          {
+            "uid": "collectionVar1xxxxxxx",
+            "name": "collectionVar",
+            "value": "from-collection-vars",
+            "enabled": true
+          }
+        ],
+        "res": []
+      },
+      "script": { "req": "", "res": "" },
+      "tests": ""
+    }
+  },
+  "brunoConfig": {
+    "version": "1",
+    "name": "Transient Inheritance",
+    "type": "collection",
+    "ignore": ["node_modules", ".git"],
+    "presets": {
+      "requestType": "http",
+      "requestUrl": "http://127.0.0.1:8081/api/echo/query?collVar={{collectionVar}}&envVar={{envHost}}"
+    }
+  }
+}

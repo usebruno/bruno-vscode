@@ -5,3 +5,4 @@ export { openCreateCollectionPanel, closeCreateCollectionPanel } from './create-
 export { openNewRequestPanel, closeNewRequestPanel } from './new-request-panel';
 export { openExportCollectionPanel, closeExportCollectionPanel } from './export-collection-panel';
 export { openCloneCollectionPanel, closeCloneCollectionPanel } from './clone-collection-panel';
+export { openPreferencesPanel, getActivePreferencesPanel } from './preferences-panel';

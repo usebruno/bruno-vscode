@@ -65,6 +65,7 @@ const WSAuthMode = ({
     <StyledWrapper>
       <div className="inline-flex items-center cursor-pointer auth-mode-selector">
         <MenuDropdown
+          data-testid="ws-auth-mode"
           items={menuItems}
           placement="bottom-end"
           selectedItemId={authMode}

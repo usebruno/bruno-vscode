@@ -47,6 +47,35 @@ export const window = {
   })
 };
 
+export class Position {
+  constructor(public readonly line: number, public readonly character: number) {}
+}
+
+export class Range {
+  constructor(public readonly start: Position, public readonly end: Position) {}
+}
+
+export const TextEdit = {
+  delete: (range: Range) => ({ range, newText: '' }),
+  replace: (range: Range, newText: string) => ({ range, newText })
+};
+
+export class WorkspaceEdit {
+  public readonly edits: { uri: unknown; range: Range; newText: string }[] = [];
+
+  delete(uri: unknown, range: Range): void {
+    this.edits.push({ uri, range, newText: '' });
+  }
+
+  insert(uri: unknown, position: Position, newText: string): void {
+    this.edits.push({ uri, range: new Range(position, position), newText });
+  }
+
+  replace(uri: unknown, range: Range, newText: string): void {
+    this.edits.push({ uri, range, newText });
+  }
+}
+
 export const workspace = {
   getConfiguration: vi.fn().mockReturnValue({
     get: vi.fn(),
@@ -54,7 +83,12 @@ export const workspace = {
     has: vi.fn().mockReturnValue(false),
     inspect: vi.fn()
   }),
-  workspaceFolders: [] as any[]
+  workspaceFolders: [] as any[],
+  applyEdit: vi.fn().mockResolvedValue(true),
+  openTextDocument: vi.fn(),
+  onDidChangeTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  onDidCloseTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  onWillSaveTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() })
 };
 
 export const commands = {
@@ -76,5 +110,9 @@ export default {
   window,
   workspace,
   commands,
-  ConfigurationTarget
+  ConfigurationTarget,
+  Position,
+  Range,
+  TextEdit,
+  WorkspaceEdit
 };

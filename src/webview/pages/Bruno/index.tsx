@@ -3,13 +3,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import find from 'lodash/find';
 import { findItemInCollection, findCollectionByUid, getDefaultRequestPaneTab } from 'utils/collections';
 import { hasPlatformSupport } from 'utils/common/platform';
+import { PREVIEW_SAVE_HOTKEY_MESSAGE, PREVIEW_SAVE_MIN_INTERVAL_MS } from 'utils/common/constants';
 import StyledWrapper from './StyledWrapper';
 import useGrpcEventListeners from 'utils/network/grpc-event-listeners';
 import useWsEventListeners from 'utils/network/ws-event-listeners';
 
 import { ViewContainer, ViewData } from 'views';
 
-import { addTab } from 'providers/ReduxStore/slices/tabs';
+import { addTab, updateScriptPaneTab, setFocusErrorLine } from 'providers/ReduxStore/slices/tabs';
+import { updateSettingsSelectedTab, updatedFolderSettingsSelectedTab } from 'providers/ReduxStore/slices/collections';
 import {
   saveRequest,
   saveFolderRoot,
@@ -17,6 +19,7 @@ import {
 } from 'providers/ReduxStore/slices/collections/actions';
 
 export default function Main(): React.ReactElement {
+  const lastPreviewSaveRef = useRef(0);
   const mainSectionRef = useRef<HTMLDivElement>(null);
   const dispatch = useDispatch();
   const collections = useSelector((state: any) => state.collections.collections);
@@ -65,8 +68,9 @@ export default function Main(): React.ReactElement {
       }));
     } else if (viewData.viewType === 'collection-settings' && viewData.collectionUid) {
       // Collection settings uses a unique ID to allow opening alongside runner
+      const tabUid = `settings-${viewData.collectionUid}`;
       dispatch(addTab({
-        uid: `settings-${viewData.collectionUid}`,
+        uid: tabUid,
         collectionUid: viewData.collectionUid,
         type: 'collection-settings',
         preview: false
@@ -101,6 +105,36 @@ export default function Main(): React.ReactElement {
       }));
     }
   }, [viewData, dispatch, collections]);
+
+  useEffect(() => {
+    const focus = viewData.focusScriptError;
+    if (!focus) return;
+
+    const { scriptPhase, line } = focus;
+    const focusTab = (uid: string) => {
+      if (scriptPhase !== 'test') {
+        dispatch(updateScriptPaneTab({ uid, scriptPaneTab: scriptPhase }));
+      }
+      if (typeof line === 'number') {
+        dispatch(setFocusErrorLine({ uid, scriptPhase, line, requestedAt: Date.now() }));
+      }
+    };
+
+    if (viewData.viewType === 'collection-settings' && viewData.collectionUid) {
+      dispatch(updateSettingsSelectedTab({
+        collectionUid: viewData.collectionUid,
+        tab: scriptPhase === 'test' ? 'tests' : 'script'
+      }));
+      focusTab(`settings-${viewData.collectionUid}`);
+    } else if (viewData.viewType === 'folder-settings' && viewData.folderUid) {
+      dispatch(updatedFolderSettingsSelectedTab({
+        collectionUid: viewData.collectionUid,
+        folderUid: viewData.folderUid,
+        tab: scriptPhase === 'test' ? 'test' : 'script'
+      }));
+      focusTab(viewData.folderUid);
+    }
+  }, [viewData, dispatch]);
 
   useEffect(() => {
     if (mainSectionRef.current) {
@@ -141,13 +175,13 @@ export default function Main(): React.ReactElement {
   useEffect(() => {
     if (!hasPlatformSupport()) return;
 
-    const { ipcRenderer } = window;
-    const removeTriggerSaveListener = ipcRenderer.on('main:trigger-save', () => {
+    const saveActiveTab = () => {
       const activeTab = find(tabs, (t: any) => t.uid === activeTabUid);
       if (!activeTab) return;
 
       if (activeTab.type === 'environment-settings' || activeTab.type === 'global-environment-settings') {
-        window.dispatchEvent(new CustomEvent('environment-save'));
+        const draftUid = findCollectionByUid(collections, activeTab.collectionUid)?.environmentsDraft?.environmentUid;
+        window.dispatchEvent(new CustomEvent(draftUid?.startsWith('dotenv:') ? 'dotenv-save' : 'environment-save'));
         return;
       }
 
@@ -164,10 +198,30 @@ export default function Main(): React.ReactElement {
           dispatch(saveCollectionSettings(collection.uid));
         }
       }
-    });
+    };
+
+    const { ipcRenderer } = window;
+    const removeTriggerSaveListener = ipcRenderer.on('main:trigger-save', saveActiveTab);
+
+    const onPreviewHotkey = (event: MessageEvent) => {
+      const { type, action } = event.data || {};
+      if (type !== PREVIEW_SAVE_HOTKEY_MESSAGE.type || action !== PREVIEW_SAVE_HOTKEY_MESSAGE.action) return;
+
+      const previewFrames = document.querySelectorAll<HTMLIFrameElement>('iframe[data-html-preview]');
+      if (![...previewFrames].some((frame) => frame.contentWindow === event.source)) return;
+
+      // The previewed page is remote and can post this itself, so a run of them is collapsed.
+      const now = Date.now();
+      if (now - lastPreviewSaveRef.current < PREVIEW_SAVE_MIN_INTERVAL_MS) return;
+      lastPreviewSaveRef.current = now;
+
+      saveActiveTab();
+    };
+    window.addEventListener('message', onPreviewHotkey);
 
     return () => {
       removeTriggerSaveListener();
+      window.removeEventListener('message', onPreviewHotkey);
     };
   }, [tabs, activeTabUid, collections, dispatch]);
 

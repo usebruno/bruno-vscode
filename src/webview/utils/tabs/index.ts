@@ -11,6 +11,11 @@ export const isItemAFolder = (item: AppItem): boolean => {
   return !('request' in item) && item.type === 'folder';
 };
 
+export const isItemAnApp = (item: AppItem): boolean => {
+  if (!item) return false;
+  return item.type === 'app';
+};
+
 export const itemIsOpenedInTabs = (item: AppItem, tabs: Tab[]): Tab | undefined => {
   return find(tabs, (t) => t.uid === item.uid);
 };

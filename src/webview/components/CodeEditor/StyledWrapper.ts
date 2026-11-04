@@ -161,6 +161,32 @@ const StyledWrapper = styled.div<{
     background: ${(props) => props.theme.codemirror.searchLineHighlightCurrent};
   }
 
+  @keyframes cm-error-line-flash {
+    0%, 60% {
+      background-color: ${(props) => rgba(props.theme.colors.text.danger, 0.2)};
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  .CodeMirror .cm-error-line-flash {
+    background-color: transparent;
+    animation: cm-error-line-flash 3s ease-in-out;
+  }
+
+  .CodeMirror .cm-error-line-flash-gutter .CodeMirror-linenumber {
+    color: ${(props) => props.theme.colors.text.danger} !important;
+    font-weight: 600;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .CodeMirror .cm-error-line-flash {
+      animation: none;
+      background-color: ${(props) => rgba(props.theme.colors.text.danger, 0.2)};
+    }
+  }
+
   .cm-search-match {
     background: rgba(255, 193, 7, 0.25);
   }

@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import get from 'lodash/get';
+import find from 'lodash/find';
 import { useDispatch, useSelector } from 'react-redux';
 import CodeEditor from 'components/CodeEditor';
 import { updateFolderRequestScript, updateFolderResponseScript } from 'providers/ReduxStore/slices/collections';
 import { saveFolderRoot } from 'providers/ReduxStore/slices/collections/actions';
+import { updateScriptPaneTab } from 'providers/ReduxStore/slices/tabs';
+import useFocusErrorLine from 'hooks/useFocusErrorLine';
 import { useTheme } from 'providers/Theme';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from 'components/Tabs';
 import StyledWrapper from './StyledWrapper';
@@ -20,11 +23,14 @@ const Script = ({
   folder
 }: any) => {
   const dispatch = useDispatch();
-  const [activeTab, setActiveTab] = useState('pre-request');
   const preRequestEditorRef = useRef(null);
   const postResponseEditorRef = useRef(null);
   const requestScript = folder.draft ? get(folder, 'draft.root.request.script.req', '') : get(folder, 'root.request.script.req', '');
   const responseScript = folder.draft ? get(folder, 'draft.root.request.script.res', '') : get(folder, 'root.request.script.res', '');
+
+  const scriptPaneTab = useSelector((state: any) => find(state.tabs.tabs, (t: any) => t.uid === folder.uid)?.scriptPaneTab);
+  const activeTab = scriptPaneTab || 'pre-request';
+  const setActiveTab = (tab: string) => dispatch(updateScriptPaneTab({ uid: folder.uid, scriptPaneTab: tab }));
 
   const { displayedTheme } = useTheme();
   const preferences = useSelector((state: any) => state.app.preferences);
@@ -41,6 +47,20 @@ const Script = ({
 
     return () => clearTimeout(timer);
   }, [activeTab]);
+
+  useFocusErrorLine({
+    uid: folder.uid,
+    editorRef: preRequestEditorRef,
+    scriptPhase: 'pre-request',
+    isVisible: activeTab === 'pre-request'
+  });
+
+  useFocusErrorLine({
+    uid: folder.uid,
+    editorRef: postResponseEditorRef,
+    scriptPhase: 'post-response',
+    isVisible: activeTab === 'post-response'
+  });
 
   const onRequestScriptEdit = (value: any) => {
     dispatch(
@@ -78,7 +98,7 @@ const Script = ({
           <TabsTrigger value="post-response">Post Response</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pre-request" className="mt-2">
+        <TabsContent value="pre-request" className="mt-2" dataTestId="folder-pre-request-script-editor">
           <CodeEditor
             ref={preRequestEditorRef}
             collection={collection}
@@ -93,7 +113,7 @@ const Script = ({
           />
         </TabsContent>
 
-        <TabsContent value="post-response" className="mt-2">
+        <TabsContent value="post-response" className="mt-2" dataTestId="folder-post-response-script-editor">
           <CodeEditor
             ref={postResponseEditorRef}
             collection={collection}

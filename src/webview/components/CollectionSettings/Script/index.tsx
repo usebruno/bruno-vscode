@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import get from 'lodash/get';
+import find from 'lodash/find';
 import { useDispatch, useSelector } from 'react-redux';
 import CodeEditor from 'components/CodeEditor';
 import { updateCollectionRequestScript, updateCollectionResponseScript } from 'providers/ReduxStore/slices/collections';
 import { saveCollectionSettings } from 'providers/ReduxStore/slices/collections/actions';
+import { updateScriptPaneTab } from 'providers/ReduxStore/slices/tabs';
+import useFocusErrorLine from 'hooks/useFocusErrorLine';
 import { useTheme } from 'providers/Theme';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from 'components/Tabs';
 import StyledWrapper from './StyledWrapper';
@@ -18,11 +21,15 @@ const Script = ({
   collection
 }: any) => {
   const dispatch = useDispatch();
-  const [activeTab, setActiveTab] = useState('pre-request');
   const preRequestEditorRef = useRef(null);
   const postResponseEditorRef = useRef(null);
   const requestScript = collection.draft?.root ? get(collection, 'draft.root.request.script.req', '') : get(collection, 'root.request.script.req', '');
   const responseScript = collection.draft?.root ? get(collection, 'draft.root.request.script.res', '') : get(collection, 'root.request.script.res', '');
+
+  const tabUid = `settings-${collection.uid}`;
+  const scriptPaneTab = useSelector((state: any) => find(state.tabs.tabs, (t: any) => t.uid === tabUid)?.scriptPaneTab);
+  const activeTab = scriptPaneTab || 'pre-request';
+  const setActiveTab = (tab: string) => dispatch(updateScriptPaneTab({ uid: tabUid, scriptPaneTab: tab }));
 
   const { displayedTheme } = useTheme();
   const preferences = useSelector((state: any) => state.app.preferences);
@@ -39,6 +46,20 @@ const Script = ({
 
     return () => clearTimeout(timer);
   }, [activeTab]);
+
+  useFocusErrorLine({
+    uid: tabUid,
+    editorRef: preRequestEditorRef,
+    scriptPhase: 'pre-request',
+    isVisible: activeTab === 'pre-request'
+  });
+
+  useFocusErrorLine({
+    uid: tabUid,
+    editorRef: postResponseEditorRef,
+    scriptPhase: 'post-response',
+    isVisible: activeTab === 'post-response'
+  });
 
   const onRequestScriptEdit = (value: any) => {
     dispatch(
@@ -106,7 +127,7 @@ const Script = ({
       </Tabs>
 
       <div className="mt-12">
-        <Button type="submit" size="sm" onClick={handleSave}>
+        <Button type="submit" size="sm" onClick={handleSave} data-testid="collection-settings-script-save">
           Save
         </Button>
       </div>

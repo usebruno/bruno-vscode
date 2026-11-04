@@ -1,35 +1,52 @@
 
 import { AxiosResponse, AxiosError } from 'axios';
-import { registerHandler, sendToWebview } from '../handlers';
+import decomment from 'decomment';
+import { registerHandler, sendToWebview, broadcastToAllWebviews } from '../handlers';
 import { prepareRequest, BrunoRequest as PrepareRequestType } from './prepare-request';
 import { interpolateVars } from './interpolate-vars';
-import { createAxiosInstance, AxiosInstanceOptions } from './axios-instance';
+import { createAxiosInstance, axiosOptionsFromCertsAndProxyConfig, AxiosInstanceOptions } from './axios-instance';
+import { resolveAwsV4Credentials, addAwsV4Interceptor, AwsV4Config } from './awsv4auth-helper';
 import { saveCancelToken, deleteCancelToken, cancelTokens } from '../../utils/cancel-token';
 import { cookiesStore } from '../../store/cookies';
 import { getCookieStringForUrl, saveCookies } from '../../utils/cookies';
 import { createFormData, formatMultipartData } from '../../utils/form-data';
-import { getPreferences } from '../../store/preferences';
+import { readFileBody, getSelectedFileBodyEntry, DEFAULT_FILE_BODY_CONTENT_TYPE } from '../../utils/file-body';
+import { safeStringifyJSON } from '../../utils/common';
+import { getPreferences, preferencesUtil } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
+import { getRuntimeVariables, setRuntimeVariables } from '../../store/runtime-variables';
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, hydrateRequestWithUuid, Item } from '../../utils/collection';
 import { getCollectionFormat } from '../../utils/filesystem';
 import fs from 'fs';
 import path from 'path';
-const { parseRequest: parseRequestFromFilestore } = require('@usebruno/filestore');
+import { parseRequest } from '../../utils/parse';
 import { registerOAuth2Handlers, applyOAuth2ToRequest } from './oauth2-handlers';
 import { runPreRequestScript, runPostResponseVars, runPostResponseScript, runTests, runAssertions } from '../../utils/script-runner';
+import type { ScriptErrorContext, ScriptMetadata } from '@bruno-types';
 import { v4 as uuidv4 } from 'uuid';
 import { cloneDeep, get, filter, forOwn } from 'lodash';
 import { Readable } from 'stream';
 import { registerWsEventHandlers } from './ws-event-handlers';
 import { registerGrpcEventHandlers } from './grpc-event-handlers';
 import { utils as brunoUtilsRaw } from '@usebruno/common';
+import type { NetworkLogEntry, RequestSent, ResponseTimeline } from '@bruno-types';
 import qs from 'qs';
 
 // Type assertion for @usebruno/common utils (no type definitions available)
 const brunoUtils = brunoUtilsRaw as {
   buildFormUrlEncodedPayload: (fields: Array<{ name: string; value: string; enabled?: boolean }>) => string;
   encodeUrl: (url: string) => string;
+};
+
+const broadcastRuntimeVariables = (
+  collectionUid: string,
+  runtimeVariables: Record<string, unknown>
+): void => {
+  broadcastToAllWebviews('main:runtime-variables-update', {
+    collectionUid,
+    runtimeVariables
+  });
 };
 
 const getJsSandboxRuntime = (collection: Record<string, unknown>): string => {
@@ -95,6 +112,8 @@ const parseDataFromResponse = (rawBuffer: Buffer, contentType: string): { data: 
 
 interface BrunoRequest {
   uid?: string;
+  /** The sandbox names the compiled script after this, so stack frames resolve. */
+  pathname?: string;
   url: string;
   method: string;
   headers?: Array<{ name: string; value: string; enabled?: boolean }> | Record<string, string>;
@@ -107,6 +126,7 @@ interface BrunoRequest {
     xml?: string;
     formUrlEncoded?: Array<{ name: string; value: string; enabled?: boolean }>;
     multipartForm?: Array<{ name: string; value: string; type?: string; enabled?: boolean; contentType?: string }>;
+    file?: Array<{ filePath?: string | null; contentType?: string | null; selected?: boolean }>;
     graphql?: {
       query?: string;
       variables?: string;
@@ -120,6 +140,7 @@ interface BrunoRequest {
     basic?: { username?: string; password?: string };
     bearer?: { token?: string };
     digest?: { username?: string; password?: string };
+    ntlm?: { username: string; password: string; domain?: string };
     apikey?: { key?: string; value?: string; placement?: string };
     oauth2?: Record<string, unknown>;
     awsv4?: Record<string, unknown>;
@@ -127,11 +148,14 @@ interface BrunoRequest {
   script?: {
     req?: string;
     res?: string;
+    reqMetadata?: ScriptMetadata | null;
+    resMetadata?: ScriptMetadata | null;
   };
   tests?: string;
+  testsMetadata?: ScriptMetadata | null;
   vars?: {
-    req?: Array<{ name: string; value: string; enabled?: boolean }>;
-    res?: Array<{ name: string; value: string; enabled?: boolean }>;
+    req?: Array<{ name: string; value: unknown; enabled?: boolean }>;
+    res?: Array<{ name: string; value: unknown; enabled?: boolean }>;
   };
   assertions?: Array<{ name: string; value: string; enabled?: boolean; uid?: string }>;
   timeout?: number;
@@ -145,12 +169,18 @@ interface BrunoRequest {
     username?: string;
     password?: string;
   };
+  ntlmConfig?: {
+    username: string;
+    password: string;
+    domain?: string;
+  };
+  awsv4config?: AwsV4Config;
   // Additional properties needed by @usebruno/js ScriptRuntime
   name?: string;
   tags?: string[];
-  collectionVariables?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
+  collectionVariables?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
   globalEnvironmentVariables?: Record<string, unknown>;
   promptVariables?: Record<string, unknown>;
 }
@@ -162,13 +192,13 @@ interface RequestContext {
   collectionPath: string;
   itemUid: string;
   itemPathname: string;
-  envVars?: Record<string, string>;
-  collectionVariables?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
+  envVars?: Record<string, unknown>;
+  collectionVariables?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
   runtimeVariables?: Record<string, string>;
   processEnvVars?: Record<string, string>;
-  globalEnvironmentVariables?: Record<string, string>;
+  globalEnvironmentVariables?: Record<string, unknown>;
 }
 
 interface RequestOptions {
@@ -188,9 +218,55 @@ interface RequestResult {
   rawBuffer?: Buffer;
   size: number;
   duration: number;
-  timeline?: Array<{ timestamp: number; event: string }>;
+  timeline?: ResponseTimeline;
+  requestSent?: RequestSent;
   error?: string;
 }
+
+/** Request bodies can be streams (multipart) or buffers, neither of which survives postMessage. */
+const serializeRequestData = (data: unknown, multipartFields?: unknown): unknown => {
+  if (data === null || data === undefined || typeof data === 'string') {
+    return data;
+  }
+  if (Buffer.isBuffer(data)) {
+    return data.toString();
+  }
+  if (typeof (data as { pipe?: unknown }).pipe === 'function') {
+    return multipartFields ?? '[multipart form data]';
+  }
+  try {
+    JSON.stringify(data);
+    return data;
+  } catch {
+    return '[Unserializable body]';
+  }
+};
+
+/** `false` is used to stop axios auto-setting Content-Type; no such header was actually sent. */
+const serializeSentHeaders = (headers: Record<string, unknown>): Record<string, string> => {
+  const sent: Record<string, string> = {};
+  Object.entries(headers || {}).forEach(([key, value]) => {
+    if (value === false || value === null || value === undefined) {
+      return;
+    }
+    sent[key] = String(value);
+  });
+  return sent;
+};
+
+const buildRequestSnapshot = (request: {
+  url?: string;
+  method?: string;
+  headers?: unknown;
+  data?: unknown;
+  _originalMultipartData?: unknown;
+}): RequestSent => ({
+  url: request.url,
+  method: (request.method || 'GET').toUpperCase(),
+  headers: serializeSentHeaders(request.headers as Record<string, unknown>),
+  data: serializeRequestData(request.data, request._originalMultipartData),
+  timestamp: Date.now()
+});
 
 interface RunFolderContext {
   running: boolean;
@@ -205,13 +281,8 @@ const executeRequest = async (
   options: RequestOptions = {}
 ): Promise<RequestResult> => {
   const startTime = Date.now();
-  const timeline: Array<{ timestamp: number; event: string }> = [];
-
-  const addTimelineEvent = (event: string) => {
-    timeline.push({ timestamp: Date.now() - startTime, event });
-  };
-
-  addTimelineEvent('Request started');
+  const timeline: NetworkLogEntry[] = [];
+  let requestSent: RequestSent | undefined;
 
   const cancelTokenUid = context.cancelTokenUid || uuidv4();
   const existingController = cancelTokens[cancelTokenUid];
@@ -221,7 +292,6 @@ const executeRequest = async (
   }
 
   try {
-    addTimelineEvent('Interpolating variables');
     const interpolatedRequest = interpolateVars(request as unknown as Parameters<typeof interpolateVars>[0], {
       globalEnvironmentVariables: context.globalEnvironmentVariables,
       collectionVariables: context.collectionVariables,
@@ -229,7 +299,8 @@ const executeRequest = async (
       folderVariables: context.folderVariables,
       requestVariables: context.requestVariables,
       runtimeVariables: context.runtimeVariables,
-      processEnvVars: context.processEnvVars
+      processEnvVars: context.processEnvVars,
+      promptVariables: (request.promptVariables || {}) as Record<string, unknown>
     }) as unknown as BrunoRequest;
 
     const headers = interpolatedRequest.headers;
@@ -269,22 +340,36 @@ const executeRequest = async (
       interpolatedRequest.url = `http://${interpolatedRequest.url}`;
     }
 
+    // The client certificate is picked by the URL's host, so OAuth2 token requests resolve their own.
+    const certsAndProxyConfigFor = (url: string | undefined) => getCertsAndProxyConfig({
+      collectionUid: context.collectionUid,
+      collection: { promptVariables: request.promptVariables } as never,
+      request: {
+        url,
+        collectionVariables: context.collectionVariables,
+        folderVariables: context.folderVariables,
+        requestVariables: context.requestVariables
+      },
+      envVars: context.envVars || {},
+      runtimeVariables: context.runtimeVariables || {},
+      processEnvVars: context.processEnvVars || {},
+      collectionPath: context.collectionPath,
+      globalEnvironmentVariables: context.globalEnvironmentVariables || {}
+    });
+
     // Apply OAuth2 token to request (auto-fetch/refresh if needed)
     const authMode = ((interpolatedRequest as { auth?: { mode?: string } })?.auth)?.mode;
     if (authMode === 'oauth2' || (interpolatedRequest as { oauth2?: unknown }).oauth2) {
-      addTimelineEvent('Applying OAuth2 token');
       await applyOAuth2ToRequest(interpolatedRequest as unknown as Record<string, unknown>, context.collectionUid, {
         envVars: context.envVars,
         runtimeVariables: context.runtimeVariables,
         processEnvVars: context.processEnvVars
-      });
+      }, certsAndProxyConfigFor);
     }
 
-    addTimelineEvent('Preparing request');
     const preparedRequest = prepareRequest(interpolatedRequest as unknown as PrepareRequestType);
 
     if (request.body?.mode === 'multipartForm' && request.body.multipartForm) {
-      addTimelineEvent('Preparing multipart form data');
       const enabledFields = request.body.multipartForm.filter(f => f.enabled !== false);
       const multipartFields = enabledFields.map(f => ({
         name: f.name,
@@ -300,25 +385,20 @@ const executeRequest = async (
       (preparedRequest as unknown as { collectionPath?: string }).collectionPath = context.collectionPath;
     }
 
+    if (request.body?.mode === 'file') {
+      const fileBody = await readFileBody(request.body.file, context.collectionPath);
+      preparedRequest.data = fileBody?.data;
+      if (fileBody) {
+        const contentTypeSet = Object.keys(preparedRequest.headers).some((key) => key.toLowerCase() === 'content-type');
+        if (!contentTypeSet) {
+          preparedRequest.headers['content-type'] = fileBody.contentType;
+        }
+      }
+    }
+
     const preferences = getPreferences();
 
-    const certsAndProxyConfig = await getCertsAndProxyConfig({
-      collectionUid: context.collectionUid,
-      collection: { promptVariables: request.promptVariables } as never,
-      request: {
-        url: request.url,
-        collectionVariables: context.collectionVariables,
-        folderVariables: context.folderVariables,
-        requestVariables: context.requestVariables
-      },
-      envVars: context.envVars || {},
-      runtimeVariables: context.runtimeVariables || {},
-      processEnvVars: context.processEnvVars || {},
-      collectionPath: context.collectionPath,
-      globalEnvironmentVariables: context.globalEnvironmentVariables || {}
-    });
-
-    const { httpsAgentRequestFields, proxyMode: certProxyMode, proxyConfig: certProxyConfig } = certsAndProxyConfig;
+    const certsAndProxyConfig = await certsAndProxyConfigFor(request.url);
 
     const followRedirects = request.settings?.followRedirects ?? true;
     let requestMaxRedirects = request.settings?.maxRedirects ?? (request as unknown as { maxRedirects?: number }).maxRedirects ?? 5;
@@ -330,27 +410,19 @@ const executeRequest = async (
 
     const axiosOptions: AxiosInstanceOptions = {
       timeout: request.timeout || request.settings?.timeout || preferences?.request?.timeout || 0,
-      httpsAgentOptions: {
-        ...httpsAgentRequestFields
-      },
-      proxyMode: certProxyMode,
-      proxyConfig: certProxyMode === 'on' ? {
-        protocol: certProxyConfig.protocol,
-        hostname: certProxyConfig.hostname,
-        port: certProxyConfig.port || undefined,
-        auth: certProxyConfig.auth ? {
-          username: certProxyConfig.auth.username,
-          password: certProxyConfig.auth.password
-        } : undefined
-      } : undefined,
+      ...axiosOptionsFromCertsAndProxyConfig(certsAndProxyConfig),
       requestMaxRedirects,
       digestConfig: request.digestConfig,
-      collectionPath: context.collectionPath
+      ntlmConfig: request.ntlmConfig,
+      collectionPath: context.collectionPath,
+      disableCookies: options.disableCookies,
+      timeline
     };
 
     // Note: We add cookies to BOTH preparedRequest (for axios) AND the original request
     // so that tests can see the cookies via req.getHeader('Cookie')
-    const cookieString = getCookieStringForUrl(preparedRequest.url || '');
+    const shouldSendCookies = !options.disableCookies && preferencesUtil.shouldSendCookies();
+    const cookieString = shouldSendCookies ? getCookieStringForUrl(preparedRequest.url || '') : '';
     if (cookieString) {
       const mergeCookies = (existing: string, newCookies: string): string => {
         const parseCookies = (str: string) => str.split(';').reduce((acc: Record<string, string>, cookie: string) => {
@@ -387,8 +459,16 @@ const executeRequest = async (
       }
     }
 
-    addTimelineEvent('Sending request');
+    requestSent = buildRequestSnapshot(preparedRequest);
+
     const axiosInstance = createAxiosInstance(axiosOptions);
+
+    if (request.awsv4config) {
+      request.awsv4config = await resolveAwsV4Credentials(request);
+      addAwsV4Interceptor(axiosInstance, request);
+      // The interceptor already holds the credentials, so drop them from the request object
+      delete request.awsv4config;
+    }
 
     preparedRequest.signal = abortController.signal;
 
@@ -397,13 +477,10 @@ const executeRequest = async (
       response = await axiosInstance.request(preparedRequest);
     } catch (error) {
       if ((error as Error).name === 'AbortError' || (error as Error).name === 'CanceledError') {
-        addTimelineEvent('Request cancelled');
         throw new Error('Request cancelled');
       }
       throw error;
     }
-
-    addTimelineEvent('Response received');
 
     const responseHeaders: Record<string, string> = {};
     Object.entries(response.headers).forEach(([key, value]) => {
@@ -422,16 +499,13 @@ const executeRequest = async (
     const { data: parsedData, dataBuffer: dataString } = parseDataFromResponse(rawBuffer, responseContentType);
 
     // Note: Cookies are already saved to the shared cookieJar in the axios interceptor
-    if (!options.disableCookies) {
+    if (!options.disableCookies && preferencesUtil.shouldStoreCookies()) {
       const setCookieHeaders = response.headers['set-cookie'];
       if (setCookieHeaders) {
-        addTimelineEvent('Processing cookies');
         // Persist cookies to VS Code storage
         cookiesStore.saveCookieJar();
       }
     }
-
-    addTimelineEvent('Request completed');
 
     const result: RequestResult = {
       status: response.status,
@@ -442,15 +516,14 @@ const executeRequest = async (
       rawBuffer: rawBuffer,
       size: responseSize,
       duration: Date.now() - startTime,
-      timeline
+      timeline,
+      requestSent
     };
 
     return result;
   } catch (error) {
     const axiosError = error as AxiosError;
     const duration = Date.now() - startTime;
-
-    addTimelineEvent('Request failed: ' + (error as Error).message);
 
     // If we have a response (4xx, 5xx), return it as a valid response
     // This matches bruno-electron behavior - error responses are shown as data, not as errors
@@ -482,6 +555,12 @@ const executeRequest = async (
         }
       }
 
+      // The interceptor logs the status line and headers, but cannot read the body without consuming
+      // the stream, so it lands in the network log here.
+      if (errorRawBuffer.length) {
+        timeline.push({ timestamp: new Date(), type: 'error', message: safeStringifyJSON(errorRawBuffer.toString()) });
+      }
+
       // Don't include 'error' property - this is a valid HTTP response with data
       // The status code (e.g. 400, 500) indicates the error, but the response body should be shown
       return {
@@ -493,7 +572,8 @@ const executeRequest = async (
         rawBuffer: errorRawBuffer,
         size: errorSize,
         duration,
-        timeline
+        timeline,
+        requestSent
       };
     }
 
@@ -501,7 +581,8 @@ const executeRequest = async (
     const errorMessage = (error as Error).message || 'Error occurred while executing the request!';
     return {
       status: 0,
-      statusText: errorMessage,
+      // Desktop reports the axios error code here and keeps the readable text in `error`.
+      statusText: axiosError.code || errorMessage,
       headers: {},
       data: null,
       dataBuffer: '',
@@ -509,6 +590,7 @@ const executeRequest = async (
       size: 0,
       duration,
       timeline,
+      requestSent,
       error: errorMessage
     };
   } finally {
@@ -552,7 +634,11 @@ const getRequestData = (body: BrunoRequest['body']): unknown => {
 
   switch (body.mode) {
     case 'json':
-      return body.json || undefined;
+      try {
+        return (body.json && decomment(body.json).trim()) || undefined;
+      } catch {
+        return body.json;
+      }
 
     case 'text':
       return body.text || undefined;
@@ -611,7 +697,7 @@ const hydrateItemRequestFromDisk = async (
   try {
     const format = getCollectionFormat(collectionPath);
     const content = await fs.promises.readFile(pathname, 'utf8');
-    const parsed = await parseRequestFromFilestore(content, { format }) as Record<string, unknown>;
+    const parsed = await parseRequest(content, { format }) as Record<string, unknown>;
     // Preserve the runner-relevant fields we already have on `item` (uid, seq,
     // draft, etc.) while pulling in name/type/request/tags/examples/... from
     // the fresh parse.
@@ -672,6 +758,17 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
       case 'multipartForm':
         headers.push({ name: 'content-type', value: 'multipart/form-data', enabled: true });
         break;
+      case 'file': {
+        const selectedFile = getSelectedFileBodyEntry(body.file);
+        if (selectedFile) {
+          headers.push({
+            name: 'content-type',
+            value: (selectedFile?.contentType || '').trim() || DEFAULT_FILE_BODY_CONTENT_TYPE,
+            enabled: true
+          });
+        }
+        break;
+      }
       case 'graphql':
         headers.push({ name: 'content-type', value: 'application/json', enabled: true });
         break;
@@ -685,6 +782,28 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
     digestConfig = {
       username: auth.digest.username,
       password: auth.digest.password
+    };
+  }
+
+  let ntlmConfig: { username: string; password: string; domain?: string } | undefined;
+  if (auth?.mode === 'ntlm' && auth.ntlm) {
+    ntlmConfig = {
+      username: auth.ntlm.username,
+      password: auth.ntlm.password,
+      domain: auth.ntlm.domain
+    }
+  }
+
+  let awsv4config: AwsV4Config | undefined;
+  if (auth?.mode === 'awsv4' && auth.awsv4) {
+    const awsv4 = auth.awsv4 as AwsV4Config;
+    awsv4config = {
+      accessKeyId: awsv4.accessKeyId,
+      secretAccessKey: awsv4.secretAccessKey,
+      sessionToken: awsv4.sessionToken,
+      service: awsv4.service,
+      region: awsv4.region,
+      profileName: awsv4.profileName
     };
   }
 
@@ -702,6 +821,7 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
 
   return {
     uid: _item.uid as string,
+    pathname: (_item.pathname as string) || '',
     url: (request.url as string) || '',
     method: (request.method as string) || 'GET',
     headers,
@@ -712,6 +832,7 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
     auth,
     script,
     tests,
+    testsMetadata: request.testsMetadata as ScriptMetadata | null,
     vars,
     assertions,
     timeout: (settings.timeout === 'inherit' ? undefined : settings.timeout as number) || 0,
@@ -722,20 +843,40 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
       encodeUrl: settings.encodeUrl as boolean | undefined
     },
     digestConfig,
+    ntlmConfig,
+    awsv4config,
     // Additional properties for scripts
     name,
     tags,
     collectionVariables,
     folderVariables,
     requestVariables,
-    globalEnvironmentVariables
+    globalEnvironmentVariables,
+    promptVariables: (_collection.promptVariables || {}) as Record<string, unknown>
   };
+};
+
+/** Sent on success too, with a null message, since the webview keys the card off the last report. */
+const notifyScriptExecution = (
+  channel: 'main:run-request-event' | 'main:run-folder-event',
+  scriptType: 'pre-request' | 'post-response' | 'test',
+  basePayload: Record<string, unknown>,
+  result: { success?: boolean; error?: string; errorContext?: ScriptErrorContext | null }
+): void => {
+  const failed = result.success === false;
+
+  sendToWebview(channel, {
+    type: `${scriptType}-script-execution`,
+    ...basePayload,
+    errorMessage: failed ? (result.error || `An error occurred in ${scriptType.replace('-', ' ')} script`) : null,
+    errorContext: failed ? (result.errorContext ?? null) : null
+  });
 };
 
 const registerNetworkIpc = (): void => {
   // Main HTTP request handler - called by webview
   registerHandler('send-http-request', async (args) => {
-    const [item, collection, environment, runtimeVariables] = args as [unknown, unknown, unknown, Record<string, string>];
+    const [item, collection, environment] = args as [unknown, unknown, unknown, Record<string, string>];
 
     const _collection = collection as Record<string, unknown>;
     const _item = item as Record<string, unknown>;
@@ -746,8 +887,7 @@ const registerNetworkIpc = (): void => {
     const requestUid = (_item.requestUid as string) || itemUid;
     const cancelTokenUid = uuidv4();
 
-    // Mutable copy of runtime variables for script execution
-    const mutableRuntimeVariables: Record<string, unknown> = { ...(runtimeVariables || {}) };
+    const mutableRuntimeVariables: Record<string, unknown> = { ...getRuntimeVariables(collectionUid) };
 
     try {
       const envVars = getEnvVars(environment as never);
@@ -957,31 +1097,28 @@ const registerNetworkIpc = (): void => {
         cancelTokenUid
       });
 
-      let skipRequest = false;
-      try {
-        const preRequestResult = await runPreRequestScript(scriptRequest, scriptContext);
+      const preRequestResult = await runPreRequestScript(scriptRequest, scriptContext);
 
-        if (!preRequestResult.success) {
-          // Pre-request script failed - send error but continue to show the error
-          sendToWebview('main:run-request-event', {
-            type: 'error',
-            itemUid,
-            requestUid,
-            collectionUid,
-            error: `Pre-request script error: ${preRequestResult.error}`
-          });
-        }
+      notifyScriptExecution('main:run-request-event', 'pre-request', { itemUid, requestUid, collectionUid }, preRequestResult);
 
-        skipRequest = preRequestResult.skipRequest || false;
-
-        if (preRequestResult.runtimeVariables) {
-          Object.assign(mutableRuntimeVariables, preRequestResult.runtimeVariables);
-          scriptContext.runtimeVariables = mutableRuntimeVariables;
-          context.runtimeVariables = mutableRuntimeVariables as Record<string, string>;
-        }
-      } catch (preReqError) {
-        console.error('Pre-request script error:', preReqError);
+      if (preRequestResult.runtimeVariables) {
+        Object.assign(mutableRuntimeVariables, preRequestResult.runtimeVariables);
+        scriptContext.runtimeVariables = mutableRuntimeVariables;
+        context.runtimeVariables = mutableRuntimeVariables as Record<string, string>;
       }
+
+      if (!preRequestResult.success) {
+        return {
+          status: 'Error',
+          isError: true,
+          error: preRequestResult.error || 'An error occurred in pre request script',
+          errorSource: 'script',
+          size: 0,
+          duration: 0
+        };
+      }
+
+      const skipRequest = preRequestResult.skipRequest || false;
 
       if (skipRequest) {
         sendToWebview('main:run-request-event', {
@@ -1025,12 +1162,7 @@ const registerNetworkIpc = (): void => {
 
       sendToWebview('main:run-request-event', {
         type: 'request-sent',
-        requestSent: {
-          url: scriptRequest.url,
-          method: scriptRequest.method,
-          headers: scriptRequest.headers,
-          timestamp: Date.now()
-        },
+        requestSent: buildRequestSnapshot(scriptRequest),
         collectionUid,
         itemUid,
         requestUid,
@@ -1040,6 +1172,27 @@ const registerNetworkIpc = (): void => {
       // Use scriptRequest so pre-request script changes are respected
       // scriptRequest will be mutated by interpolateVars inside executeRequest
       const result = await executeRequest(scriptRequest as unknown as BrunoRequest, context);
+
+      const oauth2Credentials = (scriptRequest as {
+        oauth2Credentials?: {
+          credentials?: unknown;
+          url?: string;
+          credentialsId?: string;
+          folderUid?: string;
+          debugInfo?: { data: unknown[] };
+        }
+      }).oauth2Credentials;
+      if (oauth2Credentials?.debugInfo) {
+        sendToWebview('main:credentials-update', {
+          collectionUid,
+          itemUid,
+          folderUid: oauth2Credentials.folderUid ?? null,
+          url: oauth2Credentials.url,
+          credentialsId: oauth2Credentials.credentialsId,
+          credentials: oauth2Credentials.credentials,
+          debugInfo: oauth2Credentials.debugInfo
+        });
+      }
 
       sendToWebview('main:run-request-event', {
         type: 'response-received',
@@ -1070,6 +1223,7 @@ const registerNetworkIpc = (): void => {
           size: result.size,
           duration: result.duration,
           timeline: result.timeline,
+          requestSent: result.requestSent,
           error: result.error
         };
       }
@@ -1114,6 +1268,9 @@ const registerNetworkIpc = (): void => {
 
       try {
         const postResponseResult = await runPostResponseScript(scriptRequest, response, scriptContext);
+
+        notifyScriptExecution('main:run-request-event', 'post-response', { itemUid, requestUid, collectionUid }, postResponseResult);
+
         if (postResponseResult.runtimeVariables) {
           Object.assign(mutableRuntimeVariables, postResponseResult.runtimeVariables);
           scriptContext.runtimeVariables = mutableRuntimeVariables;
@@ -1129,10 +1286,15 @@ const registerNetworkIpc = (): void => {
       }
 
       try {
-        await runTests(scriptRequest, response, scriptContext);
+        const testResult = await runTests(scriptRequest, response, scriptContext);
+
+        notifyScriptExecution('main:run-request-event', 'test', { itemUid, requestUid, collectionUid }, testResult);
       } catch (testError) {
         console.error('Tests error:', testError);
       }
+
+      setRuntimeVariables(collectionUid, mutableRuntimeVariables);
+      broadcastRuntimeVariables(collectionUid, mutableRuntimeVariables);
 
       return {
         status: result.status,
@@ -1143,6 +1305,10 @@ const registerNetworkIpc = (): void => {
         size: result.size,
         duration: result.duration,
         timeline: result.timeline,
+        requestSent: result.requestSent,
+        // Interpolated URL actually sent (executeRequest resolves {{vars}} in place). Used as the
+        // <base href> for HTML previews so relative assets resolve.
+        requestUrl: scriptRequest.url,
         error: result.error
       };
     } catch (error) {
@@ -1586,11 +1752,10 @@ const registerNetworkIpc = (): void => {
   // Run collection folder - executes all requests in a folder sequentially
   // Based on bruno-electron's implementation
   registerHandler('renderer:run-collection-folder', async (args) => {
-    const [folder, collection, environment, runtimeVariables, recursive, delay, tags, selectedRequestUids] = args as [
+    const [folder, collection, environment, recursive, delay, tags, selectedRequestUids] = args as [
       Record<string, unknown> | null,
       Record<string, unknown>,
       Record<string, unknown> | null,
-      Record<string, string>,
       boolean,
       number,
       { include?: string[]; exclude?: string[] } | null,
@@ -1604,8 +1769,7 @@ const registerNetworkIpc = (): void => {
 
     const envVars = getEnvVars(environment as never);
 
-    // Make a mutable copy of runtime variables for script execution
-    const runnerRuntimeVariables: Record<string, unknown> = { ...(runtimeVariables || {}) };
+    const runnerRuntimeVariables: Record<string, unknown> = { ...getRuntimeVariables(collectionUid) };
 
     const abortController = new AbortController();
     saveCancelToken(cancelTokenUid, abortController);
@@ -1622,341 +1786,103 @@ const registerNetworkIpc = (): void => {
       });
 
       try {
-      // Get folder requests - use folder if provided, otherwise use collection
-      const sourceFolder = folder || collection;
-      let folderRequests: Array<Record<string, unknown>> = [];
+        // Get folder requests - use folder if provided, otherwise use collection
+        const sourceFolder = folder || collection;
+        let folderRequests: Array<Record<string, unknown>> = [];
 
-      if (recursive) {
-        const allItems = flattenItems((sourceFolder.items || []) as Item[]) as unknown as Array<Record<string, unknown>>;
-        folderRequests = filter(allItems, (item) => {
-          const type = item.type as string;
-          return type === 'http-request' || type === 'graphql-request';
-        });
-      } else {
-        const items = (sourceFolder.items || []) as Array<Record<string, unknown>>;
-        folderRequests = filter(items, (item) => !!item.request);
-      }
-
-      // Items with valid seq are placed at their specified positions
-      const isSeqValid = (seq: unknown): seq is number =>
-        typeof seq === 'number' && Number.isFinite(seq) && Number.isInteger(seq) && seq > 0;
-
-      // First sort alphabetically by name
-      const alphabeticallySorted = [...folderRequests].sort((a, b) => {
-        const nameA = (a.name as string || '').toLowerCase();
-        const nameB = (b.name as string || '').toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
-
-      const withoutSeq = alphabeticallySorted.filter((f) => !isSeqValid(f.seq));
-      const withSeq = alphabeticallySorted.filter((f) => isSeqValid(f.seq)).sort((a, b) => (a.seq as number) - (b.seq as number));
-
-      // Insert items with seq at their specified positions
-      const sortedItems: Array<Record<string, unknown>> = [...withoutSeq];
-      withSeq.forEach((item) => {
-        const position = (item.seq as number) - 1;
-        if (position >= 0 && position <= sortedItems.length) {
-          sortedItems.splice(position, 0, item);
-        } else {
-          sortedItems.push(item);
-        }
-      });
-      folderRequests = sortedItems;
-
-      if (tags && tags.include && tags.exclude) {
-        const includeTags = tags.include || [];
-        const excludeTags = tags.exclude || [];
-        folderRequests = filter(folderRequests, (item) => {
-          const rawTags = (item.draft as Record<string, unknown>)?.tags || item.tags || [];
-          const requestTags = (Array.isArray(rawTags) ? rawTags : []) as string[];
-          const includeMatch = includeTags.length === 0 || requestTags.some(t => includeTags.includes(t));
-          const excludeMatch = excludeTags.length === 0 || !requestTags.some(t => excludeTags.includes(t));
-          return includeMatch && excludeMatch;
-        });
-      }
-
-      if (selectedRequestUids && selectedRequestUids.length > 0) {
-        const uidIndexMap = new Map<string, number>();
-        selectedRequestUids.forEach((uid, index) => {
-          uidIndexMap.set(uid, index);
-        });
-
-        folderRequests = folderRequests
-          .filter((request) => uidIndexMap.has(request.uid as string))
-          .sort((a, b) => {
-            const indexA = uidIndexMap.get(a.uid as string) || 0;
-            const indexB = uidIndexMap.get(b.uid as string) || 0;
-            return indexA - indexB;
+        if (recursive) {
+          const allItems = flattenItems((sourceFolder.items || []) as Item[]) as unknown as Array<Record<string, unknown>>;
+          folderRequests = filter(allItems, (item) => {
+            const type = item.type as string;
+            return type === 'http-request' || type === 'graphql-request';
           });
-      }
-
-      let currentRequestIndex = 0;
-      while (currentRequestIndex < folderRequests.length) {
-        if (abortController.signal.aborted) {
-          const error = new Error('Runner execution cancelled');
-          throw error;
+        } else {
+          const items = (sourceFolder.items || []) as Array<Record<string, unknown>>;
+          folderRequests = filter(items, (item) => !!item.request);
         }
 
-        const item = cloneDeep(folderRequests[currentRequestIndex]);
-        const itemUid = item.uid as string;
-        const eventData = {
-          collectionUid,
-          folderUid,
-          itemUid
-        };
+        // Items with valid seq are placed at their specified positions
+        const isSeqValid = (seq: unknown): seq is number =>
+          typeof seq === 'number' && Number.isFinite(seq) && Number.isInteger(seq) && seq > 0;
 
-        sendToWebview('main:run-folder-event', {
-          type: 'request-queued',
-          ...eventData
+        // First sort alphabetically by name
+        const alphabeticallySorted = [...folderRequests].sort((a, b) => {
+          const nameA = (a.name as string || '').toLowerCase();
+          const nameB = (b.name as string || '').toLowerCase();
+          return nameA.localeCompare(nameB);
         });
 
-        await hydrateItemRequestFromDisk(item, collectionPath);
+        const withoutSeq = alphabeticallySorted.filter((f) => !isSeqValid(f.seq));
+        const withSeq = alphabeticallySorted.filter((f) => isSeqValid(f.seq)).sort((a, b) => (a.seq as number) - (b.seq as number));
 
-        if (item.type === 'grpc-request') {
+        // Insert items with seq at their specified positions
+        const sortedItems: Array<Record<string, unknown>> = [...withoutSeq];
+        withSeq.forEach((item) => {
+          const position = (item.seq as number) - 1;
+          if (position >= 0 && position <= sortedItems.length) {
+            sortedItems.splice(position, 0, item);
+          } else {
+            sortedItems.push(item);
+          }
+        });
+        folderRequests = sortedItems;
+
+        if (tags && tags.include && tags.exclude) {
+          const includeTags = tags.include || [];
+          const excludeTags = tags.exclude || [];
+          folderRequests = filter(folderRequests, (item) => {
+            const rawTags = (item.draft as Record<string, unknown>)?.tags || item.tags || [];
+            const requestTags = (Array.isArray(rawTags) ? rawTags : []) as string[];
+            const includeMatch = includeTags.length === 0 || requestTags.some(t => includeTags.includes(t));
+            const excludeMatch = excludeTags.length === 0 || !requestTags.some(t => excludeTags.includes(t));
+            return includeMatch && excludeMatch;
+          });
+        }
+
+        if (selectedRequestUids && selectedRequestUids.length > 0) {
+          const uidIndexMap = new Map<string, number>();
+          selectedRequestUids.forEach((uid, index) => {
+            uidIndexMap.set(uid, index);
+          });
+
+          folderRequests = folderRequests
+            .filter((request) => uidIndexMap.has(request.uid as string))
+            .sort((a, b) => {
+              const indexA = uidIndexMap.get(a.uid as string) || 0;
+              const indexB = uidIndexMap.get(b.uid as string) || 0;
+              return indexA - indexB;
+            });
+        }
+
+        let currentRequestIndex = 0;
+        while (currentRequestIndex < folderRequests.length) {
+          if (abortController.signal.aborted) {
+            const error = new Error('Runner execution cancelled');
+            throw error;
+          }
+
+          const item = cloneDeep(folderRequests[currentRequestIndex]);
+          const itemUid = item.uid as string;
+          const eventData = {
+            collectionUid,
+            folderUid,
+            itemUid
+          };
+
           sendToWebview('main:run-folder-event', {
-            type: 'runner-request-skipped',
-            error: 'gRPC requests are skipped in folder/collection runs',
-            responseReceived: {
-              status: 'skipped',
-              statusText: 'gRPC request skipped',
-              data: null,
-              responseTime: 0,
-              headers: null
-            },
+            type: 'request-queued',
             ...eventData
           });
-          currentRequestIndex++;
-          continue;
-        }
 
-        try {
-          const request = prepareItemRequest(item, collection);
-          const requestUid = uuidv4();
+          await hydrateItemRequestFromDisk(item, collectionPath);
 
-          const scriptRequest = {
-            ...request,
-            headers: headersArrayToObject(request.headers),
-            collectionVariables: request.collectionVariables || {},
-            folderVariables: request.folderVariables || {},
-            requestVariables: request.requestVariables || {},
-            globalEnvironmentVariables: request.globalEnvironmentVariables || {},
-            name: request.name || '',
-            tags: request.tags || []
-          };
-
-          const runnerScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
-          const runnerIsFormUrlEncodedBefore = runnerScriptContentType === 'application/x-www-form-urlencoded' ||
-            (request.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-          if (runnerIsFormUrlEncodedBefore && Array.isArray(scriptRequest.data)) {
-            scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
-          }
-
-          const runnerProcessEnvVars = getProcessEnvVars(collectionUid) as Record<string, string>;
-
-          const runnerRunRequestByItemPathname = async (relativeItemPathname: string): Promise<unknown> => {
-            let itemPathname = path.join(collectionPath, relativeItemPathname);
-            if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
-              try {
-                const { getCollectionFormat } = require('../../utils/filesystem');
-                const fmt = getCollectionFormat(collectionPath);
-                itemPathname = `${itemPathname}.${fmt === 'yml' ? 'yml' : 'bru'}`;
-              } catch {
-                itemPathname = `${itemPathname}.bru`;
-              }
-            }
-            const foundItem = findItemInCollectionByPathname(collection as never, itemPathname);
-            if (!foundItem) {
-              throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
-            }
-            const innerItem = cloneDeep(foundItem) as unknown as Record<string, unknown>;
-            await hydrateItemRequestFromDisk(innerItem, collectionPath);
-            const innerRequest = prepareItemRequest(innerItem, collection);
-            const innerScriptRequest = {
-              ...innerRequest,
-              headers: headersArrayToObject(innerRequest.headers),
-              collectionVariables: innerRequest.collectionVariables || {},
-              folderVariables: innerRequest.folderVariables || {},
-              requestVariables: innerRequest.requestVariables || {},
-              globalEnvironmentVariables: innerRequest.globalEnvironmentVariables || {},
-              name: innerRequest.name || '',
-              tags: innerRequest.tags || []
-            };
-            const runnerInnerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
-            const runnerInnerIsFormUrlEncoded = runnerInnerScriptContentType === 'application/x-www-form-urlencoded' ||
-              (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-            if (runnerInnerIsFormUrlEncoded && Array.isArray(innerScriptRequest.data)) {
-              innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
-            }
-            const innerContext: RequestContext = {
-              uid: uuidv4(),
-              cancelTokenUid,
-              collectionUid,
-              collectionPath,
-              itemUid: innerItem.uid as string,
-              itemPathname,
-              envVars,
-              collectionVariables: innerScriptRequest.collectionVariables || {},
-              folderVariables: innerScriptRequest.folderVariables || {},
-              requestVariables: innerScriptRequest.requestVariables || {},
-              runtimeVariables: runnerRuntimeVariables as Record<string, string>,
-              processEnvVars: runnerProcessEnvVars,
-              globalEnvironmentVariables: (innerScriptRequest.globalEnvironmentVariables || {}) as Record<string, string>
-            };
-
-            const innerScriptContext = {
-              collectionUid,
-              collectionPath,
-              collectionName: collection.name as string || '',
-              itemUid: innerItem.uid as string,
-              requestUid: uuidv4(),
-              envVars: envVars as Record<string, unknown>,
-              runtimeVariables: runnerRuntimeVariables, // Shared with parent
-              processEnvVars: runnerProcessEnvVars,
-              scriptingConfig: { ...(get(collection, 'brunoConfig.scripts', {}) as Record<string, unknown>), runtime: getJsSandboxRuntime(collection as Record<string, unknown>) } as { runtime?: string },
-              runRequestByItemPathname: runnerRunRequestByItemPathname // Allow nested runRequest calls
-            };
-
-            try {
-              const preRequestResult = await runPreRequestScript(innerScriptRequest, innerScriptContext);
-              if (preRequestResult.runtimeVariables) {
-                Object.assign(runnerRuntimeVariables, preRequestResult.runtimeVariables);
-              }
-              if (preRequestResult.envVariables) {
-                Object.assign(envVars, preRequestResult.envVariables as Record<string, string>);
-              }
-              if (preRequestResult.skipRequest) {
-                return {
-                  status: 0,
-                  statusText: 'Skipped',
-                  headers: {},
-                  data: null,
-                  responseTime: 0
-                };
-              }
-            } catch (preReqError) {
-              console.error('Inner request pre-request script error:', preReqError);
-            }
-
-            const runnerInnerPostScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
-            const runnerInnerIsFormUrlEncodedAfter = runnerInnerPostScriptContentType === 'application/x-www-form-urlencoded' ||
-              (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-            if (runnerInnerIsFormUrlEncodedAfter && Array.isArray(innerScriptRequest.data)) {
-              innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
-            } else if (runnerInnerIsFormUrlEncodedAfter && innerScriptRequest.data && typeof innerScriptRequest.data === 'object' && !Array.isArray(innerScriptRequest.data)) {
-              innerScriptRequest.data = Object.entries(innerScriptRequest.data as Record<string, unknown>)
-                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`)
-                .join('&');
-            }
-
-            const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
-
-            const innerResponse = {
-              status: result.status,
-              statusText: result.statusText,
-              headers: result.headers,
-              data: result.data,
-              dataBuffer: result.rawBuffer,
-              size: result.size,
-              duration: result.duration,
-              responseTime: result.duration
-            };
-
-            try {
-              const varsResult = runPostResponseVars(innerScriptRequest, innerResponse, innerScriptContext);
-              if (varsResult?.runtimeVariables) {
-                Object.assign(runnerRuntimeVariables, varsResult.runtimeVariables);
-              }
-              if (varsResult?.envVariables) {
-                Object.assign(envVars, varsResult.envVariables as Record<string, string>);
-              }
-            } catch (varsError) {
-              console.error('Inner request post-response vars error:', varsError);
-            }
-
-            try {
-              const postResponseResult = await runPostResponseScript(innerScriptRequest, innerResponse, innerScriptContext);
-              if (postResponseResult.runtimeVariables) {
-                Object.assign(runnerRuntimeVariables, postResponseResult.runtimeVariables);
-              }
-              if (postResponseResult.envVariables) {
-                Object.assign(envVars, postResponseResult.envVariables as Record<string, string>);
-              }
-            } catch (postResError) {
-              console.error('Inner request post-response script error:', postResError);
-            }
-
-            return {
-              status: result.status,
-              statusText: result.statusText,
-              headers: result.headers,
-              data: result.data,
-              responseTime: result.duration
-            };
-          };
-
-          const scriptContext = {
-            collectionUid,
-            collectionPath,
-            collectionName: collection.name as string || '',
-            itemUid,
-            requestUid,
-            envVars: envVars as Record<string, unknown>,
-            runtimeVariables: runnerRuntimeVariables,
-            processEnvVars: runnerProcessEnvVars,
-            scriptingConfig: { ...(get(collection, 'brunoConfig.scripts', {}) as Record<string, unknown>), runtime: getJsSandboxRuntime(collection as Record<string, unknown>) } as { runtime?: string },
-            runRequestByItemPathname: runnerRunRequestByItemPathname
-          };
-
-          let skipRequest = false;
-          let nextRequestName: string | undefined;
-
-          try {
-            const preRequestResult = await runPreRequestScript(scriptRequest, scriptContext);
-
-            sendToWebview('main:run-folder-event', {
-              type: 'test-results-pre-request',
-              preRequestTestResults: [],
-              error: preRequestResult.error || null,
-              ...eventData
-            });
-
-            if (!preRequestResult.success) {
-              sendToWebview('main:run-folder-event', {
-                type: 'error',
-                error: `Pre-request script error: ${preRequestResult.error}`,
-                responseReceived: {},
-                ...eventData
-              });
-              currentRequestIndex++;
-              continue;
-            }
-
-            skipRequest = preRequestResult.skipRequest || false;
-            nextRequestName = preRequestResult.nextRequestName;
-
-            if (preRequestResult.runtimeVariables) {
-              Object.assign(runnerRuntimeVariables, preRequestResult.runtimeVariables);
-              scriptContext.runtimeVariables = runnerRuntimeVariables;
-            }
-          } catch (preReqError) {
-            const preErr = preReqError as Error;
-            sendToWebview('main:run-folder-event', {
-              type: 'error',
-              error: `Pre-request script error: ${preErr.message}`,
-              responseReceived: {},
-              ...eventData
-            });
-            currentRequestIndex++;
-            continue;
-          }
-
-          if (skipRequest) {
+          if (item.type === 'grpc-request') {
             sendToWebview('main:run-folder-event', {
               type: 'runner-request-skipped',
-              error: 'Skipped by pre-request script',
+              error: 'gRPC requests are skipped in folder/collection runs',
               responseReceived: {
                 status: 'skipped',
-                statusText: 'Skipped by script',
+                statusText: 'gRPC request skipped',
                 data: null,
                 responseTime: 0,
                 headers: null
@@ -1967,249 +1893,489 @@ const registerNetworkIpc = (): void => {
             continue;
           }
 
-          // This handles cases where req.setBody() was called with an array in the script
-          const runnerPostScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
-          const runnerIsFormUrlEncodedAfter = runnerPostScriptContentType === 'application/x-www-form-urlencoded' ||
-            (request.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
-          if (runnerIsFormUrlEncodedAfter && Array.isArray(scriptRequest.data)) {
-            scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
-          } else if (runnerIsFormUrlEncodedAfter && scriptRequest.data && typeof scriptRequest.data === 'object' && !Array.isArray(scriptRequest.data)) {
-            scriptRequest.data = Object.entries(scriptRequest.data as Record<string, unknown>)
-              .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`)
-              .join('&');
-          }
+          try {
+            const request = prepareItemRequest(item, collection);
+            const requestUid = uuidv4();
 
-          const requestSent = {
-            url: scriptRequest.url,
-            method: scriptRequest.method,
-            headers: scriptRequest.headers,
-            timestamp: Date.now()
-          };
+            const scriptRequest = {
+              ...request,
+              headers: headersArrayToObject(request.headers),
+              collectionVariables: request.collectionVariables || {},
+              folderVariables: request.folderVariables || {},
+              requestVariables: request.requestVariables || {},
+              globalEnvironmentVariables: request.globalEnvironmentVariables || {},
+              name: request.name || '',
+              tags: request.tags || []
+            };
 
-          sendToWebview('main:run-folder-event', {
-            type: 'request-sent',
-            requestSent,
-            ...eventData
-          });
+            const runnerScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
+            const runnerIsFormUrlEncodedBefore = runnerScriptContentType === 'application/x-www-form-urlencoded' ||
+              (request.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
+            if (runnerIsFormUrlEncodedBefore && Array.isArray(scriptRequest.data)) {
+              scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
+            }
 
-          if (delay && !Number.isNaN(delay) && delay > 0) {
-            await new Promise<void>((resolve, reject) => {
-              const timeout = setTimeout(resolve, delay);
-              abortController.signal.addEventListener('abort', () => {
-                clearTimeout(timeout);
-                reject(new Error('Cancelled'));
+            const runnerProcessEnvVars = getProcessEnvVars(collectionUid) as Record<string, string>;
+
+            const runnerRunRequestByItemPathname = async (relativeItemPathname: string): Promise<unknown> => {
+              let itemPathname = path.join(collectionPath, relativeItemPathname);
+              if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
+                try {
+                  const { getCollectionFormat } = require('../../utils/filesystem');
+                  const fmt = getCollectionFormat(collectionPath);
+                  itemPathname = `${itemPathname}.${fmt === 'yml' ? 'yml' : 'bru'}`;
+                } catch {
+                  itemPathname = `${itemPathname}.bru`;
+                }
+              }
+              const foundItem = findItemInCollectionByPathname(collection as never, itemPathname);
+              if (!foundItem) {
+                throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
+              }
+              const innerItem = cloneDeep(foundItem) as unknown as Record<string, unknown>;
+              await hydrateItemRequestFromDisk(innerItem, collectionPath);
+              const innerRequest = prepareItemRequest(innerItem, collection);
+              const innerScriptRequest = {
+                ...innerRequest,
+                headers: headersArrayToObject(innerRequest.headers),
+                collectionVariables: innerRequest.collectionVariables || {},
+                folderVariables: innerRequest.folderVariables || {},
+                requestVariables: innerRequest.requestVariables || {},
+                globalEnvironmentVariables: innerRequest.globalEnvironmentVariables || {},
+                name: innerRequest.name || '',
+                tags: innerRequest.tags || []
+              };
+              const runnerInnerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
+              const runnerInnerIsFormUrlEncoded = runnerInnerScriptContentType === 'application/x-www-form-urlencoded' ||
+                (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
+              if (runnerInnerIsFormUrlEncoded && Array.isArray(innerScriptRequest.data)) {
+                innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
+              }
+              const innerContext: RequestContext = {
+                uid: uuidv4(),
+                cancelTokenUid,
+                collectionUid,
+                collectionPath,
+                itemUid: innerItem.uid as string,
+                itemPathname,
+                envVars,
+                collectionVariables: innerScriptRequest.collectionVariables || {},
+                folderVariables: innerScriptRequest.folderVariables || {},
+                requestVariables: innerScriptRequest.requestVariables || {},
+                runtimeVariables: runnerRuntimeVariables as Record<string, string>,
+                processEnvVars: runnerProcessEnvVars,
+                globalEnvironmentVariables: (innerScriptRequest.globalEnvironmentVariables || {}) as Record<string, string>
+              };
+
+              const innerScriptContext = {
+                collectionUid,
+                collectionPath,
+                collectionName: collection.name as string || '',
+                itemUid: innerItem.uid as string,
+                requestUid: uuidv4(),
+                envVars: envVars as Record<string, unknown>,
+                runtimeVariables: runnerRuntimeVariables, // Shared with parent
+                processEnvVars: runnerProcessEnvVars,
+                scriptingConfig: { ...(get(collection, 'brunoConfig.scripts', {}) as Record<string, unknown>), runtime: getJsSandboxRuntime(collection as Record<string, unknown>) } as { runtime?: string },
+                runRequestByItemPathname: runnerRunRequestByItemPathname // Allow nested runRequest calls
+              };
+
+              try {
+                const preRequestResult = await runPreRequestScript(innerScriptRequest, innerScriptContext);
+                if (preRequestResult.runtimeVariables) {
+                  Object.assign(runnerRuntimeVariables, preRequestResult.runtimeVariables);
+                }
+                if (preRequestResult.envVariables) {
+                  Object.assign(envVars, preRequestResult.envVariables as Record<string, string>);
+                }
+                if (preRequestResult.skipRequest) {
+                  return {
+                    status: 0,
+                    statusText: 'Skipped',
+                    headers: {},
+                    data: null,
+                    responseTime: 0
+                  };
+                }
+              } catch (preReqError) {
+                console.error('Inner request pre-request script error:', preReqError);
+              }
+
+              const runnerInnerPostScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
+              const runnerInnerIsFormUrlEncodedAfter = runnerInnerPostScriptContentType === 'application/x-www-form-urlencoded' ||
+                (innerRequest.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
+              if (runnerInnerIsFormUrlEncodedAfter && Array.isArray(innerScriptRequest.data)) {
+                innerScriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(innerScriptRequest.data);
+              } else if (runnerInnerIsFormUrlEncodedAfter && innerScriptRequest.data && typeof innerScriptRequest.data === 'object' && !Array.isArray(innerScriptRequest.data)) {
+                innerScriptRequest.data = Object.entries(innerScriptRequest.data as Record<string, unknown>)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`)
+                  .join('&');
+              }
+
+              const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
+
+              const innerResponse = {
+                status: result.status,
+                statusText: result.statusText,
+                headers: result.headers,
+                data: result.data,
+                dataBuffer: result.rawBuffer,
+                size: result.size,
+                duration: result.duration,
+                responseTime: result.duration
+              };
+
+              try {
+                const varsResult = runPostResponseVars(innerScriptRequest, innerResponse, innerScriptContext);
+                if (varsResult?.runtimeVariables) {
+                  Object.assign(runnerRuntimeVariables, varsResult.runtimeVariables);
+                }
+                if (varsResult?.envVariables) {
+                  Object.assign(envVars, varsResult.envVariables as Record<string, string>);
+                }
+              } catch (varsError) {
+                console.error('Inner request post-response vars error:', varsError);
+              }
+
+              try {
+                const postResponseResult = await runPostResponseScript(innerScriptRequest, innerResponse, innerScriptContext);
+                if (postResponseResult.runtimeVariables) {
+                  Object.assign(runnerRuntimeVariables, postResponseResult.runtimeVariables);
+                }
+                if (postResponseResult.envVariables) {
+                  Object.assign(envVars, postResponseResult.envVariables as Record<string, string>);
+                }
+              } catch (postResError) {
+                console.error('Inner request post-response script error:', postResError);
+              }
+
+              return {
+                status: result.status,
+                statusText: result.statusText,
+                headers: result.headers,
+                data: result.data,
+                responseTime: result.duration
+              };
+            };
+
+            const scriptContext = {
+              collectionUid,
+              collectionPath,
+              collectionName: collection.name as string || '',
+              itemUid,
+              requestUid,
+              envVars: envVars as Record<string, unknown>,
+              runtimeVariables: runnerRuntimeVariables,
+              processEnvVars: runnerProcessEnvVars,
+              scriptingConfig: { ...(get(collection, 'brunoConfig.scripts', {}) as Record<string, unknown>), runtime: getJsSandboxRuntime(collection as Record<string, unknown>) } as { runtime?: string },
+              runRequestByItemPathname: runnerRunRequestByItemPathname
+            };
+
+            let skipRequest = false;
+            let nextRequestName: string | undefined;
+
+            try {
+              const preRequestResult = await runPreRequestScript(scriptRequest, scriptContext);
+
+              sendToWebview('main:run-folder-event', {
+                type: 'test-results-pre-request',
+                preRequestTestResults: [],
+                error: preRequestResult.error || null,
+                ...eventData
               });
-            });
-          }
 
-          const context: RequestContext = {
-            uid: requestUid,
-            cancelTokenUid,
-            collectionUid,
-            collectionPath,
-            itemUid,
-            itemPathname: item.pathname as string || '',
-            envVars,
-            collectionVariables: scriptRequest.collectionVariables || {},
-            folderVariables: scriptRequest.folderVariables || {},
-            requestVariables: scriptRequest.requestVariables || {},
-            runtimeVariables: runnerRuntimeVariables as Record<string, string>,
-            processEnvVars: runnerProcessEnvVars,
-            globalEnvironmentVariables: (scriptRequest.globalEnvironmentVariables || {}) as Record<string, string>
-          };
+              notifyScriptExecution('main:run-folder-event', 'pre-request', eventData, preRequestResult);
 
-          // Use scriptRequest so pre-request script changes are respected
-          const result = await executeRequest(scriptRequest as unknown as BrunoRequest, context, { runnerContext: { isRunningFolder: true, delay } });
+              if (!preRequestResult.success) {
+                sendToWebview('main:run-folder-event', {
+                  type: 'error',
+                  error: `Pre-request script error: ${preRequestResult.error}`,
+                  errorSource: 'script',
+                  responseReceived: {},
+                  ...eventData
+                });
+                currentRequestIndex++;
+                continue;
+              }
 
-          // In this case, skip post-processing and report the error
-          if (result.error && result.status === 0) {
+              skipRequest = preRequestResult.skipRequest || false;
+              nextRequestName = preRequestResult.nextRequestName;
+
+              if (preRequestResult.runtimeVariables) {
+                Object.assign(runnerRuntimeVariables, preRequestResult.runtimeVariables);
+                scriptContext.runtimeVariables = runnerRuntimeVariables;
+              }
+            } catch (preReqError) {
+              const preErr = preReqError as Error;
+              sendToWebview('main:run-folder-event', {
+                type: 'error',
+                error: `Pre-request script error: ${preErr.message}`,
+                errorSource: 'script',
+                responseReceived: {},
+                ...eventData
+              });
+              currentRequestIndex++;
+              continue;
+            }
+
+            if (skipRequest) {
+              sendToWebview('main:run-folder-event', {
+                type: 'runner-request-skipped',
+                error: 'Skipped by pre-request script',
+                responseReceived: {
+                  status: 'skipped',
+                  statusText: 'Skipped by script',
+                  data: null,
+                  responseTime: 0,
+                  headers: null
+                },
+                ...eventData
+              });
+              currentRequestIndex++;
+              continue;
+            }
+
+            // This handles cases where req.setBody() was called with an array in the script
+            const runnerPostScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
+            const runnerIsFormUrlEncodedAfter = runnerPostScriptContentType === 'application/x-www-form-urlencoded' ||
+              (request.body as { mode?: string } | undefined)?.mode === 'formUrlEncoded';
+            if (runnerIsFormUrlEncodedAfter && Array.isArray(scriptRequest.data)) {
+              scriptRequest.data = brunoUtils.buildFormUrlEncodedPayload(scriptRequest.data);
+            } else if (runnerIsFormUrlEncodedAfter && scriptRequest.data && typeof scriptRequest.data === 'object' && !Array.isArray(scriptRequest.data)) {
+              scriptRequest.data = Object.entries(scriptRequest.data as Record<string, unknown>)
+                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`)
+                .join('&');
+            }
+
+            const requestSent = buildRequestSnapshot(scriptRequest);
+
             sendToWebview('main:run-folder-event', {
-              type: 'error',
-              error: result.error,
+              type: 'request-sent',
+              requestSent,
+              ...eventData
+            });
+
+            if (delay && !Number.isNaN(delay) && delay > 0) {
+              await new Promise<void>((resolve, reject) => {
+                const timeout = setTimeout(resolve, delay);
+                abortController.signal.addEventListener('abort', () => {
+                  clearTimeout(timeout);
+                  reject(new Error('Cancelled'));
+                });
+              });
+            }
+
+            const context: RequestContext = {
+              uid: requestUid,
+              cancelTokenUid,
+              collectionUid,
+              collectionPath,
+              itemUid,
+              itemPathname: item.pathname as string || '',
+              envVars,
+              collectionVariables: scriptRequest.collectionVariables || {},
+              folderVariables: scriptRequest.folderVariables || {},
+              requestVariables: scriptRequest.requestVariables || {},
+              runtimeVariables: runnerRuntimeVariables as Record<string, string>,
+              processEnvVars: runnerProcessEnvVars,
+              globalEnvironmentVariables: (scriptRequest.globalEnvironmentVariables || {}) as Record<string, string>
+            };
+
+            // Use scriptRequest so pre-request script changes are respected
+            const result = await executeRequest(scriptRequest as unknown as BrunoRequest, context, { runnerContext: { isRunningFolder: true, delay } });
+
+            // In this case, skip post-processing and report the error
+            if (result.error && result.status === 0) {
+              sendToWebview('main:run-folder-event', {
+                type: 'error',
+                error: result.error,
+                responseReceived: {
+                  status: 0,
+                  statusText: result.error, // Use actual error message to match bruno-copy's behavior
+                  headers: {},
+                  data: null,
+                  dataBuffer: '',
+                  size: 0,
+                  duration: result.duration,
+                  responseTime: result.duration,
+                  timeline: result.timeline
+                },
+                ...eventData
+              });
+              currentRequestIndex++;
+              continue;
+            }
+
+            // Use rawBuffer (actual Buffer) for scripts, not base64 dataBuffer
+            // Include request property with URL parts for res.getUrl() to work
+            let runnerResponseRequest: { protocol: string; host: string; path: string } | undefined;
+            try {
+              // Use scriptRequest.url since it's interpolated after executeRequest
+              const responseUrl = scriptRequest.url;
+              if (responseUrl) {
+                const parsedUrl = new URL(responseUrl);
+                runnerResponseRequest = {
+                  protocol: parsedUrl.protocol,
+                  host: parsedUrl.host,
+                  path: parsedUrl.pathname + parsedUrl.search
+                };
+              }
+            } catch {
+            }
+
+            const response = {
+              status: result.status,
+              statusText: result.statusText,
+              headers: result.headers,
+              data: result.data,
+              dataBuffer: result.rawBuffer,
+              size: result.size,
+              duration: result.duration,
+              responseTime: result.duration,
+              request: runnerResponseRequest
+            };
+
+            sendToWebview('main:run-folder-event', {
+              type: 'response-received',
+              requestSent: result.requestSent,
               responseReceived: {
-                status: 0,
-                statusText: result.error, // Use actual error message to match bruno-copy's behavior
-                headers: {},
-                data: null,
-                dataBuffer: '',
-                size: 0,
+                status: result.status,
+                statusText: result.statusText,
+                headers: result.headers,
+                data: result.data,
+                dataBuffer: result.dataBuffer,
+                size: result.size,
                 duration: result.duration,
                 responseTime: result.duration,
                 timeline: result.timeline
               },
               ...eventData
             });
-            currentRequestIndex++;
-            continue;
-          }
 
-          // Use rawBuffer (actual Buffer) for scripts, not base64 dataBuffer
-          // Include request property with URL parts for res.getUrl() to work
-          let runnerResponseRequest: { protocol: string; host: string; path: string } | undefined;
-          try {
-            // Use scriptRequest.url since it's interpolated after executeRequest
-            const responseUrl = scriptRequest.url;
-            if (responseUrl) {
-              const parsedUrl = new URL(responseUrl);
-              runnerResponseRequest = {
-                protocol: parsedUrl.protocol,
-                host: parsedUrl.host,
-                path: parsedUrl.pathname + parsedUrl.search
-              };
-            }
-          } catch {
-          }
-
-          const response = {
-            status: result.status,
-            statusText: result.statusText,
-            headers: result.headers,
-            data: result.data,
-            dataBuffer: result.rawBuffer,
-            size: result.size,
-            duration: result.duration,
-            responseTime: result.duration,
-            request: runnerResponseRequest
-          };
-
-          sendToWebview('main:run-folder-event', {
-            type: 'response-received',
-            responseReceived: {
-              status: result.status,
-              statusText: result.statusText,
-              headers: result.headers,
-              data: result.data,
-              dataBuffer: result.dataBuffer,
-              size: result.size,
-              duration: result.duration,
-              responseTime: result.duration,
-              timeline: result.timeline
-            },
-            ...eventData
-          });
-
-          try {
-            const varsResult = runPostResponseVars(scriptRequest, response, scriptContext);
-            if (varsResult?.runtimeVariables) {
-              Object.assign(runnerRuntimeVariables, varsResult.runtimeVariables);
-              scriptContext.runtimeVariables = runnerRuntimeVariables;
-            }
-          } catch (varsError) {
-            console.error('Post-response vars error:', varsError);
-          }
-
-          try {
-            const postResponseResult = await runPostResponseScript(scriptRequest, response, scriptContext);
-
-            sendToWebview('main:run-folder-event', {
-              type: 'test-results-post-response',
-              postResponseTestResults: [],
-              error: postResponseResult.error || null,
-              ...eventData
-            });
-
-            if (postResponseResult.runtimeVariables) {
-              Object.assign(runnerRuntimeVariables, postResponseResult.runtimeVariables);
-              scriptContext.runtimeVariables = runnerRuntimeVariables;
+            try {
+              const varsResult = runPostResponseVars(scriptRequest, response, scriptContext);
+              if (varsResult?.runtimeVariables) {
+                Object.assign(runnerRuntimeVariables, varsResult.runtimeVariables);
+                scriptContext.runtimeVariables = runnerRuntimeVariables;
+              }
+            } catch (varsError) {
+              console.error('Post-response vars error:', varsError);
             }
 
-            if (postResponseResult.nextRequestName) {
-              nextRequestName = postResponseResult.nextRequestName;
+            try {
+              const postResponseResult = await runPostResponseScript(scriptRequest, response, scriptContext);
+
+              sendToWebview('main:run-folder-event', {
+                type: 'test-results-post-response',
+                postResponseTestResults: [],
+                error: postResponseResult.error || null,
+                ...eventData
+              });
+
+              notifyScriptExecution('main:run-folder-event', 'post-response', eventData, postResponseResult);
+
+              if (postResponseResult.runtimeVariables) {
+                Object.assign(runnerRuntimeVariables, postResponseResult.runtimeVariables);
+                scriptContext.runtimeVariables = runnerRuntimeVariables;
+              }
+
+              if (postResponseResult.nextRequestName) {
+                nextRequestName = postResponseResult.nextRequestName;
+              }
+            } catch (postResError) {
+              console.error('Post-response script error:', postResError);
+              sendToWebview('main:run-folder-event', {
+                type: 'test-results-post-response',
+                postResponseTestResults: [],
+                error: (postResError as Error).message,
+                ...eventData
+              });
             }
-          } catch (postResError) {
-            console.error('Post-response script error:', postResError);
-            sendToWebview('main:run-folder-event', {
-              type: 'test-results-post-response',
-              postResponseTestResults: [],
-              error: (postResError as Error).message,
-              ...eventData
-            });
-          }
 
-          let assertionResults: Array<unknown> = [];
-          try {
-            const assertResult = runAssertions(scriptRequest, response, scriptContext);
-            assertionResults = assertResult.results || [];
+            let assertionResults: Array<unknown> = [];
+            try {
+              const assertResult = runAssertions(scriptRequest, response, scriptContext);
+              assertionResults = assertResult.results || [];
 
-            sendToWebview('main:run-folder-event', {
-              type: 'assertion-results',
-              assertionResults,
-              ...eventData
-            });
-          } catch (assertError) {
-            console.error('Assertions error:', assertError);
-            assertionResults = [{
-              uid: 'error',
-              lhsExpr: 'assertion',
-              rhsExpr: 'error',
-              operator: 'error',
-              error: (assertError as Error).message,
-              status: 'fail'
-            }];
-            sendToWebview('main:run-folder-event', {
-              type: 'assertion-results',
-              assertionResults,
-              ...eventData
-            });
-          }
-
-          let testResults: Array<unknown> = [];
-          try {
-            const testResult = await runTests(scriptRequest, response, scriptContext);
-            testResults = testResult.results || [];
-
-            sendToWebview('main:run-folder-event', {
-              type: 'test-results',
-              testResults,
-              ...eventData
-            });
-          } catch (testError) {
-            console.error('Tests error:', testError);
-            testResults = [{
-              uid: 'error',
-              description: 'Test execution error',
-              passed: false,
-              error: (testError as Error).message
-            }];
-            sendToWebview('main:run-folder-event', {
-              type: 'test-results',
-              testResults,
-              ...eventData
-            });
-          }
-
-          if (nextRequestName) {
-            const nextIndex = folderRequests.findIndex(r => r.name === nextRequestName);
-            if (nextIndex !== -1) {
-              currentRequestIndex = nextIndex;
-              continue;
+              sendToWebview('main:run-folder-event', {
+                type: 'assertion-results',
+                assertionResults,
+                ...eventData
+              });
+            } catch (assertError) {
+              console.error('Assertions error:', assertError);
+              assertionResults = [{
+                uid: 'error',
+                lhsExpr: 'assertion',
+                rhsExpr: 'error',
+                operator: 'error',
+                error: (assertError as Error).message,
+                status: 'fail'
+              }];
+              sendToWebview('main:run-folder-event', {
+                type: 'assertion-results',
+                assertionResults,
+                ...eventData
+              });
             }
+
+            let testResults: Array<unknown> = [];
+            try {
+              const testResult = await runTests(scriptRequest, response, scriptContext);
+              testResults = testResult.results || [];
+
+              notifyScriptExecution('main:run-folder-event', 'test', eventData, testResult);
+
+              sendToWebview('main:run-folder-event', {
+                type: 'test-results',
+                testResults,
+                ...eventData
+              });
+            } catch (testError) {
+              console.error('Tests error:', testError);
+              testResults = [{
+                uid: 'error',
+                description: 'Test execution error',
+                passed: false,
+                error: (testError as Error).message
+              }];
+              sendToWebview('main:run-folder-event', {
+                type: 'test-results',
+                testResults,
+                ...eventData
+              });
+            }
+
+            if (nextRequestName) {
+              const nextIndex = folderRequests.findIndex(r => r.name === nextRequestName);
+              if (nextIndex !== -1) {
+                currentRequestIndex = nextIndex;
+                continue;
+              }
+            }
+
+          } catch (error) {
+            const err = error as Error;
+
+            sendToWebview('main:run-folder-event', {
+              type: 'error',
+              error: err.message || 'An error occurred while running the request',
+              responseReceived: {},
+              ...eventData
+            });
           }
 
-        } catch (error) {
-          const err = error as Error;
-
-          sendToWebview('main:run-folder-event', {
-            type: 'error',
-            error: err.message || 'An error occurred while running the request',
-            responseReceived: {},
-            ...eventData
-          });
+          currentRequestIndex++;
         }
 
-        currentRequestIndex++;
-      }
-
-      deleteCancelToken(cancelTokenUid);
-      sendToWebview('main:run-folder-event', {
-        type: 'testrun-ended',
-        collectionUid,
-        folderUid,
-        runCompletionTime: new Date().toISOString()
-      });
+        sendToWebview('main:run-folder-event', {
+          type: 'testrun-ended',
+          collectionUid,
+          folderUid,
+          runCompletionTime: new Date().toISOString()
+        });
 
       } catch (error) {
-        deleteCancelToken(cancelTokenUid);
         sendToWebview('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,
@@ -2217,6 +2383,10 @@ const registerNetworkIpc = (): void => {
           runCompletionTime: new Date().toISOString(),
           error: error && !(error as { isCancel?: boolean }).isCancel ? error : null
         });
+      } finally {
+        deleteCancelToken(cancelTokenUid);
+        setRuntimeVariables(collectionUid, runnerRuntimeVariables);
+        broadcastRuntimeVariables(collectionUid, runnerRuntimeVariables);
       }
     };
 

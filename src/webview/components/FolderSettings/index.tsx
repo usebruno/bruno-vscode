@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import classnames from 'classnames';
 import { updatedFolderSettingsSelectedTab } from 'providers/ReduxStore/slices/collections';
 import { useDispatch } from 'react-redux';
@@ -10,7 +10,7 @@ import Vars from './Vars';
 import Documentation from './Documentation';
 import Auth from './Auth';
 import StatusDot from 'components/StatusDot';
-import get from 'lodash/get';
+import { hasEffectiveAuth } from 'utils/auth';
 
 interface FolderSettingsProps {
   collection?: React.ReactNode;
@@ -40,8 +40,11 @@ const FolderSettings = ({
   const responseVars = folderRoot?.request?.vars?.res || [];
   const activeVarsCount = requestVars.filter((v: any) => v.enabled).length + responseVars.filter((v: any) => v.enabled).length;
 
-  const auth = get(folderRoot, 'request.auth.mode');
-  const hasAuth = auth && auth !== 'none';
+  const folderAuthMode = folderRoot?.request?.auth?.mode;
+  const hasAuth = useMemo(
+    () => hasEffectiveAuth(collection, folder),
+    [folder, folderAuthMode, collection]
+  );
 
   const setTab = (tab: any) => {
     dispatch(
@@ -83,7 +86,7 @@ const FolderSettings = ({
   };
 
   return (
-    <StyledWrapper className="flex flex-col h-full overflow-auto">
+    <StyledWrapper className="flex flex-col h-full overflow-auto" data-testid="folder-settings">
       <div className="flex flex-col h-full relative px-4 py-4">
         <div className="flex flex-wrap items-center tabs" role="tablist">
           <div className={getTabClassname('headers')} role="tab" onClick={() => setTab('headers')}>
@@ -92,11 +95,11 @@ const FolderSettings = ({
           </div>
           <div className={getTabClassname('script')} role="tab" onClick={() => setTab('script')}>
             Script
-            {hasScripts && <StatusDot />}
+            {hasScripts && <StatusDot testId="script" />}
           </div>
           <div className={getTabClassname('test')} role="tab" onClick={() => setTab('test')}>
             Test
-            {hasTests && <StatusDot />}
+            {hasTests && <StatusDot testId="tests" />}
           </div>
           <div className={getTabClassname('vars')} role="tab" onClick={() => setTab('vars')}>
             Vars
@@ -104,13 +107,13 @@ const FolderSettings = ({
           </div>
           <div className={getTabClassname('auth')} role="tab" onClick={() => setTab('auth')}>
             Auth
-            {hasAuth && <StatusDot />}
+            {hasAuth && <StatusDot testId="auth" />}
           </div>
           <div className={getTabClassname('docs')} role="tab" onClick={() => setTab('docs')}>
             Docs
           </div>
         </div>
-        <section className="flex mt-4 h-full overflow-auto">{getTabPanel(tab)}</section>
+        <section className="flex mt-4 flex-1 min-h-0 overflow-auto">{getTabPanel(tab)}</section>
       </div>
     </StyledWrapper>
   );

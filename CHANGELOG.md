@@ -1,5 +1,23 @@
 # Changelog
 
+## [6.0.0]
+
+### Added
+- Request timeline for viewing network trace, timings, and response details
+- Data type support for variables (string, number, boolean, object, array)
+- Apps at collection and request level
+- Prompt variables to prompt the user for a value at send time
+
+### Fixed
+- Various bug fixes and stability improvements
+
+## [5.0.2]
+
+### Fixed
+- Sidebar crash when copy-pasting requests between collections with different formats (.bru and .yml)
+- Sidebar search crash on requests with numeric names
+- Copy-paste and clone losing request URL and body data
+
 ## [5.0.1]
 
 ### Fixed

@@ -3,14 +3,14 @@ import { forOwn, cloneDeep } from 'lodash';
 const { interpolate } = require('@usebruno/common');
 
 interface InterpolationOptions {
-  globalEnvironmentVariables?: Record<string, string>;
-  collectionVariables?: Record<string, string>;
-  envVars?: Record<string, string>;
-  folderVariables?: Record<string, string>;
-  requestVariables?: Record<string, string>;
-  runtimeVariables?: Record<string, string>;
-  processEnvVars?: Record<string, string>;
-  promptVariables?: Record<string, string>;
+  globalEnvironmentVariables?: Record<string, unknown>;
+  collectionVariables?: Record<string, unknown>;
+  envVars?: Record<string, unknown>;
+  folderVariables?: Record<string, unknown>;
+  requestVariables?: Record<string, unknown>;
+  runtimeVariables?: Record<string, unknown>;
+  processEnvVars?: Record<string, unknown>;
+  promptVariables?: Record<string, unknown>;
 }
 
 const interpolateString = (

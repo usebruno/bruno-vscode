@@ -149,7 +149,7 @@ const AwsV4Auth = ({
   return (
     <StyledWrapper className="mt-2 w-full">
       <label className="block mb-1">Access Key ID</label>
-      <div className="single-line-editor-wrapper mb-3">
+      <div className="single-line-editor-wrapper mb-3" data-testid="auth-awsv4-access-key-id">
         <SingleLineEditor
           value={awsv4Auth.accessKeyId || ''}
           theme={storedTheme}
@@ -163,7 +163,7 @@ const AwsV4Auth = ({
       </div>
 
       <label className="block mb-1">Secret Access Key</label>
-      <div className="single-line-editor-wrapper mb-3 flex items-center">
+      <div className="single-line-editor-wrapper mb-3 flex items-center" data-testid="auth-awsv4-secret-access-key">
         <SingleLineEditor
           value={awsv4Auth.secretAccessKey || ''}
           theme={storedTheme}
@@ -194,7 +194,7 @@ const AwsV4Auth = ({
       </div>
 
       <label className="block mb-1">Service</label>
-      <div className="single-line-editor-wrapper mb-3">
+      <div className="single-line-editor-wrapper mb-3" data-testid="auth-awsv4-service">
         <SingleLineEditor
           value={awsv4Auth.service || ''}
           theme={storedTheme}
@@ -208,7 +208,7 @@ const AwsV4Auth = ({
       </div>
 
       <label className="block mb-1">Region</label>
-      <div className="single-line-editor-wrapper mb-3">
+      <div className="single-line-editor-wrapper mb-3" data-testid="auth-awsv4-region">
         <SingleLineEditor
           value={awsv4Auth.region || ''}
           theme={storedTheme}

@@ -151,6 +151,7 @@ const CreateUntitledRequest = ({
 
   return (
     <MenuDropdown
+      data-testid="create-untitled-request"
       items={menuItems}
       placement={placement}
       autoFocusFirstOption={true}

@@ -9,7 +9,8 @@ export type ItemType =
   | 'folder'
   | 'js'
   | 'grpc-request'
-  | 'ws-request';
+  | 'ws-request'
+  | 'app';
 
 export interface HttpItemSettings {
   encodeUrl?: boolean | null;
@@ -27,6 +28,11 @@ export interface WebSocketItemSettings {
 
 export type ItemSettings = HttpItemSettings | WebSocketItemSettings | null;
 
+export interface ItemApp {
+  code?: string | null;
+  enabled?: boolean;
+}
+
 export interface Item {
   uid: UID;
   type: ItemType;
@@ -41,4 +47,5 @@ export interface Item {
   examples?: Example[] | null;
   filename?: string | null;
   pathname?: string | null;
+  app?: ItemApp | null;
 }

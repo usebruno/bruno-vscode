@@ -10,6 +10,7 @@ import { posixifyPath } from '../utils/filesystem';
 const { parseEnvironment } = require('@usebruno/filestore');
 import EnvironmentSecretsStore from '../store/env-secrets';
 import { decryptStringSafe } from '../utils/encryption';
+import { parseValueByDataType, BrunoVariableDataType } from '@usebruno/common/utils';
 
 type MessageSender = (channel: string, data: unknown) => void;
 
@@ -26,8 +27,9 @@ export function setMessageSender(sender: MessageSender): void {
 interface EnvironmentVariable {
   uid?: string;
   name: string;
-  value: string;
+  value: string | number | boolean | Record<string, unknown> | null;
   secret?: boolean;
+  dataType?: BrunoVariableDataType;
 }
 
 interface Environment {
@@ -146,7 +148,8 @@ const parseGlobalEnvironmentFile = async (
       const variable = _.find(file.data!.variables, (v) => v.name === secret.name);
       if (variable && secret.value) {
         const decryptionResult = decryptStringSafe(secret.value);
-        variable.value = decryptionResult.value;
+        // Coerce back to the recorded data type so typed secrets round-trip like non-secret vars.
+        variable.value = parseValueByDataType(decryptionResult.value, variable.dataType);
       }
     });
   }

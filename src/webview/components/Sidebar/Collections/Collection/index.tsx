@@ -38,7 +38,7 @@ import { makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
 import toast from 'react-hot-toast';
 import CollectionItem from './CollectionItem';
 import { doesCollectionHaveItemsMatchingSearchText } from 'utils/collections/search';
-import { isItemAFolder, isItemARequest } from 'utils/collections';
+import { isItemAFolder, isItemARequest, isItemAnApp } from 'utils/collections';
 import { isTabForItemActive } from 'selectors/tab';
 import StyledWrapper from './StyledWrapper';
 import { areItemsLoading } from 'utils/collections';
@@ -49,6 +49,7 @@ import { getRevealInFolderLabel } from 'utils/common/platform';
 import ActionIcon from 'ui/ActionIcon';
 import MenuDropdown from 'ui/MenuDropdown';
 import { useSidebarAccordion } from 'components/Sidebar/SidebarAccordionContext';
+import useSearchCollapse from 'hooks/useSearchCollapse';
 import { ipcRenderer } from 'utils/ipc';
 import { addTransientRequest } from 'providers/ReduxStore/slices/collections';
 import transientManager from 'utils/transient-manager';
@@ -77,8 +78,12 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
     });
   };
 
-  const hasSearchText = searchText && searchText?.trim?.()?.length;
-  const collectionIsCollapsed = hasSearchText ? false : collection.collapsed;
+  const hasSearchText = !!(searchText && searchText?.trim?.()?.length);
+  const { collapsed: collectionIsCollapsed, toggleCollapsed } = useSearchCollapse(
+    hasSearchText,
+    collection.collapsed,
+    () => dispatch(toggleCollection(collection.uid))
+  );
 
   const iconClassName = classnames({
     'rotate-90': !collectionIsCollapsed
@@ -110,7 +115,7 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
   const handleCollectionCollapse = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    dispatch(toggleCollection(collection.uid));
+    toggleCollapsed();
   };
 
   const handleCollectionDoubleClick = (e: React.MouseEvent) => {
@@ -290,12 +295,6 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
     }
   }, [isCollectionFocused]);
 
-  if (searchText && (searchText as string).length) {
-    if (!doesCollectionHaveItemsMatchingSearchText(collection, searchText)) {
-      return null;
-    }
-  }
-
   const collectionRowClassName = classnames('flex py-1 collection-name items-center', {
     'item-hovered': isOver && dropType === 'adjacent',
     'drop-target': isOver && dropType === 'inside',
@@ -303,14 +302,21 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
     'collection-keyboard-focused': isKeyboardFocused
   });
 
-  const { folderItems, requestItems } = useMemo(() => {
+  const { folderItems, appItems, requestItems } = useMemo(() => {
     const items = collection.items || [];
     const folders = sortByNameThenSequence(filter(items, (i: any) => isItemAFolder(i)));
+    const apps = sortByNameThenSequence(filter(items, (i: any) => isItemAnApp(i) && !i.isTransient));
     const requests = sortByNameThenSequence(filter(items, (i: any) => isItemARequest(i) && !i.isTransient));
-    return { folderItems: folders, requestItems: requests };
+    return { folderItems: folders, appItems: apps, requestItems: requests };
   }, [collection.items]);
 
   const newRequestMenuRef = useRef<any>(null);
+
+  // The menu is memoized on collection.uid, so its onClicks would capture a
+  // stale collection. Read the latest via a ref so "Untitled N" numbering
+  // reflects the current items.
+  const latestCollectionRef = useRef(collection);
+  latestCollectionRef.current = collection;
 
   const openTransientRequest = (item: any) => {
     dispatch(addTransientRequest({ collectionUid: collection.uid, item }));
@@ -328,25 +334,25 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
       id: 'new-http',
       leftSection: IconApi,
       label: 'HTTP',
-      onClick: () => openTransientRequest(transientManager.createHttpRequest(collection))
+      onClick: () => openTransientRequest(transientManager.createHttpRequest(latestCollectionRef.current))
     },
     {
       id: 'new-graphql',
       leftSection: IconBrandGraphql,
       label: 'GraphQL',
-      onClick: () => openTransientRequest(transientManager.createGraphQLRequest(collection))
+      onClick: () => openTransientRequest(transientManager.createGraphQLRequest(latestCollectionRef.current))
     },
     {
       id: 'new-grpc',
       leftSection: IconNetwork,
       label: 'gRPC',
-      onClick: () => openTransientRequest(transientManager.createGrpcRequest(collection))
+      onClick: () => openTransientRequest(transientManager.createGrpcRequest(latestCollectionRef.current))
     },
     {
       id: 'new-ws',
       leftSection: IconPlugConnected,
       label: 'WebSocket',
-      onClick: () => openTransientRequest(transientManager.createWebSocketRequest(collection))
+      onClick: () => openTransientRequest(transientManager.createWebSocketRequest(latestCollectionRef.current))
     }
   ], [collection.uid]);
 
@@ -421,6 +427,12 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
     }
   ], [hasCopiedItems, collection.uid]);
 
+  if (searchText && searchText.length) {
+    if (!doesCollectionHaveItemsMatchingSearchText(collection, searchText)) {
+      return null;
+    }
+  }
+
   return (
     <StyledWrapper className="flex flex-col" id={`collection-${collection.name.replace(/\s+/g, '-').toLowerCase()}`}>
       <CollectionItemDragPreview />
@@ -434,7 +446,7 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
         onKeyDown={handleKeyDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        data-testid="sidebar-collection-row"
+        data-testid={`sidebar-collection-row-${collection.name}`}
       >
         <div
           className="flex flex-grow items-center overflow-hidden"
@@ -464,9 +476,9 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
             placement="bottom-start"
             appendTo={dropdownContainerRef?.current || document.body}
             popperOptions={{ strategy: 'fixed' }}
-            data-testid="collection-new-request"
+            data-testid={`collection-new-request-${collection.name}`}
           >
-            <ActionIcon className="collection-actions" data-testid="collection-new-request-btn">
+            <ActionIcon className="collection-actions">
               <IconPlus size={16} strokeWidth={2} />
             </ActionIcon>
           </MenuDropdown>
@@ -477,7 +489,7 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
               placement="bottom-start"
               appendTo={dropdownContainerRef?.current || document.body}
               popperOptions={{ strategy: 'fixed' }}
-              data-testid="collection-actions"
+              data-testid={`collection-actions-${collection.name}`}
             >
               <ActionIcon className="collection-actions">
                 <IconDots size={18} />
@@ -490,6 +502,9 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
         {!collectionIsCollapsed ? (
           <div>
             {folderItems?.map?.((i: any) => {
+              return <CollectionItem key={i.uid} item={i} collectionUid={collection.uid} collectionPathname={collection.pathname} searchText={searchText} />;
+            })}
+            {appItems?.map?.((i: any) => {
               return <CollectionItem key={i.uid} item={i} collectionUid={collection.uid} collectionPathname={collection.pathname} searchText={searchText} />;
             })}
             {requestItems?.map?.((i: any) => {

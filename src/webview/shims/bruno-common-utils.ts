@@ -7,6 +7,129 @@
  * a circular import if we tried to re-export from the npm package.
  */
 
+export type BrunoVariableDataType = 'string' | 'number' | 'boolean' | 'object';
+
+/**
+ * Derive the Bru lang data type of a native value. Mirrors @usebruno/common's implementation;
+ * reimplemented here because the rsbuild alias redirects @usebruno/common/utils to this shim.
+ */
+export const getDataTypeFromValue = (value: unknown): BrunoVariableDataType => {
+  if (value === null || value === undefined) return 'string';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (typeof value === 'object') return 'object';
+  return 'string';
+};
+
+export const BRUNO_VARIABLE_DATATYPES: readonly BrunoVariableDataType[] = ['string', 'number', 'boolean', 'object'];
+
+/** String-form → typed JS value, or the raw value on failure. Pairs with valueToString. */
+export const parseValueByDataType = (value: any, dataType?: BrunoVariableDataType): any => {
+  if (!dataType || dataType === 'string') return value;
+  try {
+    if (dataType === 'number') {
+      if (typeof value === 'number') return value;
+      const trimmed = typeof value === 'string' ? value.trim() : value;
+      if (trimmed === '' || trimmed == null) return value;
+      const num = Number(trimmed);
+      if (!Number.isNaN(num)) return num;
+    } else if (dataType === 'boolean') {
+      if (typeof value === 'boolean') return value;
+      if (value === 'true') return true;
+      if (value === 'false') return false;
+    } else if (dataType === 'object') {
+      if (typeof value === 'object' && value !== null) return value;
+      const trimmed = typeof value === 'string' ? value.trim() : value;
+      if (trimmed === '' || trimmed == null) return value;
+      const parsed = JSON.parse(trimmed);
+      if (parsed !== null && typeof parsed === 'object') return parsed;
+    }
+  } catch (_) {
+    // not coercible — fall through to raw
+  }
+  return value;
+};
+
+/** Native value → its string form (objects as JSON). Pairs with parseValueByDataType. */
+export const valueToString = (value: unknown, indent?: number): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'function' || typeof value === 'symbol') return '';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value, null, indent) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+  return String(value);
+};
+
+/** Error message when a coerced value's JS type doesn't match its declared dataType, else null. */
+export const validateDataTypeValue = (value: any, dataType?: BrunoVariableDataType): string | null => {
+  if (!dataType || dataType === 'string') return null;
+  if (value === undefined || value === null) return null;
+  if (dataType === 'number' && typeof value !== 'number') return `Value is not a valid ${dataType}`;
+  if (dataType === 'boolean' && typeof value !== 'boolean') return `Value is not a valid ${dataType}`;
+  if (dataType === 'object' && typeof value !== 'object') return `Value is not a valid ${dataType}`;
+  return null;
+};
+
+export interface DotenvVariable {
+  name: string;
+  value?: string;
+}
+
+/**
+ * Serializes variables to .env file content. Copied from @usebruno/common because the
+ * rsbuild alias points @usebruno/common/utils at this shim, so its version is unreachable
+ * here. The two must stay byte-identical or the extension and the webview disagree on
+ * what a saved file should look like.
+ *
+ * A value is quoted based on how the dotenv parser reads each quote style back:
+ * - unquoted keeps \, " and ', but ends the value at a # and drops surrounding spaces
+ * - single and backtick quotes are taken literally
+ * - double quotes are literal except for \n and \r, which expand
+ */
+export const jsonToDotenv = (variables: DotenvVariable[]): string => {
+  if (!Array.isArray(variables)) {
+    return '';
+  }
+
+  return variables
+    .filter((variable) => variable.name && variable.name.trim() !== '')
+    .map((variable) => {
+      const value = variable.value || '';
+
+      if (value.includes('\n') || value.includes('\r')) {
+        return `${variable.name}="${value.replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`;
+      }
+
+      if (value.includes('#')) {
+        if (!value.includes('\'')) {
+          return `${variable.name}='${value}'`;
+        }
+        if (!value.includes('`')) {
+          return `${variable.name}=\`${value}\``;
+        }
+        return `${variable.name}="${value.replace(/"/g, '\\"')}"`;
+      }
+
+      if (value !== value.trim()) {
+        if (!value.includes('\'')) {
+          return `${variable.name}='${value}'`;
+        }
+        if (!value.includes('`')) {
+          return `${variable.name}=\`${value}\``;
+        }
+        return `${variable.name}="${value}"`;
+      }
+
+      return `${variable.name}=${value}`;
+    })
+    .join('\n');
+};
+
 interface QueryParam {
   name: string;
   value?: string;
