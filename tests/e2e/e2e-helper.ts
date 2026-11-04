@@ -182,9 +182,7 @@ type LifecycleSuite = {
 
 type OnlySuiteExports<T> = T & { [K in Exclude<keyof T, keyof LifecycleSuite>]: 'A suite can export only desc, workspace, run and setup' };
 
-export function runSuites<const S extends LifecycleSuite[]>(title: string, suites: { [I in keyof S]: OnlySuiteExports<S[I]> }, { timeoutMs = 3 * 60_000 } = {}) {
-  test.describe.configure({ mode: 'serial', timeout: timeoutMs });
-
+export function runSuites<const S extends LifecycleSuite[]>(title: string, suites: { [I in keyof S]: OnlySuiteExports<S[I]> }) {
   test.describe(title, () => {
     for (const { desc, workspace, run, setup } of suites as LifecycleSuite[]) {
       test.describe(desc, () => {

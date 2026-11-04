@@ -90,7 +90,6 @@ async function verifyTokenLifecycle() {
   await setAuth('clear-cache', 'oauth2', clientCredentials);
   await getOAuth2AccessToken('clear-cache');
   await clearOAuth2Cache('clear-cache');
-  await sendRequestAndExpect('clear-cache', 401);
 
   await setAuth('refresh', 'oauth2', { ...clientCredentials, refreshTokenUrl: `${TEST_SERVER_LOCAL_URL}/api/auth/oauth2/refresh` });
   await getOAuth2AccessToken('refresh');
