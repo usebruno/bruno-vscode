@@ -13,6 +13,18 @@ interface UpdateData {
 
 let extensionContext: vscode.ExtensionContext | null = null;
 
+export const normalizeSnapshotPath = (p: string): string => {
+  if (!p) {
+    return p;
+  }
+
+  // Convert backslashes to forward slashes and strip trailing slashes
+  const normalized = p.replace(/\\/g, '/').replace(/\/+$/, '');
+
+  // Lowercase the Windows drive letter so "C:/foo" and "c:/foo" match
+  return /^[a-zA-Z]:/.test(normalized) ? normalized[0].toLowerCase() + normalized.slice(1) : normalized;
+};
+
 export function setExtensionContext(context: vscode.ExtensionContext): void {
   extensionContext = context;
 }
@@ -34,19 +46,37 @@ class UiStateSnapshotStore {
   }
 
   getCollections(): CollectionSnapshot[] {
-    return this.getFromStorage<CollectionSnapshot[]>('ui-state-snapshot.collections', []);
+    const byPathname = new Map<string, CollectionSnapshot>();
+
+    // Dedupe by normalized pathname; later entries overwrite earlier ones
+    for (const c of this.getFromStorage<CollectionSnapshot[]>('ui-state-snapshot.collections', [])) {
+      if (!c?.pathname) {
+        continue;
+      }
+      
+      const pathname = normalizeSnapshotPath(c.pathname);
+      byPathname.set(pathname, { ...c, pathname });
+    }
+
+    return [...byPathname.values()];
   }
 
   saveCollections(collections: CollectionSnapshot[]): void {
     this.setInStorage('ui-state-snapshot.collections', collections);
   }
 
-  getCollectionByPathname({ pathname }: { pathname: string }): CollectionSnapshot {
-    let collections = this.getCollections();
+  findByPathname(pathname: string): CollectionSnapshot | undefined {
+    const normalizedPathname = normalizeSnapshotPath(pathname);
+    return this.getCollections().find((c) => c.pathname === normalizedPathname);
+  }
 
-    let collection = collections.find((c) => c?.pathname === pathname);
+  getCollectionByPathname({ pathname }: { pathname: string }): CollectionSnapshot {
+    const normalizedPathname = normalizeSnapshotPath(pathname);
+    const collections = this.getCollections();
+
+    let collection = collections.find((c) => c.pathname === normalizedPathname);
     if (!collection) {
-      collection = { pathname };
+      collection = { pathname: normalizedPathname };
       collections.push(collection);
       this.saveCollections(collections);
     }
@@ -55,13 +85,12 @@ class UiStateSnapshotStore {
   }
 
   setCollectionByPathname({ collection }: { collection: CollectionSnapshot }): CollectionSnapshot {
-    let collections = this.getCollections();
-
-    collections = collections.filter((c) => c?.pathname !== collection.pathname);
-    collections.push({ ...collection });
+    const normalizedCollection = { ...collection, pathname: normalizeSnapshotPath(collection.pathname) };
+    const collections = this.getCollections().filter((c) => c.pathname !== normalizedCollection.pathname);
+    collections.push(normalizedCollection);
     this.saveCollections(collections);
 
-    return collection;
+    return normalizedCollection;
   }
 
   updateCollectionEnvironment({ collectionPath, environmentName }: { collectionPath: string; environmentName: string }): void {
