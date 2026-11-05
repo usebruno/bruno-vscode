@@ -1,7 +1,20 @@
-import { Page, expect } from "@playwright/test";
-import { createCollectionV2, createRequestV2, deleteRequestV2, exportCollectionV2, fillRequestDetails, openBrunoSidebar, saveRequest, saveRequestV2, sendRequest } from "./utils/page/actions";
+import { Page } from "@playwright/test";
+import { Context } from "./context";
+import {
+  createCollectionV2,
+  createFolderV2,
+  createRequestV2,
+  fillRequestDetails,
+  openBrunoSidebar,
+  openCollectionSettings,
+  saveRequestV2,
+  sendRequest,
+  setCollectionHeaders,
+  setCollectionPresets,
+  setCollectionVars
+} from "./utils/page/actions";
 
-type KeyValue<T = string | number | boolean> = {
+export type KeyValue<T = string | number | boolean> = {
   [k: string]: T,
 }
 
@@ -19,7 +32,6 @@ type RequestConfig<EnvName extends string = string> = {
   method: RequestMethod
   run: boolean,
   env?: NoInfer<EnvName>
-  delete?: boolean;
 }
 
 type EnvConfig<EnvName extends string = string> = {
@@ -27,33 +39,58 @@ type EnvConfig<EnvName extends string = string> = {
   vars: { [k: string]: string }[]
 }
 
-type CollectionConfig<EnvName extends string = string> = {
+type CollectionConfig<EnvName extends string = string, FolderName extends string = string> = {
   format: FileFormat,
   name: string,
-  vars?: KeyValue[],
+  vars?: KeyValue,
+  headers?: KeyValue,
+  presets?: { requestUrl: string },
+  folders?: FolderName[],
   requests: RequestConfig<EnvName>[]
-  export?: boolean
 } | string /* fixture path */
 
-type Config<EnvName extends string = string> = {
-  collections: CollectionConfig<EnvName>[];
+// Just the settings-panel part of a collection, for the set collection settings actions.
+export type CollectionSettingsConfig = Pick<Exclude<CollectionConfig, string>, 'vars' | 'headers' | 'presets'>;
+
+type Config<EnvName extends string = string, FolderName extends string = string> = {
+  collections: CollectionConfig<EnvName, FolderName>[];
   envs?: EnvConfig<EnvName>[]
 }
 
-
-export async function performE2E<const EnvName extends string = never>(config: Config<EnvName>, page: Page) {
+export async function createSetup<const EnvName extends string = never, const FolderName extends string = never>(config: Config<EnvName, FolderName>, page: Page) {
   const collections = config.collections;
   const sidebar = await openBrunoSidebar(page);
+  const ctx = new Context();
 
   for (const [index, collection] of collections.entries()) {
     if (typeof collection === 'string') {
       // import collection
     } else {
-      const ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
+      await createCollectionV2(page, sidebar, ctx, collection.name, index !== 0, collection.format)
+
+      if (collection.vars || collection.headers || collection.presets) {
+        const settings = await openCollectionSettings(page, sidebar, collection.name);
+
+        if (collection.vars) {
+          await setCollectionVars(page, settings, collection.vars);
+        }
+
+        if (collection.headers) {
+          await setCollectionHeaders(page, settings, collection.headers);
+        }
+
+        if (collection.presets) {
+          await setCollectionPresets(settings, collection.presets);
+        }
+      }
+
+      for (const folder of collection.folders ?? []) {
+        await createFolderV2(page, sidebar, collection.name, folder);
+      }
 
       for (const request of collection.requests) {
         const requestWebview = await createRequestV2(page, sidebar, ctx, collection.name, request.type, request.method)
-        await fillRequestDetails(requestWebview, ctx, request.url, request.payload, request.params, request.headers)
+        await fillRequestDetails(requestWebview, ctx, request.type, request.url, request.payload, request.params, request.headers)
 
         if (request.run) {
           await sendRequest(requestWebview, 200)
@@ -61,21 +98,8 @@ export async function performE2E<const EnvName extends string = never>(config: C
 
         await saveRequestV2(page, requestWebview, ctx, request.name, true)
       }
-
-      // Delete only after every request is saved, so deletes don't shift the "Untitled N" titles.
-      const requestsToDelete = collection.requests.filter((request) => request.delete);
-      for (const request of requestsToDelete) {
-        await deleteRequestV2(page, sidebar, ctx, request.name, collection.format)
-      }
-
-      if (collection.export) {
-        const exported = await exportCollectionV2(page, sidebar, ctx)
-
-        // verify the export reflects the deletes
-        const exportedNames = (exported.items ?? []).map((item: { name: string }) => item.name);
-        const remainingNames = collection.requests.filter((request) => !request.delete).map((request) => request.name);
-        expect(exportedNames.sort()).toEqual(remainingNames.sort());
-      }
     }
   }
+
+  return { sidebar, ctx };
 }
