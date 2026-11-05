@@ -30,6 +30,7 @@ import {
   parseEnvironment
 } from '../utils/parse';
 import { transformBrunoConfigAfterRead } from '../utils/transformBrunoConfig';
+import { isDocumentRegistered } from '../editors/dirty-state-manager';
 
 // Message sender type - will be set by the extension (variadic args)
 type MessageSender = (channel: string, ...args: unknown[]) => void;
@@ -968,6 +969,13 @@ class CollectionWatcher {
     const format = getCollectionFormat(collectionPath);
     if (hasRequestExtension(pathname, format)) {
       await this.handleRequestFile(pathname, collectionUid, collectionPath);
+      // A create event also fires when an existing file is replaced (atomic saves, git checkout).
+      // handleRequestFile sends metadata only, which a request already parsed in an open tab keeps
+      // ignoring, so files open in an editor also get the full content: the change handler updates
+      // them and keeps any draft. Other files stay metadata-only, so a git pull stays cheap.
+      if (isDocumentRegistered(pathname)) {
+        await this.handleRequestFileChange(pathname, collectionUid, collectionPath);
+      }
     }
   }
 
