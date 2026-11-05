@@ -22,6 +22,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     collectionItemLabel: (name: string) => frame.getByTestId(`collection-item-label-${name}`),
     folder: (name: string) => frame.getByTestId(`sidebar-collection-item-row-${name}`),
     folderChevron: (name: string) => frame.getByTestId(`folder-chevron-${name}`),
+    folderChild: (folderName: string, name: string) =>
+      frame.getByTestId(`sidebar-collection-item-row-${folderName}`).locator('..').getByTestId(`sidebar-collection-item-row-${name}`),
     addMenu: () => frame.getByTestId('collections-header-add-menu'),
     addMenuCreate: () => frame.getByTestId('collections-header-add-menu-create'),
     openCollectionButton: () => frame.getByTestId('collections-header-add-menu-open'),
@@ -33,7 +35,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     runCollectionButton: (collectionName: string) => frame.getByTestId(`collection-actions-${collectionName}-run`),
     actionsItem: (collectionName: string, id: string) => frame.getByTestId(`collection-actions-${collectionName}-${id}`),
     itemMenu: (name: string) => frame.getByTestId(`collection-item-menu-${name}`),
-    itemMenuAction: (name: string, id: string) => frame.getByTestId(`collection-item-menu-${name}-${id}`)
+    itemMenuAction: (name: string, id: string) => frame.getByTestId(`collection-item-menu-${name}-${id}`),
+    toast: (text: string) => frame.locator('[data-rht-toaster]').getByText(text)
   },
   importCollection: {
     container: () => frame.getByTestId('import-collection-container'),

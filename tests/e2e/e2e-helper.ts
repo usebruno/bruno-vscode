@@ -1,14 +1,17 @@
 import { Page } from "@playwright/test";
 import { Context } from "./context";
 import {
-  addCollectionSettings,
   createCollectionV2,
   createFolderV2,
   createRequestV2,
   fillRequestDetails,
   openBrunoSidebar,
+  openCollectionSettings,
   saveRequestV2,
-  sendRequest
+  sendRequest,
+  setCollectionHeaders,
+  setCollectionPresets,
+  setCollectionVars
 } from "./utils/page/actions";
 
 export type KeyValue<T = string | number | boolean> = {
@@ -46,7 +49,7 @@ type CollectionConfig<EnvName extends string = string, FolderName extends string
   requests: RequestConfig<EnvName>[]
 } | string /* fixture path */
 
-// Just the settings-panel part of a collection, for the add/edit collection settings actions.
+// Just the settings-panel part of a collection, for the set collection settings actions.
 export type CollectionSettingsConfig = Pick<Exclude<CollectionConfig, string>, 'vars' | 'headers' | 'presets'>;
 
 type Config<EnvName extends string = string, FolderName extends string = string> = {
@@ -57,21 +60,32 @@ type Config<EnvName extends string = string, FolderName extends string = string>
 export async function createSetup<const EnvName extends string = never, const FolderName extends string = never>(config: Config<EnvName, FolderName>, page: Page) {
   const collections = config.collections;
   const sidebar = await openBrunoSidebar(page);
-  let ctx: Context | undefined;
+  const ctx = new Context();
 
   for (const [index, collection] of collections.entries()) {
     if (typeof collection === 'string') {
       // import collection
     } else {
-      ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
+      await createCollectionV2(page, sidebar, ctx, collection.name, index !== 0, collection.format)
 
-      const hasSettings = Boolean(collection.vars || collection.headers || collection.presets);
-      if (hasSettings) {
-        await addCollectionSettings(page, sidebar, ctx, collection, collection.format);
+      if (collection.vars || collection.headers || collection.presets) {
+        const settings = await openCollectionSettings(page, sidebar, collection.name);
+
+        if (collection.vars) {
+          await setCollectionVars(page, settings, collection.vars);
+        }
+
+        if (collection.headers) {
+          await setCollectionHeaders(page, settings, collection.headers);
+        }
+
+        if (collection.presets) {
+          await setCollectionPresets(settings, collection.presets);
+        }
       }
 
       for (const folder of collection.folders ?? []) {
-        await createFolderV2(page, sidebar, ctx, folder);
+        await createFolderV2(page, sidebar, collection.name, folder);
       }
 
       for (const request of collection.requests) {
