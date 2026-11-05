@@ -1,11 +1,11 @@
 import { expect, type Frame, type Page } from "@playwright/test";
 import { test } from "./utils/fixtures";
-import type { Context } from "./context";
+import { Context } from "./context";
 import { buildCommonLocators } from "./utils/page/locators";
 import {
-  addCollectionSettings, createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2,
-  deleteRequest, exportCollection, fillRequestDetails, openBrunoSidebar, removeCollection, runCommand, saveRequestV2,
-  sendRequest, setAuth, takeScreenshot,
+  createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2,
+  deleteRequest, exportCollection, fillRequestDetails, openBrunoSidebar, openCollectionSettings, removeCollection, runCommand, saveRequestV2,
+  sendRequest, setAuth, setCollectionHeaders, setCollectionPresets, setCollectionVars, takeScreenshot,
 } from "./utils/page/actions";
 
 export type KeyValue<T = string | number | boolean> = {
@@ -71,7 +71,7 @@ type CollectionConfig<EnvName extends string = string> = {
   auth?: AuthMode
 } | string /* fixture path */
 
-// Just the settings-panel part of a collection, for the add/edit collection settings actions.
+// Just the settings-panel part of a collection, for the set collection settings actions.
 export type CollectionSettingsConfig = Pick<Exclude<CollectionConfig, string>, 'vars' | 'headers' | 'presets'>;
 
 type Config<EnvName extends string = string> = {
@@ -114,8 +114,8 @@ async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: 
 
 export type SetupResult = {
   sidebar: Frame,
-  // Context of the last collection created
-  ctx: Context | undefined,
+  // Every collection created, by name
+  ctx: Context,
   // Names of the collections it created
   collections: string[],
 }
@@ -123,7 +123,7 @@ export type SetupResult = {
 // Builds the workspace
 export async function createSetup<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<SetupResult> {
   const sidebar = await openBrunoSidebar(page);
-  let ctx: Context | undefined;
+  const ctx = new Context();
   const collections: string[] = [];
 
   for (const [index, collection] of config.collections.entries()) {
@@ -136,11 +136,23 @@ export async function createSetup<const EnvName extends string = never>(config: 
         ...folders.flatMap(({ folder }) => (folder.requests ?? []).map((request) => ({ request, folder: folder.name }))),
       ]
 
-      ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
+      await createCollectionV2(page, sidebar, ctx, collection.name, index !== 0, collection.format)
       collections.push(collection.name)
 
       if (collection.vars || collection.headers || collection.presets) {
-        await addCollectionSettings(page, sidebar, ctx, collection, collection.format);
+        const settings = await openCollectionSettings(page, sidebar, collection.name);
+
+        if (collection.vars) {
+          await setCollectionVars(page, settings, collection.vars);
+        }
+
+        if (collection.headers) {
+          await setCollectionHeaders(page, settings, collection.headers);
+        }
+
+        if (collection.presets) {
+          await setCollectionPresets(settings, collection.presets);
+        }
       }
 
       await expandCollection(sidebar, collection.name)
@@ -166,15 +178,15 @@ export async function createSetup<const EnvName extends string = never>(config: 
       // Delete only after every request is saved, so deletes don't shift the "Untitled N" titles.
       const toDelete = requests.filter(({ request }) => request.delete)
       for (const { request } of toDelete) {
-        await deleteRequest(page, sidebar, ctx, request.name, collection.format)
+        await deleteRequest(page, sidebar, collection.name, request.name)
       }
 
       if (collection.export) {
-        const exportedFiles = await exportCollection(page, sidebar, ctx)
+        const exported = await exportCollection(page, sidebar, ctx, collection.name)
 
         // verify the export reflects the deletes
         for (const request of collection.requests) {
-          expect(exportedFiles.includes(`${request.name}.${collection.format}`)).toBe(!request.delete);
+          expect(`${request.name}.${collection.format}` in exported).toBe(!request.delete);
         }
       }
     }
