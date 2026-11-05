@@ -171,8 +171,14 @@ const getAbsoluteFilePath = (basePath: string, relativePath: string): string => 
 };
 
 const normalizePath = (p: string | null | undefined): string => {
-  if (!p) return '';
+  if (!p) {
+    return '';
+  }
+
+  // Convert backslashes to forward slashes and strip trailing slashes
   const normalized = p.replace(/\\/g, '/').replace(/\/+$/, '');
+
+  // Lowercase the Windows drive letter so "C:/foo" and "c:/foo" match
   return /^[a-zA-Z]:/.test(normalized) ? normalized[0].toLowerCase() + normalized.slice(1) : normalized;
 };
 

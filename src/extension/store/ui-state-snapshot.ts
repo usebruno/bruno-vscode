@@ -14,8 +14,14 @@ interface UpdateData {
 let extensionContext: vscode.ExtensionContext | null = null;
 
 export const normalizeSnapshotPath = (p: string): string => {
-  if (!p) return p;
+  if (!p) {
+    return p;
+  }
+
+  // Convert backslashes to forward slashes and strip trailing slashes
   const normalized = p.replace(/\\/g, '/').replace(/\/+$/, '');
+
+  // Lowercase the Windows drive letter so "C:/foo" and "c:/foo" match
   return /^[a-zA-Z]:/.test(normalized) ? normalized[0].toLowerCase() + normalized.slice(1) : normalized;
 };
 
@@ -41,12 +47,17 @@ class UiStateSnapshotStore {
 
   getCollections(): CollectionSnapshot[] {
     const byPathname = new Map<string, CollectionSnapshot>();
+
+    // Dedupe by normalized pathname; later entries overwrite earlier ones
     for (const c of this.getFromStorage<CollectionSnapshot[]>('ui-state-snapshot.collections', [])) {
-      if (!c?.pathname) continue;
+      if (!c?.pathname) {
+        continue;
+      }
+      
       const pathname = normalizeSnapshotPath(c.pathname);
-      byPathname.delete(pathname);
       byPathname.set(pathname, { ...c, pathname });
     }
+
     return [...byPathname.values()];
   }
 
