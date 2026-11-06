@@ -1,7 +1,7 @@
-import { expect } from '@playwright/test';
-import { Workspace } from '../../e2e-helper';
-import { activeEditor, setAuth, sendRequestAndExpect, expectResponsePane, page } from '../../utils/page/actions';
-import { buildCommonLocators } from '../../utils/page/locators';
+import { expect, type Page } from '@playwright/test';
+import type { Workspace } from '../../e2e-helper';
+import { editorLocators, setAuth } from '../../utils/page/actions';
+import { sendRequestAndVerify, verifyResponsePane } from '../../utils/page/assertions';
 import { TEST_SERVER_LOCAL_URL, TEST_SERVER_REMOTE_URL } from '../../utils/urls';
 
 export const desc = 'Basic, Bearer, Digest, AWS Sig v4 and API Key each send what the server expects, and No Auth sends no Authorization header';
@@ -23,66 +23,66 @@ export const workspace: Workspace = {
   ],
 };
 
-const response = () => buildCommonLocators(activeEditor(page)).response.previewContainer();
+const response = (page: Page) => editorLocators(page).response.previewContainer();
 
-async function testBasicAuth() {
-  await setAuth('basic-request', 'basic', { username: 'bruno', password: 'wrong' });
-  await sendRequestAndExpect('basic-request', 401);
-  await setAuth('basic-request', 'basic', { username: 'bruno', password: 'della' });
-  await sendRequestAndExpect('basic-request', 200);
-  await expectResponsePane('basic-request', 'Timeline', { contains: [/authorization/i] }, 'Request');
+async function verifyBasicAuth(page: Page) {
+  await setAuth(page, 'basic-request', 'basic', { username: 'bruno', password: 'wrong' });
+  await sendRequestAndVerify(page, 'basic-request', 401);
+  await setAuth(page, 'basic-request', 'basic', { username: 'bruno', password: 'della' });
+  await sendRequestAndVerify(page, 'basic-request', 200);
+  await verifyResponsePane(page, 'basic-request', { tab: 'Timeline', section: 'Request' }, { contains: [/authorization/i] });
 
-  await setAuth('basic-request', 'none');
-  await sendRequestAndExpect('basic-request', 401);
-  await expectResponsePane('basic-request', 'Timeline', { notContains: [/authorization/i] }, 'Request');
+  await setAuth(page, 'basic-request', 'none');
+  await sendRequestAndVerify(page, 'basic-request', 401);
+  await verifyResponsePane(page, 'basic-request', { tab: 'Timeline', section: 'Request' }, { notContains: [/authorization/i] });
 }
 
-async function testBearerAuth() {
-  await setAuth('bearer-request', 'bearer', { token: 'wrong-token' });
-  await sendRequestAndExpect('bearer-request', 401);
-  await setAuth('bearer-request', 'bearer', { token: 'your_secret_token' });
-  await sendRequestAndExpect('bearer-request', 200);
+async function verifyBearerAuth(page: Page) {
+  await setAuth(page, 'bearer-request', 'bearer', { token: 'wrong-token' });
+  await sendRequestAndVerify(page, 'bearer-request', 401);
+  await setAuth(page, 'bearer-request', 'bearer', { token: 'your_secret_token' });
+  await sendRequestAndVerify(page, 'bearer-request', 200);
 }
 
-async function testDigestAuth() {
-  await setAuth('digest-request', 'digest', { username: 'bruno', password: 'wrong' });
-  await sendRequestAndExpect('digest-request', 401);
-  await setAuth('digest-request', 'digest', { username: 'bruno', password: 'della' });
-  await sendRequestAndExpect('digest-request', 200);
-  await expect(response()).toContainText('authenticated');
+async function verifyDigestAuth(page: Page) {
+  await setAuth(page, 'digest-request', 'digest', { username: 'bruno', password: 'wrong' });
+  await sendRequestAndVerify(page, 'digest-request', 401);
+  await setAuth(page, 'digest-request', 'digest', { username: 'bruno', password: 'della' });
+  await sendRequestAndVerify(page, 'digest-request', 200);
+  await expect(response(page)).toContainText('authenticated');
 }
 
-async function testAwsV4Auth() {
-  await setAuth('aws-request', 'awsv4', {
+async function verifyAwsV4Auth(page: Page) {
+  await setAuth(page, 'aws-request', 'awsv4', {
     accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
     secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
     service: 'execute-api',
     region: 'us-east-1',
   });
-  await sendRequestAndExpect('aws-request', 200);
-  await expect(response()).toContainText('AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/');
-  await expect(response()).not.toContainText('MissingAuthenticationToken');
-  await expectResponsePane('aws-request', 'Timeline', { contains: ['Authorization', 'AWS4-HMAC-SHA256', 'X-Amz-Date'] }, 'Request');
+  await sendRequestAndVerify(page, 'aws-request', 200);
+  await expect(response(page)).toContainText('AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/');
+  await expect(response(page)).not.toContainText('MissingAuthenticationToken');
+  await verifyResponsePane(page, 'aws-request', { tab: 'Timeline', section: 'Request' }, { contains: ['Authorization', 'AWS4-HMAC-SHA256', 'X-Amz-Date'] });
 }
 
-async function testApiKeyAuth() {
-  await setAuth('api-key-header-request', 'apikey', { key: 'x-api-key', value: 'header-secret-123', addTo: 'header' });
-  await sendRequestAndExpect('api-key-header-request', 200);
-  await expect(response()).toContainText('x-api-key');
-  await expect(response()).toContainText('header-secret-123');
+async function verifyApiKeyAuth(page: Page) {
+  await setAuth(page, 'api-key-header-request', 'apikey', { key: 'x-api-key', value: 'header-secret-123', addTo: 'header' });
+  await sendRequestAndVerify(page, 'api-key-header-request', 200);
+  await expect(response(page)).toContainText('x-api-key');
+  await expect(response(page)).toContainText('header-secret-123');
 
-  await setAuth('api-key-query-request', 'apikey', { key: 'api_key', value: 'query-secret-456', addTo: 'queryParams' });
-  await sendRequestAndExpect('api-key-query-request', 200);
-  await expect(response()).toContainText('api_key');
-  await expect(response()).toContainText('query-secret-456');
+  await setAuth(page, 'api-key-query-request', 'apikey', { key: 'api_key', value: 'query-secret-456', addTo: 'queryParams' });
+  await sendRequestAndVerify(page, 'api-key-query-request', 200);
+  await expect(response(page)).toContainText('api_key');
+  await expect(response(page)).toContainText('query-secret-456');
 }
 
 // NTLM is covered in ntlm.ts and OAuth 2.0 in oauth2.ts
-export async function run() {
-  await testAwsV4Auth();
-  await testBasicAuth();
-  await testBearerAuth();
-  await testDigestAuth();
-  await testApiKeyAuth();
+export async function run(page: Page) {
+  await verifyAwsV4Auth(page);
+  await verifyBasicAuth(page);
+  await verifyBearerAuth(page);
+  await verifyDigestAuth(page);
+  await verifyApiKeyAuth(page);
 }
 

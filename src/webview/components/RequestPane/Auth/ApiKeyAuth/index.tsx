@@ -104,7 +104,7 @@ const ApiKeyAuth = ({
       </div>
 
       <label className="block mb-1">Add To</label>
-      <div className="inline-flex items-center cursor-pointer auth-placement-selector w-fit" data-testid="auth-apikey-add-to-placement-selector">
+      <div className="inline-flex items-center cursor-pointer auth-placement-selector w-fit" data-testid="auth-apikey-placement">
         <Dropdown onCreate={onDropdownCreate} icon={<Icon />} placement="bottom-end">
           <div
             className="dropdown-item"

@@ -1,7 +1,7 @@
-import { expect } from '@playwright/test';
-import { Workspace } from '../../e2e-helper';
-import { activeEditor, setAuth, expectRequestPane, sendRequestAndExpect, expectResponsePane, page } from '../../utils/page/actions';
-import { buildCommonLocators } from '../../utils/page/locators';
+import { expect, type Page } from '@playwright/test';
+import type { Workspace } from '../../e2e-helper';
+import { editorLocators, setAuth } from '../../utils/page/actions';
+import { verifyRequestPane, sendRequestAndVerify, verifyResponsePane } from '../../utils/page/assertions';
 import { TEST_SERVER_REMOTE_URL } from '../../utils/urls';
 
 export const desc = 'Inherit resolves every auth type, goes to the nearest parent, stops at a No Auth folder, and is sent';
@@ -16,9 +16,9 @@ const authTypes = [
   ['awsv4', 'AWS Sig V4'],
 ] as const;
 
-const authModifiedIndicator = () => buildCommonLocators(activeEditor(page)).tabs.byText('Auth').getByTestId('status-dot-auth');
-const collectionAuthModifiedIndicator = () => buildCommonLocators(activeEditor(page)).paneTabs.collectionSettingsTab('auth').getByTestId('status-dot-auth');
-const folderAuthModifiedIndicator = () => buildCommonLocators(activeEditor(page)).paneTabs.folderSettingsTab('auth').getByTestId('status-dot-auth');
+const authModifiedIndicator = (page: Page) => editorLocators(page).tabs.byText('Auth').getByTestId('status-dot-auth');
+const collectionAuthModifiedIndicator = (page: Page) => editorLocators(page).paneTabs.collectionSettingsTab('auth').getByTestId('status-dot-auth');
+const folderAuthModifiedIndicator = (page: Page) => editorLocators(page).paneTabs.folderSettingsTab('auth').getByTestId('status-dot-auth');
 
 export const workspace: Workspace = {
   collections: [
@@ -38,8 +38,8 @@ export const workspace: Workspace = {
               auth: 'inherit',
             },
             { name: 'graphql-request', url: 'http://localhost:8080/graphql', type: 'GraphQL', method: 'POST', auth: 'inherit' },
-            { name: 'grpc-request', url: 'grpc://localhost:8080', type: 'gRPC', auth: 'inherit' },
-            { name: 'ws-request', url: 'ws://localhost:8080', type: 'WebSocket', auth: 'inherit' },
+            { name: 'grpc-request', url: 'grpc://localhost:8080', type: 'gRPC', method: 'GET', auth: 'inherit' },
+            { name: 'ws-request', url: 'ws://localhost:8080', type: 'WebSocket', method: 'GET', auth: 'inherit' },
           ],
           folders: [
             {
@@ -65,85 +65,85 @@ export const workspace: Workspace = {
 };
 
 // Request set to Inherit: it resolves each auth type from its folder
-async function verifyInheritedFromFolder() {
+async function verifyAuthInheritanceFromFolder(page: Page) {
   for (const [mode, label] of authTypes) {
-    await setAuth('folder-1', mode);
-    await expectRequestPane('request-1', 'Auth', { contains: ['Auth inherited from folder-1:', label] });
+    await setAuth(page, 'folder-1', mode);
+    await verifyRequestPane(page, 'request-1', 'Auth', { contains: ['Auth inherited from folder-1:', label] });
   }
 }
 
 // Folder set to Inherit: the request resolves each auth type from the collection
-async function verifyInheritedFromCollection() {
-  await setAuth('folder-1', 'inherit');
+async function verifyAuthInheritanceFromCollection(page: Page) {
+  await setAuth(page, 'folder-1', 'inherit');
   for (const [mode, label] of authTypes) {
-    await setAuth('collection-1', mode);
-    await expectRequestPane('request-1', 'Auth', { contains: ['Auth inherited from Collection:', label] });
+    await setAuth(page, 'collection-1', mode);
+    await verifyRequestPane(page, 'request-1', 'Auth', { contains: ['Auth inherited from Collection:', label] });
   }
 }
 
 // The nearest parent wins, and a No Auth folder stops the chain
-async function verifyInheritanceChain() {
-  await setAuth('collection-1', 'basic', { username: 'bruno', password: 'della' });
-  await setAuth('folder-1', 'basic');
-  await setAuth('folder-2', 'basic');
-  await setAuth('folder-3', 'inherit');
-  await expectRequestPane('folder-3', 'Auth', { contains: ['Auth inherited from folder-2:', 'Basic Auth'] });
+async function verifyAuthInheritanceChain(page: Page) {
+  await setAuth(page, 'collection-1', 'basic');
+  await setAuth(page, 'folder-1', 'basic');
+  await setAuth(page, 'folder-2', 'basic');
+  await setAuth(page, 'folder-3', 'inherit');
+  await verifyRequestPane(page, 'folder-3', 'Auth', { contains: ['Auth inherited from folder-2:', 'Basic Auth'] });
 
-  await setAuth('folder-1', 'none');
-  await expectRequestPane('request-1', 'Auth', { contains: ['Auth inherited from folder-1:', 'No Auth'] });
-  await sendRequestAndExpect('request-1', 401);
-  await expectResponsePane('request-1', 'Timeline', { notContains: [/authorization/i] }, 'Request');
+  await setAuth(page, 'folder-1', 'none');
+  await verifyRequestPane(page, 'request-1', 'Auth', { contains: ['Auth inherited from folder-1:', 'No Auth'] });
+  await sendRequestAndVerify(page, 'request-1', 401);
+  await verifyResponsePane(page, 'request-1', { tab: 'Timeline', section: 'Request' }, { notContains: [/authorization/i] });
 }
 
 // An inheriting request sends the collection's auth (Bearer), and sends nothing when the collection is No Auth
-async function verifyCollectionAuthApplied() {
-  await setAuth('collection-1', 'bearer', { token: 'wrong-token' });
-  await expectRequestPane('request-2', 'Auth', { contains: ['Auth inherited from Collection:', 'Bearer Token'] });
-  await sendRequestAndExpect('request-2', 401);
+async function verifyCollectionAuthApplied(page: Page) {
+  await setAuth(page, 'collection-1', 'bearer', { token: 'wrong-token' });
+  await verifyRequestPane(page, 'request-2', 'Auth', { contains: ['Auth inherited from Collection:', 'Bearer Token'] });
+  await sendRequestAndVerify(page, 'request-2', 401);
 
-  await setAuth('collection-1', 'bearer', { token: 'your_secret_token' });
-  await sendRequestAndExpect('request-2', 200);
+  await setAuth(page, 'collection-1', 'bearer', { token: 'your_secret_token' });
+  await sendRequestAndVerify(page, 'request-2', 200);
 
-  await setAuth('collection-1', 'none');
-  await expectRequestPane('request-2', 'Auth', { contains: ['Auth inherited from Collection:', 'No Auth'] });
-  await sendRequestAndExpect('request-2', 401);
-  await expectResponsePane('request-2', 'Timeline', { notContains: [/authorization/i] }, 'Request');
+  await setAuth(page, 'collection-1', 'none');
+  await verifyRequestPane(page, 'request-2', 'Auth', { contains: ['Auth inherited from Collection:', 'No Auth'] });
+  await sendRequestAndVerify(page, 'request-2', 401);
+  await verifyResponsePane(page, 'request-2', { tab: 'Timeline', section: 'Request' }, { notContains: [/authorization/i] });
 }
 
 // The Auth tab dot shows only when the effective auth is not No Auth, for the collection, a folder and every request type
-async function verifyAuthModifiedIndicator() {
+async function verifyAuthModifiedIndicator(page: Page) {
   const folderRequests = ['request-1', 'graphql-request', 'grpc-request', 'ws-request'];
 
-  await setAuth('collection-1', 'basic');
-  await expect(collectionAuthModifiedIndicator()).toBeVisible();
-  await setAuth('collection-1', 'none');
-  await expect(collectionAuthModifiedIndicator()).toBeHidden();
+  await setAuth(page, 'collection-1', 'basic');
+  await expect(collectionAuthModifiedIndicator(page)).toBeVisible();
+  await setAuth(page, 'collection-1', 'none');
+  await expect(collectionAuthModifiedIndicator(page)).toBeHidden();
 
-  await setAuth('folder-1', 'basic');
-  await expect(folderAuthModifiedIndicator()).toBeVisible();
+  await setAuth(page, 'folder-1', 'basic');
+  await expect(folderAuthModifiedIndicator(page)).toBeVisible();
 
-  await setAuth('folder-1', 'inherit');
-  await expectRequestPane('folder-1', 'Auth', { contains: ['Auth inherited from Collection:', 'No Auth'] });
-  await expect(folderAuthModifiedIndicator()).toBeHidden();
+  await setAuth(page, 'folder-1', 'inherit');
+  await verifyRequestPane(page, 'folder-1', 'Auth', { contains: ['Auth inherited from Collection:', 'No Auth'] });
+  await expect(folderAuthModifiedIndicator(page)).toBeHidden();
 
-  await setAuth('folder-1', 'none');
-  await expect(folderAuthModifiedIndicator()).toBeHidden();
+  await setAuth(page, 'folder-1', 'none');
+  await expect(folderAuthModifiedIndicator(page)).toBeHidden();
   for (const request of folderRequests) {
-    await expectRequestPane(request, 'Auth', { contains: ['Auth inherited from folder-1:', 'No Auth'] });
-    await expect(authModifiedIndicator()).toBeHidden();
+    await verifyRequestPane(page, request, 'Auth', { contains: ['Auth inherited from folder-1:', 'No Auth'] });
+    await expect(authModifiedIndicator(page)).toBeHidden();
   }
 
-  await setAuth('folder-1', 'basic');
+  await setAuth(page, 'folder-1', 'basic');
   for (const request of folderRequests) {
-    await expectRequestPane(request, 'Auth', { contains: ['Auth inherited from folder-1:', 'Basic Auth'] });
-    await expect(authModifiedIndicator()).toBeVisible();
+    await verifyRequestPane(page, request, 'Auth', { contains: ['Auth inherited from folder-1:', 'Basic Auth'] });
+    await expect(authModifiedIndicator(page)).toBeVisible();
   }
 }
 
-export async function run() {
-  await verifyInheritedFromFolder();
-  await verifyInheritedFromCollection();
-  await verifyInheritanceChain();
-  await verifyCollectionAuthApplied();
-  await verifyAuthModifiedIndicator();
+export async function run(page: Page) {
+  await verifyAuthInheritanceFromFolder(page);
+  await verifyAuthInheritanceFromCollection(page);
+  await verifyAuthInheritanceChain(page);
+  await verifyCollectionAuthApplied(page);
+  await verifyAuthModifiedIndicator(page);
 }

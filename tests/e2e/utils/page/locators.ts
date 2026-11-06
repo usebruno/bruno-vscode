@@ -192,10 +192,10 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     awsServiceEditor: () => frame.getByTestId('auth-awsv4-service').locator('.CodeMirror'),
     awsRegionEditor: () => frame.getByTestId('auth-awsv4-region').locator('.CodeMirror'),
     editorByLabel: (label: string) => frame.locator(`label:text-is("${label}") + .single-line-editor-wrapper .CodeMirror`),
-    apiKeyAddToPlacementSelector: () => frame.getByTestId('auth-apikey-add-to-placement-selector')
+    apiKeyPlacement: () => frame.getByTestId('auth-apikey-placement')
   },
   requestPane: () => frame.getByTestId('request-pane'),
-  itemPane: () => frame.locator('[data-testid="request-pane"], [data-testid="collection-settings"], [data-testid="folder-settings"]'),
+  itemPane: () => frame.getByTestId(/^(request-pane|folder-settings|collection-settings)$/),
   responsePane: () => frame.getByTestId('response-pane'),
   paneTabs: {
     collectionSettingsTab: (key: string) => frame.getByTestId('collection-settings').locator(`[role="tab"].${key}`),
@@ -207,7 +207,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     requestPanel: (item: Locator) => item.getByTestId('timeline-panel-request'),
     networkTab: (item: Locator) => item.getByRole('button', { name: 'Network', exact: true }),
     networkPanel: (item: Locator) => item.getByTestId('timeline-panel-network'),
-    tab: (item: Locator, label: string) => item.getByTestId(`timeline-tab-${label}`),
+    tab: (item: Locator, label: string) => item.getByTestId(`timeline-tab-${label.toLowerCase()}`),
     panel: (item: Locator, label: string) => item.getByTestId(`timeline-panel-${label.toLowerCase()}`)
   },
   body: {
