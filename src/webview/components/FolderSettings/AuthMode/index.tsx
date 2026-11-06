@@ -93,7 +93,7 @@ const AuthMode = ({
           selectedItemId={authMode}
           showTickMark={true}
         >
-          <div className="flex items-center justify-center auth-mode-label select-none">
+          <div className="flex items-center justify-center auth-mode-label select-none" data-testid="auth-mode-label">
             {humanizeRequestAuthMode(authMode)} <IconCaretDown className="caret ml-1 mr-1" size={14} strokeWidth={2} />
           </div>
         </MenuDropdown>

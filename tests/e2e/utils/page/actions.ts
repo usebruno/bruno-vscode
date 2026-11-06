@@ -5,6 +5,7 @@ import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
 import { Context } from '../../context';
 import { VSCodeFixture, VSCodeOptions } from '../fixtures';
+import type { AuthFields, AuthMode, ResponsePaneTab } from '../../e2e-helper';
 
 // The editor pane currently in focus (request, folder settings or collection settings).
 export const activeEditor = (page: Page): FrameLocator =>
@@ -453,6 +454,26 @@ export async function selectEnvironment(frame: Frame | FrameLocator, name: strin
  * @param url - Request URL
  * @param method - HTTP method (default: 'GET')
  */
+export async function createRequestInFolder(
+  page: Page,
+  sidebar: Frame,
+  { collection, folder, name, type, method, url }: { collection: string; folder: string; name: string; type: 'HTTP' | 'GraphQL' | 'gRPC' | 'WebSocket'; method: string; url: string }
+): Promise<void> {
+  const panel = await openNewRequestPanel(page, sidebar, folder, true);
+  await buildCommonLocators(panel).newRequest.typeOption(type).click();
+
+  await createRequest(page, panel, sidebar, collection, name, url);
+
+  await buildCommonLocators(page).workbench.editorTab('New Request').waitFor({ state: 'detached' });
+
+  if ((type === 'HTTP' || type === 'GraphQL') && method.toUpperCase() !== 'GET') {
+    const editor = await getWebviewByTitle(page, name);
+    await editor.getByTestId('request-method').click();
+    await editor.getByTestId(`request-method-${method.toLowerCase()}`).click();
+    await saveRequest(page);
+  }
+}
+
 export async function createRequest(
   page: Page,
   editor: Frame,
@@ -639,7 +660,6 @@ export async function setBearerToken(page: Page, editor: Frame, token: string): 
   await openRequestTab(editor, 'auth');
   const locators = buildCommonLocators(editor);
 
-  // `.auth-mode-selector` works for HTTP/GraphQL and WebSocket (WS lacks the oauth2 testid).
   await locators.auth.modeSelector().click();
   const bearerItem = locators.dropdownItem('Bearer Token');
   await expect(bearerItem).toBeVisible({ timeout: 5_000 });
@@ -824,6 +844,19 @@ export async function dragItemAboveOrBelow(
   const targetPosition = { x: 50, y: position === 'above' ? 3 : 22 };
 
   await locators.sidebar.collectionItemLabel(itemName).dragTo(targetRow, { targetPosition, steps: 15 });
+}
+
+export async function dragItem(
+  page: Page,
+  { dragItem, target, position }: { dragItem: string; target: string; position: 'above' | 'below' | 'inside' }
+): Promise<void> {
+  const sidebar = await openSidebar(page);
+  const locators = buildCommonLocators(sidebar);
+  const targetRow = locators.sidebar.collectionItem(target);
+  // 'inside' drops on the middle of the row (into a folder); steps gives the sidebar a real drag, a single jump does not start one.
+  const targetPosition = position === 'inside' ? undefined : { x: 50, y: position === 'above' ? 3 : 22 };
+
+  await locators.sidebar.collectionItemLabel(dragItem).dragTo(targetRow, { targetPosition, steps: 15 });
 }
 
 /**
@@ -1056,7 +1089,7 @@ export async function sendRequest(
   const statusCode = editor.locator('[data-testid="response-status-code"]');
   await expect(statusCode).toBeVisible({ timeout });
 
-  if (expectedStatus !== undefined) {
+  if (expectedStatus) {
     await expect(statusCode).toContainText(String(expectedStatus), { timeout: 5_000 });
   }
 }
@@ -1184,21 +1217,28 @@ export async function createFolder(
   ).toBeVisible({ timeout: 15_000 });
 }
 
+export async function pickDropdownItem(page: Page, trigger: Locator | string, label: string): Promise<void> {
+  const editor = activeEditor(page);
+  const item = editor.locator('.dropdown-item').filter({ hasText: label });
+  await (typeof trigger === 'string' ? editor.locator(trigger) : trigger).click();
+  await expect(item).toBeVisible();
+  await item.click();
+  await expect(item).not.toBeVisible();
+}
+
 /** Pick an auth mode by its dropdown label, e.g. 'Bearer Token', in the auth pane that is open. */
 export async function selectAuthMode(page: Page, modeLabel: string): Promise<void> {
-  const editor = activeEditor(page);
-  await editor.locator('.auth-mode-label').click();
-  await editor.locator('.dropdown-item').filter({ hasText: modeLabel }).click();
+  await pickDropdownItem(page, buildCommonLocators(activeEditor(page)).auth.modeSelector(), modeLabel);
 }
 
 async function selectPaneTab(page: Page, paneSelector: string, tabName: string): Promise<void> {
   const editor = activeEditor(page);
   const pane = editor.locator(paneSelector);
   await expect(pane).toBeVisible();
-  await expect(pane.locator('.tabs')).toBeVisible();
+  const tabs = pane.locator('.tabs').first();
 
-  const visibleTab = pane.locator('.tabs').getByRole('tab', { name: tabName });
-  const overflowButton = pane.locator('.tabs .more-tabs');
+  const visibleTab = tabs.getByRole('tab', { name: tabName });
+  const overflowButton = tabs.locator('.more-tabs');
 
   await expect(async () => {
     if (await visibleTab.isVisible()) {
@@ -1658,3 +1698,247 @@ export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Contex
   await expect.poll(() => fs.existsSync(exportPath), { message: `${exportPath} should be exported` }).toBe(true);
   return JSON.parse(fs.readFileSync(exportPath, 'utf8'));
 }
+
+export const authModeLabels: Record<AuthMode, string> = {
+  inherit: 'Inherit',
+  none: 'No Auth',
+  basic: 'Basic Auth',
+  bearer: 'Bearer Token',
+  digest: 'Digest Auth',
+  ntlm: 'NTLM Auth',
+  wsse: 'WSSE Auth',
+  apikey: 'API Key',
+  awsv4: 'AWS Sig v4',
+  oauth2: 'OAuth 2.0'
+};
+
+export const editorLocators = (page: Page) => buildCommonLocators(activeEditor(page));
+export const sidebarLocators = async (page: Page) => buildCommonLocators(await openSidebar(page));
+
+// The Bruno sidebar with every collection expanded, so any collection, folder or request row can be found by its name
+async function openSidebar(page: Page): Promise<Frame> {
+  const sidebar = await openBrunoSidebar(page);
+  const chevrons = sidebar.getByTestId(/^sidebar-collection-row-/).locator('svg.chevron-icon');
+  for (const chevron of await chevrons.all()) {
+    const isExpanded = await chevron.evaluate((el) => el.classList.contains('rotate-90'));
+    if (!isExpanded) {
+      await chevron.click();
+    }
+  }
+  return sidebar;
+}
+
+// What a name in the sidebar is: a collection row, a folder row (it has a chevron) or a request row
+async function itemTypeOf(sidebar: Frame, target: string): Promise<'collection' | 'folder' | 'request'> {
+  const rows = buildCommonLocators(sidebar).sidebar;
+  // Wait for the row first, so a folder whose row hasn't rendered yet isn't taken for a request
+  await rows.collectionName(target).or(rows.collectionItem(target)).first().waitFor();
+  if (await rows.collectionName(target).count()) {
+    return 'collection';
+  }
+  if (await rows.folderChevron(target).count()) {
+    return 'folder';
+  }
+  return 'request';
+}
+
+// Opens a tab of a collection, folder or request
+export async function openItemTab(page: Page, target: string, tab: string): Promise<void> {
+  await openRequestPane(page, target, tab);
+}
+
+// Opens a response pane tab of a request; for Timeline, also the view (Request, Response or Network) of its latest entry
+export async function openResponseTab(page: Page, request: string, paneTab: ResponsePaneTab): Promise<void> {
+  await openRequestEditor(page, request);
+  await selectResponsePaneTab(page, paneTab.tab);
+
+  if (paneTab.tab === 'Timeline') {
+    const { timeline } = editorLocators(page);
+    const timelineItem = timeline.lastItem();
+    await timeline.itemHeader(timelineItem).click();
+    await timeline.tab(timelineItem, paneTab.section).click();
+  }
+}
+
+// Opens a request and sends it
+export async function sendRequestByName(page: Page, request: string): Promise<void> {
+  await openRequestEditor(page, request);
+  await activeEditor(page).locator('#send-request').click();
+}
+
+async function openRequestEditor(page: Page, request: string) {
+  const sidebar = await openSidebar(page);
+  await expect(async () => {
+    await buildCommonLocators(sidebar).sidebar.collectionItem(request).click();
+    try {
+      await expect(buildCommonLocators(activeEditor(page)).requestPane()).toBeVisible({ timeout: 3000 });
+    } catch (error) {
+      await runCommand(page, 'View: Close All Editors');
+      throw error;
+    }
+  }).toPass({ timeout: 25_000 });
+}
+
+// Opens a tab of a collection, folder or request and returns which of them the name is
+async function openRequestPane(page: Page, target: string, tab: string): Promise<'collection' | 'folder' | 'request'> {
+  const sidebar = await openSidebar(page);
+  const rows = buildCommonLocators(sidebar).sidebar;
+  const itemType = await itemTypeOf(sidebar, target);
+
+  if (itemType === 'collection') {
+    await rows.collectionName(target).click();
+    await selectPaneTab(page, '[data-testid="collection-settings"]', tab);
+  } else if (itemType === 'request') {
+    await openRequestEditor(page, target);
+    await selectPaneTab(page, '[data-testid="request-pane"]', tab);
+  } else {
+    await rows.folder(target).click();
+    await selectPaneTab(page, '[data-testid="folder-settings"]', tab);
+  }
+  return itemType;
+}
+
+async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
+  if (itemType === 'request') {
+    await saveRequest(page);
+  } else {
+    const editor = activeEditor(page);
+    const savedToast = editor.getByText(/Settings saved successfully/);
+    await savedToast.evaluateAll((toasts) => toasts.forEach((toast) => toast.setAttribute('data-earlier-save', '')));
+    await buildCommonLocators(editor).saveButton().click();
+    await expect(savedToast.and(editor.locator(':not([data-earlier-save])')).last()).toBeVisible();
+  }
+}
+
+// Picks the grant type, then fills the OAuth 2.0 fields (found by their test-ids) and the placement dropdowns.
+async function setOAuth2Fields(page: Page, fields: AuthFields) {
+  const editor = activeEditor(page);
+  const oauth2 = buildCommonLocators(editor).oauth2;
+  const field = (key: string) => oauth2.field(key).locator('.CodeMirror');
+
+  if (fields.grantType) {
+    const grantTypeLabels = {
+      passwordCredentials: 'Password Credentials',
+      authorizationCode: 'Authorization Code',
+      implicit: 'Implicit',
+      clientCredentials: 'Client Credentials'
+    };
+    await pickDropdownItem(page, oauth2.grantTypeSelector(), grantTypeLabels[fields.grantType]);
+  }
+
+  const values: Record<string, string | undefined> = {
+    accessTokenUrl: fields.accessTokenUrl, refreshTokenUrl: fields.refreshTokenUrl, username: fields.username,
+    password: fields.password, clientId: fields.clientId, clientSecret: fields.clientSecret, scope: fields.scope
+  };
+
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) await setCodeMirrorValue(page, field(key), value);
+  }
+
+  if (fields.addCredentialsTo) {
+    const addCredentialsToSelector = fields.grantType === 'passwordCredentials' ? oauth2.passwordCredentialsPlacementSelector() : oauth2.credentialsPlacementSelector();
+    await pickDropdownItem(page, addCredentialsToSelector, fields.addCredentialsTo === 'requestBody' ? 'Request Body' : 'Basic Auth Header');
+  }
+
+  if (fields.addTokenTo) {
+    await pickDropdownItem(page, oauth2.tokenPlacementSelector(), fields.addTokenTo === 'url' ? 'URL' : 'Header');
+    await expect(oauth2.field(fields.addTokenTo === 'url' ? 'tokenQueryKey' : 'tokenHeaderPrefix')).toBeVisible();
+  }
+}
+
+const authFieldLabels: Partial<Record<keyof AuthFields, string>> = {
+  username: 'Username', password: 'Password', domain: 'Domain', token: 'Token', key: 'Key', value: 'Value',
+  accessKeyId: 'Access Key ID', secretAccessKey: 'Secret Access Key', service: 'Service', region: 'Region'
+};
+
+async function fillAuthFields(page: Page, fields: AuthFields) {
+  const { auth } = buildCommonLocators(activeEditor(page));
+  for (const [field, value] of Object.entries(fields)) {
+    const label = authFieldLabels[field as keyof AuthFields];
+    if (label && value) {
+      await setCodeMirrorValue(page, auth.editorByLabel(label), String(value));
+    }
+  }
+}
+
+export async function setAuth(page: Page, target: string, mode: AuthMode, fields: AuthFields = {}): Promise<void> {
+  const itemType = await openRequestPane(page, target, 'Auth');
+  await selectAuthMode(page, authModeLabels[mode]);
+
+  if (mode === 'oauth2') {
+    await setOAuth2Fields(page, fields);
+  } else {
+    await fillAuthFields(page, fields);
+  }
+
+  if (mode === 'apikey' && fields.addTo) {
+    const placement = buildCommonLocators(activeEditor(page)).auth.apiKeyPlacement();
+    const placementLabel = fields.addTo === 'queryParams' ? 'Query Param' : 'Header';
+    await pickDropdownItem(page, placement, placementLabel);
+  }
+
+  await saveItem(page, itemType);
+}
+
+async function openOAuth2Tab(page: Page, request: string) {
+  await openRequestPane(page, request, 'Auth');
+  return activeEditor(page);
+}
+
+export async function getOAuth2AccessToken(page: Page, request: string, { expectToken = true } = {}): Promise<void> {
+  const editor = await openOAuth2Tab(page, request);
+  const getToken = editor.getByTestId('oauth2-get-token-btn');
+  await expect(getToken).toBeEnabled();
+  await getToken.click();
+  if (expectToken) await expect(editor.getByTestId('oauth2-token-title').first()).toBeVisible({ timeout: 15_000 });
+  await expect(getToken).toBeEnabled({ timeout: 15_000 });
+}
+
+// Runs right after getOAuth2AccessToken, in the same open Auth tab.
+export async function refreshOAuth2Token(page: Page): Promise<void> {
+  const editor = activeEditor(page);
+  const refresh = editor.getByTestId('oauth2-refresh-token-btn');
+  await expect(refresh).toBeVisible();
+  await refresh.click();
+  await expect(refresh).toBeEnabled({ timeout: 15_000 });
+}
+
+export async function clearOAuth2Cache(page: Page, request: string): Promise<void> {
+  const editor = await openOAuth2Tab(page, request);
+  const clear = editor.getByTestId('oauth2-clear-cache-btn');
+  if (await clear.isVisible()) {
+    await clear.scrollIntoViewIfNeeded();
+    await clear.click();
+    await expect(editor.getByTestId('oauth2-token-title')).toHaveCount(0);
+  }
+}
+
+export async function setBody(page: Page, request: string, json: string): Promise<void> {
+  const locators = buildCommonLocators(activeEditor(page));
+  await openRequestPane(page, request, 'Body');
+  await locators.requestBody.modeSelector().click();
+  await locators.requestBody.modeOption('json').click();
+  await setCodeMirrorValue(page, locators.body.editor(), json);
+  await saveRequest(page);
+}
+
+// e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
+export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], hook: 'preRequest' | 'postResponse' = 'preRequest'): Promise<void> {
+  const editor = activeEditor(page);
+  const itemType = await openRequestPane(page, target, 'Vars');
+  const suffix = hook === 'preRequest' ? 'req' : 'res';
+  const tableId = `${itemType}-vars-${suffix}`;
+
+  const tableRows = buildCommonLocators(editor).varsTable.rows(itemType, suffix);
+  const table = buildCommonLocators(editor.getByTestId(tableId)).editableTable;
+  await expect(tableRows.first()).toBeVisible({ timeout: 10_000 });
+
+  for (const { name, value } of rows) {
+    const emptyRow = (await tableRows.count()) - 1;
+    await table.columnNameInput(emptyRow).fill(name);
+    await setCodeMirrorValue(page, table.columnValueEditor(emptyRow), value);
+  }
+
+  await saveItem(page, itemType);
+}
+

@@ -21,6 +21,7 @@ test.describe('Modified indicator for auth tab', () => {
     { protocol: 'GraphQL', requestName: 'graphql-request' }
   ];
 
+  // @deprecated Moved to tests/e2e/auth2/suites/inheritance.ts (verifyAuthModifiedIndicator)
   test('Auth tab indicator dot reflects effective auth for a folder and for HTTP, gRPC, WebSocket and GraphQL requests', async ({ pageWithCollections: page }) => {
     const collectionName = 'modified-indicator-collection';
     const sidebar = await openBrunoSidebar(page);

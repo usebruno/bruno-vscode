@@ -19,6 +19,7 @@ test.describe('OAuth2 with Keycloak: Password Credentials', () => {
     test.skip(!(await ensureKeycloakUp()), KEYCLOAK_DOWN_REASON);
   });
 
+  // @deprecated Moved to tests/e2e/auth2/suites/oauth2.ts (verifyPasswordCredentials, verifyTokenLifecycle), against the local test server instead of Keycloak
   test('fetch, refresh and reject tokens', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const editor = await setupOAuth2Request(page, sidebar, tmpDir, 'KC Password', 'Password Credentials', KEYCLOAK.userInfoUrl);
