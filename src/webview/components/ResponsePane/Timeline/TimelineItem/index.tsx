@@ -102,7 +102,7 @@ const TimelineItem = ({
                   key={tab.id}
                   type="button"
                   className={`tl-tab ${activeTab === tab.id ? 'is-active' : ''}`}
-                  data-testid={`timeline-tab-${tab.label}`}
+                  data-testid={`timeline-tab-${tab.label.toLowerCase()}`}
                   onClick={() => handleTabClick(tab.id)}
                 >
                   {tab.label}

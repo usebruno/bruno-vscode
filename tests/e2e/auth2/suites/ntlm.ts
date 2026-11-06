@@ -1,6 +1,7 @@
-import { expect } from '@playwright/test';
-import { Workspace } from '../../e2e-helper';
-import { setAuth, setBody, sendRequestAndExpect, expectResponsePane } from '../../utils/page/actions';
+import { expect, type Page } from '@playwright/test';
+import type { Workspace } from '../../e2e-helper';
+import { setAuth, setBody } from '../../utils/page/actions';
+import { sendRequestAndVerify, verifyResponsePane } from '../../utils/page/assertions';
 import { startNtlmServer, type NtlmEndpoint } from '../../server/auth/ntlm';
 
 export const desc = 'NTLM authenticates over one connection, is refused with a wrong password, and works inherited, with a body, a redirect and TLS';
@@ -22,7 +23,7 @@ export const workspace: Workspace = {
         { name: 'body', url: `${NTLM_URL}/api`, type: 'HTTP', method: 'POST' },
         { name: 'redirect', url: `${NTLM_URL}/redirect?to=${NTLM_URL}/landing`, type: 'HTTP', method: 'GET' },
         { name: 'timeline', url: `${NTLM_URL}/api`, type: 'HTTP', method: 'GET' },
-        { name: 'https', url: `https://127.0.0.1:${NTLM_PORT}/api`, type: 'HTTP', method: 'GET' },
+        { name: 'https', url: `${NTLM_URL.replace('http:', 'https:')}/api`, type: 'HTTP', method: 'GET' },
       ],
     },
   ],
@@ -38,21 +39,21 @@ async function withNtlmServer(options: Parameters<typeof startNtlmServer>[0], ru
   }
 }
 
-async function setUpAuth() {
-  await setAuth('ntlm-collection', 'ntlm', credentials);
+async function setUpAuth(page: Page) {
+  await setAuth(page, 'ntlm-collection', 'ntlm', credentials);
   for (const request of ['api', 'redirect', 'timeline', 'https']) {
-    await setAuth(request, 'ntlm', credentials);
+    await setAuth(page, request, 'ntlm', credentials);
   }
-  await setAuth('wrong-password', 'ntlm', { ...credentials, password: 'notThePassword' });
+  await setAuth(page, 'wrong-password', 'ntlm', { ...credentials, password: 'notThePassword' });
 
-  await setAuth('body', 'ntlm', credentials);
-  await setBody('body', '{"hello":"world"}');
+  await setAuth(page, 'body', 'ntlm', credentials);
+  await setBody(page, 'body', '{"hello":"world"}');
 }
 
-async function verifyHandshake() {
+async function verifyHandshake(page: Page) {
   await withNtlmServer({}, async (endpoint) => {
-    await sendRequestAndExpect('api', 200);
-    await expectResponsePane('api', 'Response', { contains: ['authenticated'] });
+    await sendRequestAndVerify(page, 'api', 200);
+    await verifyResponsePane(page, 'api', { tab: 'Response' }, { contains: ['authenticated'] });
 
     expect(endpoint.messageTypesSeen()).toEqual([null, 1, 3]);
     expect(endpoint.requests.map((request) => request.authenticated)).toEqual([undefined, undefined, true]);
@@ -60,27 +61,27 @@ async function verifyHandshake() {
   });
 }
 
-async function verifyWrongPassword() {
+async function verifyWrongPassword(page: Page) {
   await withNtlmServer({}, async (endpoint) => {
-    await sendRequestAndExpect('wrong-password', 401);
+    await sendRequestAndVerify(page, 'wrong-password', 401);
 
     expect(endpoint.messageTypesSeen()).toEqual([null, 1, 3]);
     expect(endpoint.requests.map((request) => request.authenticated)).toEqual([undefined, undefined, false]);
   });
 }
 
-async function verifyInherited() {
+async function verifyAuthInheritanceFromCollection(page: Page) {
   await withNtlmServer({}, async (endpoint) => {
-    await sendRequestAndExpect('inherited', 200);
+    await sendRequestAndVerify(page, 'inherited', 200);
 
     expect(endpoint.messageTypesSeen()).toEqual([null, 1, 3]);
     expect(endpoint.requests.map((request) => request.authenticated)).toEqual([undefined, undefined, true]);
   });
 }
 
-async function verifyBodyOnEveryRequest() {
+async function verifyBodyOnEveryRequest(page: Page) {
   await withNtlmServer({}, async (endpoint) => {
-    await sendRequestAndExpect('body', 200);
+    await sendRequestAndVerify(page, 'body', 200);
 
     expect(endpoint.messageTypesSeen()).toEqual([null, 1, 3]);
     expect(endpoint.requests.map((request) => JSON.parse(request.body))).toEqual([
@@ -89,10 +90,10 @@ async function verifyBodyOnEveryRequest() {
   });
 }
 
-async function verifyRedirect() {
+async function verifyRedirect(page: Page) {
   await withNtlmServer({}, async (endpoint) => {
-    await sendRequestAndExpect('redirect', 200);
-    await expectResponsePane('redirect', 'Response', { contains: ['/landing'] });
+    await sendRequestAndVerify(page, 'redirect', 200);
+    await verifyResponsePane(page, 'redirect', { tab: 'Response' }, { contains: ['/landing'] });
 
     expect(endpoint.messageTypesSeen()).toEqual([null, 1, 3, null, 1, 3]);
     const carryingRetry = endpoint.requests.filter((request) => request.headers['x-retry'] !== undefined);
@@ -100,19 +101,19 @@ async function verifyRedirect() {
   });
 }
 
-async function verifyTimelineLogsHandshake() {
+async function verifyTimelineLogsHandshake(page: Page) {
   await withNtlmServer({}, async () => {
-    await sendRequestAndExpect('timeline', 200);
+    await sendRequestAndVerify(page, 'timeline', 200);
 
-    await expectResponsePane('timeline', 'Timeline', {
+    await verifyResponsePane(page, 'timeline', { tab: 'Timeline', section: 'Network' }, {
       contains: ['Authorization: NTLM TlRMTVNTUAAB', 'Authorization: NTLM TlRMTVNTUAAD', 'HTTP/1.1 200 OK'],
-    }, 'Network');
+    });
   });
 }
 
-async function verifyTls() {
+async function verifyTls(page: Page) {
   await withNtlmServer({ tls: true }, async (endpoint) => {
-    await sendRequestAndExpect('https', 200);
+    await sendRequestAndVerify(page, 'https', 200);
 
     expect(endpoint.messageTypesSeen()).toEqual([null, 1, 3]);
     expect(endpoint.requests.map((request) => request.authenticated)).toEqual([undefined, undefined, true]);
@@ -120,13 +121,13 @@ async function verifyTls() {
   });
 }
 
-export async function run() {
-  await setUpAuth();
-  await verifyHandshake();
-  await verifyWrongPassword();
-  await verifyInherited();
-  await verifyBodyOnEveryRequest();
-  await verifyRedirect();
-  await verifyTimelineLogsHandshake();
-  await verifyTls();
+export async function run(page: Page) {
+  await setUpAuth(page);
+  await verifyHandshake(page);
+  await verifyWrongPassword(page);
+  await verifyAuthInheritanceFromCollection(page);
+  await verifyBodyOnEveryRequest(page);
+  await verifyRedirect(page);
+  await verifyTimelineLogsHandshake(page);
+  await verifyTls(page);
 }

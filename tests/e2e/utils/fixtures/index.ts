@@ -154,75 +154,75 @@ async function waitForWorkbench(page: Page): Promise<void> {
 }
 
 export interface SuiteWorkerFixtures {
-  sharedPage: Page;
+  workbench: Page;
 }
 
 const SUITE_SETTINGS = { 'files.simpleDialog.enable': true, 'window.dialogStyle': 'custom' };
 
-let launchWorkbench: (args: { vscodeSettings: Record<string, unknown> }, use: (page: Page) => Promise<void>) => Promise<void>;
+async function launchWorkbench({ vscodeSettings }: { vscodeSettings: Record<string, unknown> }, use: (page: Page) => Promise<void>): Promise<void> {
+  const debugPort = await getFreePort();
+  const userDataDir = makeTempDir('bruno-vscode-test-');
+
+  // Create a temp workspace folder so the extension host has a workspace to run against
+  const workspacePath = makeTempDir('bruno-workspace-');
+
+  writeVSCodeSettings(userDataDir, vscodeSettings);
+
+  const executablePath = await resolveExecutable();
+  const proc = launchVSCode(executablePath, debugPort, userDataDir, workspacePath);
+
+  let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
+
+  try {
+    await waitForPort(debugPort, 25_000);
+
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
+
+    // VS Code may have multiple contexts — find the one with the workbench page
+    let workbenchPage: Page | undefined;
+
+    // Try existing pages first
+    for (const ctx of browser.contexts()) {
+      const found = ctx.pages().find(p =>
+        p.url().startsWith('vscode-file://') || p.url().includes('workbench.html')
+      );
+      if (found) { workbenchPage = found; break; }
+    }
+
+    // If not found yet, wait for a new page to appear
+    if (!workbenchPage) {
+      workbenchPage = await new Promise<Page>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Workbench page not found within 20s')), 20_000);
+        for (const ctx of browser!.contexts()) {
+          ctx.on('page', p => {
+            if (p.url().startsWith('vscode-file://') || p.url().includes('workbench.html')) {
+              clearTimeout(timer);
+              resolve(p);
+            }
+          });
+        }
+      });
+    }
+
+    await waitForWorkbench(workbenchPage);
+
+    await use(workbenchPage);
+  } finally {
+    await browser?.close().catch(() => {});
+    proc.kill('SIGTERM');
+    await new Promise<void>(r => setTimeout(r, 1500));
+    proc.kill('SIGKILL');
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+    fs.rmSync(workspacePath, { recursive: true, force: true });
+  }
+}
 
 export const test = base.extend<VSCodeFixture & VSCodeOptions, SuiteWorkerFixtures>({
   vscodeSettings: [{}, { option: true }],
 
-  page: launchWorkbench = async ({ vscodeSettings }, use) => {
-    const debugPort = await getFreePort();
-    const userDataDir = makeTempDir('bruno-vscode-test-');
+  page: launchWorkbench,
 
-    // Create a temp workspace folder so the extension host has a workspace to run against
-    const workspacePath = makeTempDir('bruno-workspace-');
-
-    writeVSCodeSettings(userDataDir, vscodeSettings);
-
-    const executablePath = await resolveExecutable();
-    const proc = launchVSCode(executablePath, debugPort, userDataDir, workspacePath);
-
-    let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
-
-    try {
-      await waitForPort(debugPort, 25_000);
-
-      browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
-
-      // VS Code may have multiple contexts — find the one with the workbench page
-      let workbenchPage: Page | undefined;
-
-      // Try existing pages first
-      for (const ctx of browser.contexts()) {
-        const found = ctx.pages().find(p =>
-          p.url().startsWith('vscode-file://') || p.url().includes('workbench.html')
-        );
-        if (found) { workbenchPage = found; break; }
-      }
-
-      // If not found yet, wait for a new page to appear
-      if (!workbenchPage) {
-        workbenchPage = await new Promise<Page>((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error('Workbench page not found within 20s')), 20_000);
-          for (const ctx of browser!.contexts()) {
-            ctx.on('page', p => {
-              if (p.url().startsWith('vscode-file://') || p.url().includes('workbench.html')) {
-                clearTimeout(timer);
-                resolve(p);
-              }
-            });
-          }
-        });
-      }
-
-      await waitForWorkbench(workbenchPage);
-
-      await use(workbenchPage);
-    } finally {
-      await browser?.close().catch(() => {});
-      proc.kill('SIGTERM');
-      await new Promise<void>(r => setTimeout(r, 1500));
-      proc.kill('SIGKILL');
-      fs.rmSync(userDataDir, { recursive: true, force: true });
-      fs.rmSync(workspacePath, { recursive: true, force: true });
-    }
-  },
-
-  sharedPage: [async ({}, use) => {
+  workbench: [async ({}, use) => {
     await launchWorkbench({ vscodeSettings: SUITE_SETTINGS }, use);
   }, { scope: 'worker', timeout: 120_000 }],
 

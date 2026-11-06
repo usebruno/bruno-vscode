@@ -1,9 +1,12 @@
 import { Frame, Page, expect } from "@playwright/test";
-import * as path from "path";
 import { test } from "./utils/fixtures";
 import { Context } from "./context";
 import { buildCommonLocators } from "./utils/page/locators";
-import { closeEditorTabIfOpen, createCollectionV2, createFolder, createRequestV2, deleteRequestV2, dragItemIntoFolder, exportCollectionV2, expandFolder, fillRequestDetails, openBrunoSidebar, removeCollection, runCommand, sidebar, collectionName, saveRequestV2, sendRequest, setAuth, takeScreenshot, useCollection } from "./utils/page/actions";
+import {
+  createCollectionV2, createFolder, createRequestInFolder, createRequestV2, deleteRequestV2, exportCollectionV2,
+  openBrunoSidebar, removeCollection, runCommand, saveRequestV2,
+  sendRequest, setAuth, setCodeMirrorValue, takeScreenshot,
+} from "./utils/page/actions";
 
 type KeyValue<T = string | number | boolean> = {
   [k: string]: T,
@@ -13,13 +16,11 @@ type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 type RequestType = 'HTTP' | 'GraphQL' | 'gRPC' | `WebSocket`;
 type FileFormat = 'yml' | 'bru';
 
+export type ResponsePaneTab = { tab: 'Timeline', section: 'Request' | 'Response' | 'Network' } | { tab: 'Response' | 'Headers' | 'Tests' };
+
 export type TextCheck = {
   contains?: (string | RegExp)[],
   notContains?: (string | RegExp)[],
-}
-
-export type RequestPaneCheck = TextCheck & {
-  rows?: { name: string, value: string, description?: string }[],
 }
 
 type RequestConfig<EnvName extends string = string> = {
@@ -28,8 +29,8 @@ type RequestConfig<EnvName extends string = string> = {
   params?: KeyValue[],
   headers?: KeyValue[],
   payload?: string;
-  type?: RequestType,
-  method?: RequestMethod
+  type: RequestType,
+  method: RequestMethod
   run?: boolean,
   env?: NoInfer<EnvName>
   delete?: boolean;
@@ -59,7 +60,7 @@ type EnvConfig<EnvName extends string = string> = {
 }
 
 type CollectionConfig<EnvName extends string = string> = {
-  format?: FileFormat,
+  format: FileFormat,
   name: string,
   vars?: KeyValue[],
   folders?: FolderConfig<EnvName>[],
@@ -74,8 +75,6 @@ type Config<EnvName extends string = string> = {
 }
 
 
-export type LifecycleCtx = { page: Page, sidebar: Frame, collection: string, collectionPath: string, folders: string[], requests: string[] }
-
 type FolderEntry = { folder: FolderConfig, parent?: string }
 type RequestEntry = { request: RequestConfig, folder?: string }
 
@@ -84,91 +83,84 @@ function flattenFolders(folders: FolderConfig[] = [], parent?: string): FolderEn
   return folders.flatMap((folder) => [{ folder, parent }, ...flattenFolders(folder.folders, folder.name)])
 }
 
-// Requests are created at the collection root, then dragged into their folder.
+
 async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: string, { request, folder }: RequestEntry) {
-  const requestWebview = await createRequestV2(page, sidebar, ctx, collection, request.type ?? 'HTTP', request.method ?? 'GET')
-  await fillRequestDetails(requestWebview, ctx, request.url, request.payload, request.params, request.headers)
-
-  if (request.run) {
-    await sendRequest(requestWebview, 200)
-  }
-
-  await saveRequestV2(page, requestWebview, ctx, request.name, true)
-
   if (folder) {
-    await closeEditorTabIfOpen(page, request.name)
-    await dragItemIntoFolder(sidebar, request.name, folder)
-    await expandFolder(sidebar, folder)
+    await createRequestInFolder(page, sidebar, { collection, folder, name: request.name, type: request.type, method: request.method, url: request.url })
 
     const rows = buildCommonLocators(sidebar).sidebar
     const folderDepth = await rows.collectionItem(folder).locator('.indent-block').count()
     await expect(rows.collectionItem(request.name).locator('.indent-block')).toHaveCount(folderDepth + 1)
+  } else {
+    const requestWebview = await createRequestV2(page, sidebar, ctx, collection, request.type, request.method)
+    await setCodeMirrorValue(page, requestWebview.locator('.CodeMirror').first(), request.url)
+
+    if (request.run) {
+      await sendRequest(requestWebview, 200)
+    }
+
+    await saveRequestV2(page, requestWebview, ctx, request.name, true)
   }
 
   if (request.auth) {
-    await setAuth(request.name, request.auth)
+    await setAuth(page, request.name, request.auth)
   }
 }
 
-export async function performE2E<const EnvName extends string = never>(config: Config<EnvName>, page: Page) {
+// Builds the workspace and returns the names of the collections it created
+export async function performE2E<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<string[]> {
   const sidebar = await openBrunoSidebar(page);
+  const collections: string[] = [];
 
   for (const [index, collection] of config.collections.entries()) {
     if (typeof collection === 'string') {
       // import collection
-      continue
-    }
+    } else {
+      const folders = flattenFolders(collection.folders)
+      const requests: RequestEntry[] = [
+        ...(collection.requests ?? []).map((request) => ({ request })),
+        ...folders.flatMap(({ folder }) => (folder.requests ?? []).map((request) => ({ request, folder: folder.name }))),
+      ]
 
-    const folders = flattenFolders(collection.folders)
-    const requests: RequestEntry[] = [
-      ...(collection.requests ?? []).map((request) => ({ request })),
-      ...folders.flatMap(({ folder }) => (folder.requests ?? []).map((request) => ({ request, folder: folder.name }))),
-    ]
+      const ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
+      collections.push(collection.name)
 
-    const ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
-    if (index === 0) {
-      useCollection({
-        page, sidebar,
-        collection: collection.name,
-        collectionPath: path.join(ctx.collectionLocation, collection.name),
-        folders: folders.map(({ folder }) => folder.name),
-        requests: requests.map(({ request }) => request.name),
-      })
-    }
+      for (const { folder, parent } of folders) {
+        await createFolder(sidebar, parent ?? collection.name, folder.name, !parent)
+      }
 
-    for (const { folder, parent } of folders) {
-      await createFolder(sidebar, parent ?? collection.name, folder.name, !parent)
-    }
+      for (const entry of requests) {
+        await addRequest(page, sidebar, ctx, collection.name, entry)
+      }
 
-    for (const entry of requests) {
-      await addRequest(page, sidebar, ctx, collection.name, entry)
-    }
+      for (const { folder } of folders) {
+        if (folder.auth) {
+          await setAuth(page, folder.name, folder.auth)
+        }
+      }
 
-    for (const { folder } of folders) {
-      if (folder.auth) {
-        await setAuth(folder.name, folder.auth)
+      if (collection.auth) {
+        await setAuth(page, collection.name, collection.auth)
+      }
+
+      // Delete only after every request is saved, so deletes don't shift the "Untitled N" titles.
+      const toDelete = requests.filter(({ request }) => request.delete)
+      for (const { request } of toDelete) {
+        await deleteRequestV2(page, sidebar, ctx, request.name, collection.format)
+      }
+
+      if (collection.export) {
+        const exported = await exportCollectionV2(page, sidebar, ctx)
+
+        // verify the export reflects the deletes
+        const exportedNames = (exported.items ?? []).map((item: { name: string }) => item.name);
+        const remainingNames = requests.filter(({ request }) => !request.delete).map(({ request }) => request.name);
+        expect(exportedNames.sort()).toEqual(remainingNames.sort());
       }
     }
-
-    if (collection.auth) {
-      await setAuth(collection.name, collection.auth)
-    }
-
-    // Delete only after every request is saved, so deletes don't shift the "Untitled N" titles.
-    const toDelete = requests.filter(({ request }) => request.delete)
-    for (const { request } of toDelete) {
-      await deleteRequestV2(page, sidebar, ctx, request.name, collection.format)
-    }
-
-    if (collection.export) {
-      const exported = await exportCollectionV2(page, sidebar, ctx)
-
-      // verify the export reflects the deletes
-      const exportedNames = (exported.items ?? []).map((item: { name: string }) => item.name);
-      const remainingNames = requests.filter(({ request }) => !request.delete).map(({ request }) => request.name);
-      expect(exportedNames.sort()).toEqual(remainingNames.sort());
-    }
   }
+
+  return collections
 }
 
 export type Workspace = Parameters<typeof performE2E>[0];
@@ -176,7 +168,7 @@ export type Workspace = Parameters<typeof performE2E>[0];
 type LifecycleSuite = {
   desc: string;
   workspace: Workspace;
-  run: () => Promise<void>;
+  run: (page: Page) => Promise<void>;
   setup?: (t: typeof test) => void;
 };
 
@@ -186,20 +178,24 @@ export function runSuites<const S extends LifecycleSuite[]>(title: string, suite
   test.describe(title, () => {
     for (const { desc, workspace, run, setup } of suites as LifecycleSuite[]) {
       test.describe(desc, () => {
+        let collections: string[] = [];
         setup?.(test);
 
-        test.beforeEach(async ({ sharedPage }) => {
-          await performE2E(workspace, sharedPage);
+        test.beforeEach(async ({ workbench }) => {
+          collections = await performE2E(workspace, workbench);
         });
 
-        test.afterEach(async ({ sharedPage }) => {
-          await takeScreenshot(sharedPage, test);
-          await runCommand(sharedPage, 'View: Close All Editors');
-          await removeCollection(sharedPage, sidebar, collectionName);
+        test.afterEach(async ({ workbench }) => {
+          await takeScreenshot(workbench, test);
+          await runCommand(workbench, 'View: Close All Editors');
+          const sidebar = await openBrunoSidebar(workbench);
+          for (const collection of collections) {
+            await removeCollection(workbench, sidebar, collection);
+          }
         });
 
-        test('run', async () => {
-          await run();
+        test('run', async ({ workbench }) => {
+          await run(workbench);
         });
       });
     }

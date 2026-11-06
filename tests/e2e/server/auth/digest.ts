@@ -5,13 +5,15 @@
  */
 
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
 const router = Router();
 
 const REALM = 'bruno';
-const USERNAME = 'bruno';
-const PASSWORD = 'della';
+
+const users: Record<string, string> = {
+  bruno: 'della'
+};
 
 const md5 = (value: string) => crypto.createHash('md5').update(value).digest('hex');
 
@@ -35,11 +37,16 @@ router.get('/protected', (req: Request, res: Response) => {
   }
 
   const { username, nonce, nc, cnonce, qop, response } = parseDigestHeader(header);
-  const ha1 = md5(`${USERNAME}:${REALM}:${PASSWORD}`);
+  const password = users[username];
+  if (!password) {
+    return challenge(res);
+  }
+
+  const ha1 = md5(`${username}:${REALM}:${password}`);
   const ha2 = md5(`${req.method}:${req.originalUrl}`);
   const expected = md5(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`);
 
-  if (username !== USERNAME || response !== expected) {
+  if (response !== expected) {
     return challenge(res);
   }
   res.json({ authenticated: true });

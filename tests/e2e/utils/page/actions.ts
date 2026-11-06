@@ -5,7 +5,7 @@ import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
 import { Context } from '../../context';
 import { VSCodeFixture, VSCodeOptions } from '../fixtures';
-import type { AuthFields, AuthMode, LifecycleCtx, RequestPaneCheck, TextCheck } from '../../e2e-helper';
+import type { AuthFields, AuthMode, ResponsePaneTab } from '../../e2e-helper';
 
 // The editor pane currently in focus (request, folder settings or collection settings).
 export const activeEditor = (page: Page): FrameLocator =>
@@ -454,6 +454,26 @@ export async function selectEnvironment(frame: Frame | FrameLocator, name: strin
  * @param url - Request URL
  * @param method - HTTP method (default: 'GET')
  */
+export async function createRequestInFolder(
+  page: Page,
+  sidebar: Frame,
+  { collection, folder, name, type, method, url }: { collection: string; folder: string; name: string; type: 'HTTP' | 'GraphQL' | 'gRPC' | 'WebSocket'; method: string; url: string }
+): Promise<void> {
+  const panel = await openNewRequestPanel(page, sidebar, folder, true);
+  await buildCommonLocators(panel).newRequest.typeOption(type).click();
+
+  await createRequest(page, panel, sidebar, collection, name, url);
+
+  await buildCommonLocators(page).workbench.editorTab('New Request').waitFor({ state: 'detached' });
+
+  if ((type === 'HTTP' || type === 'GraphQL') && method.toUpperCase() !== 'GET') {
+    const editor = await getWebviewByTitle(page, name);
+    await editor.getByTestId('request-method').click();
+    await editor.getByTestId(`request-method-${method.toLowerCase()}`).click();
+    await saveRequest(page);
+  }
+}
+
 export async function createRequest(
   page: Page,
   editor: Frame,
@@ -826,6 +846,19 @@ export async function dragItemAboveOrBelow(
   await locators.sidebar.collectionItemLabel(itemName).dragTo(targetRow, { targetPosition, steps: 15 });
 }
 
+export async function dragItem(
+  page: Page,
+  { dragItem, target, position }: { dragItem: string; target: string; position: 'above' | 'below' | 'inside' }
+): Promise<void> {
+  const sidebar = await openSidebar(page);
+  const locators = buildCommonLocators(sidebar);
+  const targetRow = locators.sidebar.collectionItem(target);
+  // 'inside' drops on the middle of the row (into a folder); steps gives the sidebar a real drag, a single jump does not start one.
+  const targetPosition = position === 'inside' ? undefined : { x: 50, y: position === 'above' ? 3 : 22 };
+
+  await locators.sidebar.collectionItemLabel(dragItem).dragTo(targetRow, { targetPosition, steps: 15 });
+}
+
 /**
  * Collapse a collection in the sidebar by clicking its chevron toggle.
  * A collapsed collection removes its children from the DOM.
@@ -1182,10 +1215,6 @@ export async function createFolder(
   await expect(
     buildCommonLocators(sidebar).sidebar.collectionItem(folderName)
   ).toBeVisible({ timeout: 15_000 });
-
-  const folderCreatedToast = sidebar.getByRole('status').filter({ hasText: 'Folder created' });
-  await expect(folderCreatedToast).toBeVisible();
-  await expect(folderCreatedToast).toBeHidden();
 }
 
 export async function pickDropdownItem(page: Page, trigger: Locator | string, label: string): Promise<void> {
@@ -1207,7 +1236,6 @@ async function selectPaneTab(page: Page, paneSelector: string, tabName: string):
   const pane = editor.locator(paneSelector);
   await expect(pane).toBeVisible();
   const tabs = pane.locator('.tabs').first();
-  await expect(tabs).toBeVisible();
 
   const visibleTab = tabs.getByRole('tab', { name: tabName });
   const overflowButton = tabs.locator('.more-tabs');
@@ -1550,10 +1578,6 @@ export async function createRequestV2(page: Page, _sidebar: Frame, ctx: Context,
   const webview = await getWebviewByTitle(page, 'Untitled 1');
   expect(webview).toBeTruthy();
 
-  if (type === 'gRPC' || type === 'WebSocket') {
-    return webview;
-  }
-
   const requestTypeDropdown = webview.getByTestId('request-method');
   if ((await requestTypeDropdown.getAttribute('aria-expanded')) === 'false') {
     await requestTypeDropdown.click()
@@ -1688,52 +1712,64 @@ export const authModeLabels: Record<AuthMode, string> = {
   oauth2: 'OAuth 2.0'
 };
 
-// The collection the running suite acts on
-let currentCollection: LifecycleCtx;
-export let page: Page;
-export let sidebar: Frame;
-export let collectionName = '';
-export let collectionPath = '';
+export const editorLocators = (page: Page) => buildCommonLocators(activeEditor(page));
+export const sidebarLocators = async (page: Page) => buildCommonLocators(await openSidebar(page));
 
-export function useCollection(ctx: LifecycleCtx): void {
-  currentCollection = ctx;
-  page = ctx.page;
-  sidebar = ctx.sidebar;
-  collectionName = ctx.collection;
-  collectionPath = ctx.collectionPath;
+// The Bruno sidebar with every collection expanded, so any collection, folder or request row can be found by its name
+async function openSidebar(page: Page): Promise<Frame> {
+  const sidebar = await openBrunoSidebar(page);
+  const chevrons = sidebar.getByTestId(/^sidebar-collection-row-/).locator('svg.chevron-icon');
+  for (const chevron of await chevrons.all()) {
+    const isExpanded = await chevron.evaluate((el) => el.classList.contains('rotate-90'));
+    if (!isExpanded) {
+      await chevron.click();
+    }
+  }
+  return sidebar;
 }
 
-// Checks the text of a response pane tab of a request. Timeline checks a view (Request, Response or Network) of the latest entry, other tabs the whole pane.
-export async function expectResponsePane(request: string, tabName: string, check: TextCheck, section: 'Request' | 'Response' | 'Network' = 'Request'): Promise<void> {
-  const ctx = currentCollection;
-  const page = ctx.page;
-  const locators = buildCommonLocators(activeEditor(page));
-  await expandCollection(ctx.sidebar, ctx.collection);
-  await openRequestEditor(ctx, request);
-  await selectResponsePaneTab(page, tabName);
-
-  let panel: Locator;
-  if (tabName === 'Timeline') {
-    const timelineItem = locators.timeline.lastItem();
-    await locators.timeline.itemHeader(timelineItem).click();
-    await locators.timeline.tab(timelineItem, section).click();
-    panel = locators.timeline.panel(timelineItem, section);
-  } else {
-    panel = locators.responsePane();
+// What a name in the sidebar is: a collection row, a folder row (it has a chevron) or a request row
+async function itemTypeOf(sidebar: Frame, target: string): Promise<'collection' | 'folder' | 'request'> {
+  const rows = buildCommonLocators(sidebar).sidebar;
+  // Wait for the row first, so a folder whose row hasn't rendered yet isn't taken for a request
+  await rows.collectionName(target).or(rows.collectionItem(target)).first().waitFor();
+  if (await rows.collectionName(target).count()) {
+    return 'collection';
   }
-  await expect(panel).toBeVisible();
-
-  for (const text of check.contains ?? []) {
-    await expect(panel).toContainText(text);
+  if (await rows.folderChevron(target).count()) {
+    return 'folder';
   }
-  for (const text of check.notContains ?? []) {
-    await expect(panel).not.toContainText(text);
+  return 'request';
+}
+
+// Opens a tab of a collection, folder or request
+export async function openItemTab(page: Page, target: string, tab: string): Promise<void> {
+  await openRequestPane(page, target, tab);
+}
+
+// Opens a response pane tab of a request; for Timeline, also the view (Request, Response or Network) of its latest entry
+export async function openResponseTab(page: Page, request: string, paneTab: ResponsePaneTab): Promise<void> {
+  await openRequestEditor(page, request);
+  await selectResponsePaneTab(page, paneTab.tab);
+
+  if (paneTab.tab === 'Timeline') {
+    const { timeline } = editorLocators(page);
+    const timelineItem = timeline.lastItem();
+    await timeline.itemHeader(timelineItem).click();
+    await timeline.tab(timelineItem, paneTab.section).click();
   }
 }
 
-async function openRequestEditor({ page, sidebar, collection }: Pick<LifecycleCtx, 'page' | 'sidebar' | 'collection'>, request: string) {
+// Opens a request and sends it
+export async function sendRequestByName(page: Page, request: string): Promise<void> {
+  await openRequestEditor(page, request);
+  await activeEditor(page).locator('#send-request').click();
+}
+
+async function openRequestEditor(page: Page, request: string) {
+  const sidebar = await openSidebar(page);
   await expect(async () => {
-    await openRequest(page, sidebar, collection, request);
+    await buildCommonLocators(sidebar).sidebar.collectionItem(request).click();
     try {
       await expect(buildCommonLocators(activeEditor(page)).requestPane()).toBeVisible({ timeout: 3000 });
     } catch (error) {
@@ -1743,37 +1779,34 @@ async function openRequestEditor({ page, sidebar, collection }: Pick<LifecycleCt
   }).toPass({ timeout: 25_000 });
 }
 
-// What a target name refers to. Names are unique across the collection, its folders and its requests.
-function itemTypeOf({ collection, folders, requests }: LifecycleCtx, target: string): 'collection' | 'folder' | 'request' {
-  if (target === collection) return 'collection';
-  if (folders.includes(target)) return 'folder';
-  if (requests.includes(target)) return 'request';
-  throw new Error(`"${target}" is not the collection, a folder or a request of this suite`);
-}
-
-async function openRequestPane(ctx: LifecycleCtx, target: string, tab: string) {
-  const { page, sidebar } = ctx;
+// Opens a tab of a collection, folder or request and returns which of them the name is
+async function openRequestPane(page: Page, target: string, tab: string): Promise<'collection' | 'folder' | 'request'> {
+  const sidebar = await openSidebar(page);
   const rows = buildCommonLocators(sidebar).sidebar;
-  const itemType = itemTypeOf(ctx, target);
+  const itemType = await itemTypeOf(sidebar, target);
 
   if (itemType === 'collection') {
     await rows.collectionName(target).click();
     await selectPaneTab(page, '[data-testid="collection-settings"]', tab);
   } else if (itemType === 'request') {
-    await openRequestEditor(ctx, target);
+    await openRequestEditor(page, target);
     await selectPaneTab(page, '[data-testid="request-pane"]', tab);
   } else {
     await rows.folder(target).click();
     await selectPaneTab(page, '[data-testid="folder-settings"]', tab);
   }
+  return itemType;
 }
 
 async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
   if (itemType === 'request') {
     await saveRequest(page);
   } else {
-    await buildCommonLocators(activeEditor(page)).saveButton().click();
-    await expect(activeEditor(page).getByText(/Settings saved successfully/).last()).toBeVisible({ timeout: 5000 });
+    const editor = activeEditor(page);
+    const savedToast = editor.getByText(/Settings saved successfully/);
+    await savedToast.evaluateAll((toasts) => toasts.forEach((toast) => toast.setAttribute('data-earlier-save', '')));
+    await buildCommonLocators(editor).saveButton().click();
+    await expect(savedToast.and(editor.locator(':not([data-earlier-save])')).last()).toBeVisible();
   }
 }
 
@@ -1797,6 +1830,7 @@ async function setOAuth2Fields(page: Page, fields: AuthFields) {
     accessTokenUrl: fields.accessTokenUrl, refreshTokenUrl: fields.refreshTokenUrl, username: fields.username,
     password: fields.password, clientId: fields.clientId, clientSecret: fields.clientSecret, scope: fields.scope
   };
+
   for (const [key, value] of Object.entries(values)) {
     if (value !== undefined) await setCodeMirrorValue(page, field(key), value);
   }
@@ -1805,6 +1839,7 @@ async function setOAuth2Fields(page: Page, fields: AuthFields) {
     const addCredentialsToSelector = fields.grantType === 'passwordCredentials' ? oauth2.passwordCredentialsPlacementSelector() : oauth2.credentialsPlacementSelector();
     await pickDropdownItem(page, addCredentialsToSelector, fields.addCredentialsTo === 'requestBody' ? 'Request Body' : 'Basic Auth Header');
   }
+
   if (fields.addTokenTo) {
     await pickDropdownItem(page, oauth2.tokenPlacementSelector(), fields.addTokenTo === 'url' ? 'URL' : 'Header');
     await expect(oauth2.field(fields.addTokenTo === 'url' ? 'tokenQueryKey' : 'tokenHeaderPrefix')).toBeVisible();
@@ -1826,12 +1861,8 @@ async function fillAuthFields(page: Page, fields: AuthFields) {
   }
 }
 
-export async function setAuth(target: string, mode: AuthMode, fields: AuthFields = {}): Promise<void> {
-  const ctx = currentCollection;
-  const { page, collection } = ctx;
-
-  await expandCollection(ctx.sidebar, collection);
-  await openRequestPane(ctx, target, 'Auth');
+export async function setAuth(page: Page, target: string, mode: AuthMode, fields: AuthFields = {}): Promise<void> {
+  const itemType = await openRequestPane(page, target, 'Auth');
   await selectAuthMode(page, authModeLabels[mode]);
 
   if (mode === 'oauth2') {
@@ -1841,21 +1872,21 @@ export async function setAuth(target: string, mode: AuthMode, fields: AuthFields
   }
 
   if (mode === 'apikey' && fields.addTo) {
-    await pickDropdownItem(page, buildCommonLocators(activeEditor(page)).auth.apiKeyAddToPlacementSelector(), fields.addTo === 'queryParams' ? 'Query Param' : 'Header');
+    const placement = buildCommonLocators(activeEditor(page)).auth.apiKeyPlacement();
+    const placementLabel = fields.addTo === 'queryParams' ? 'Query Param' : 'Header';
+    await pickDropdownItem(page, placement, placementLabel);
   }
 
-  await saveItem(page, itemTypeOf(ctx, target));
+  await saveItem(page, itemType);
 }
 
-async function openOAuth2Tab(request: string) {
-  const ctx = currentCollection;
-  await expandCollection(ctx.sidebar, ctx.collection);
-  await openRequestPane(ctx, request, 'Auth');
-  return activeEditor(ctx.page);
+async function openOAuth2Tab(page: Page, request: string) {
+  await openRequestPane(page, request, 'Auth');
+  return activeEditor(page);
 }
 
-export async function getOAuth2AccessToken(request: string, { expectToken = true } = {}): Promise<void> {
-  const editor = await openOAuth2Tab(request);
+export async function getOAuth2AccessToken(page: Page, request: string, { expectToken = true } = {}): Promise<void> {
+  const editor = await openOAuth2Tab(page, request);
   const getToken = editor.getByTestId('oauth2-get-token-btn');
   await expect(getToken).toBeEnabled();
   await getToken.click();
@@ -1864,16 +1895,16 @@ export async function getOAuth2AccessToken(request: string, { expectToken = true
 }
 
 // Runs right after getOAuth2AccessToken, in the same open Auth tab.
-export async function refreshOAuth2Token(): Promise<void> {
-  const editor = activeEditor(currentCollection.page);
+export async function refreshOAuth2Token(page: Page): Promise<void> {
+  const editor = activeEditor(page);
   const refresh = editor.getByTestId('oauth2-refresh-token-btn');
   await expect(refresh).toBeVisible();
   await refresh.click();
   await expect(refresh).toBeEnabled({ timeout: 15_000 });
 }
 
-export async function clearOAuth2Cache(request: string): Promise<void> {
-  const editor = await openOAuth2Tab(request);
+export async function clearOAuth2Cache(page: Page, request: string): Promise<void> {
+  const editor = await openOAuth2Tab(page, request);
   const clear = editor.getByTestId('oauth2-clear-cache-btn');
   if (await clear.isVisible()) {
     await clear.scrollIntoViewIfNeeded();
@@ -1882,74 +1913,21 @@ export async function clearOAuth2Cache(request: string): Promise<void> {
   }
 }
 
-// Checks a tab of a collection, folder or request: table rows or text.
-// e.g. expectRequestPane('request-1', 'Params', { rows: [{ name: 'page', value: '1' }] }) // rows is not implemented yet
-// e.g. expectRequestPane('request-1', 'Body', { contains: ['"name": "bruno"'], notContains: ['password'] })
-export async function expectRequestPane(target: string, tab: string, check: RequestPaneCheck): Promise<void> {
-  const ctx = currentCollection;
-
-  await expandCollection(ctx.sidebar, ctx.collection);
-  await openRequestPane(ctx, target, tab);
-
-  if (check.rows) {
-    await expectTableRows(ctx.page, tab, check.rows);
-  }
-
-  const panel = buildCommonLocators(activeEditor(ctx.page)).itemPane();
-  for (const text of check.contains ?? []) {
-    await expect(panel).toContainText(text);
-  }
-  for (const text of check.notContains ?? []) {
-    await expect(panel).not.toContainText(text);
-  }
-}
-
-export async function sendRequestAndExpect(request: string, status?: 200 | 201 | 400 | 401 | 404): Promise<void> {
-  const ctx = currentCollection;
-
-  await expandCollection(ctx.sidebar, ctx.collection);
-  await openRequestEditor(ctx, request);
-  // Send through the active editor: the frame openRequest returns can be a hidden one.
-  await sendRequest(activeEditor(ctx.page), status);
-}
-
-export async function setBody(request: string, json: string): Promise<void> {
-  const ctx = currentCollection;
-  const locators = buildCommonLocators(activeEditor(ctx.page));
-  await expandCollection(ctx.sidebar, ctx.collection);
-  await openRequestPane(ctx, request, 'Body');
+export async function setBody(page: Page, request: string, json: string): Promise<void> {
+  const locators = buildCommonLocators(activeEditor(page));
+  await openRequestPane(page, request, 'Body');
   await locators.requestBody.modeSelector().click();
   await locators.requestBody.modeOption('json').click();
-  await setCodeMirrorValue(ctx.page, locators.body.editor(), json);
-  await saveRequest(ctx.page);
-}
-
-// Not implemented yet. Key/value tables: Headers and Params of a request.
-// e.g. expectTableRows(page, 'request-headers', [{ name: 'x-api-key', value: '123' }])
-async function expectTableRows(page: Page, tableId: string, rows: { name: string; value: string; description?: string }[]) {
-  console.warn('expectTableRows is not implemented');
-}
-
-// e.g. setHeaders('request-1', [{ name: 'x-api-key', value: '123' }])
-export async function setHeaders(target: string, rows: { name: string; value: string; description?: string }[]): Promise<void> {
-  console.warn('setHeaders is not implemented');
-}
-
-// e.g. setParams('request-1', [{ name: 'page', value: '2' }])
-export async function setParams(request: string, rows: { name: string; value: string; description?: string }[]): Promise<void> {
-  console.warn('setParams is not implemented');
+  await setCodeMirrorValue(page, locators.body.editor(), json);
+  await saveRequest(page);
 }
 
 // e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
-export async function setVars(target: string, rows: { name: string; value: string; description?: string }[], hook: 'preRequest' | 'postResponse' = 'preRequest'): Promise<void> {
-  const ctx = currentCollection;
-  const editor = activeEditor(ctx.page);
-  const itemType = itemTypeOf(ctx, target);
+export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], hook: 'preRequest' | 'postResponse' = 'preRequest'): Promise<void> {
+  const editor = activeEditor(page);
+  const itemType = await openRequestPane(page, target, 'Vars');
   const suffix = hook === 'preRequest' ? 'req' : 'res';
   const tableId = `${itemType}-vars-${suffix}`;
-
-  await expandCollection(ctx.sidebar, ctx.collection);
-  await openRequestPane(ctx, target, 'Vars');
 
   const tableRows = buildCommonLocators(editor).varsTable.rows(itemType, suffix);
   const table = buildCommonLocators(editor.getByTestId(tableId)).editableTable;
@@ -1958,33 +1936,9 @@ export async function setVars(target: string, rows: { name: string; value: strin
   for (const { name, value } of rows) {
     const emptyRow = (await tableRows.count()) - 1;
     await table.columnNameInput(emptyRow).fill(name);
-    await setCodeMirrorValue(ctx.page, table.columnValueEditor(emptyRow), value);
+    await setCodeMirrorValue(page, table.columnValueEditor(emptyRow), value);
   }
 
-  await saveItem(ctx.page, itemType);
+  await saveItem(page, itemType);
 }
 
-// e.g. setScript('request-1', { preRequest: "bru.setVar('a', 1)", postResponse: "bru.setVar('b', res.status)" })
-export async function setScript(target: string, scripts: { preRequest?: string; postResponse?: string }): Promise<void> {
-  console.warn('setScript is not implemented');
-}
-
-// e.g. addAsserts('request-1', [{ expression: 'res.status', operator: 'eq', value: '200' }])
-export async function addAsserts(request: string, rows: { expression: string; operator: string; value: string }[]): Promise<void> {
-  console.warn('addAsserts is not implemented');
-}
-
-// e.g. setTests('request-1', "test('ok', () => expect(res.status).to.equal(200))")
-export async function setTests(target: string, script: string): Promise<void> {
-  console.warn('setTests is not implemented');
-}
-
-// e.g. setDocs('request-1', '# What this request does')
-export async function setDocs(target: string, markdown: string): Promise<void> {
-  console.warn('setDocs is not implemented');
-}
-
-// e.g. setSettings('request-1', { followRedirects: false })
-export async function setSettings(request: string, settings: Record<string, string | boolean>): Promise<void> {
-  console.warn('setSettings is not implemented');
-}

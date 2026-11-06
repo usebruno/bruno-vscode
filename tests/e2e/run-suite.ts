@@ -1,8 +1,8 @@
 // Runs one suite file: npm run test:suite -- tests/e2e/auth2/suites/oauth2.ts [playwright options]
 // A suite is registered by the *.test.ts next to its suites folder, so this runs that file filtered to the suite's title.
-import { spawnSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 const [suitePath, ...playwrightArgs] = process.argv.slice(2);
 if (!suitePath) {

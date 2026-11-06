@@ -1,7 +1,8 @@
 // Copy this file into a suites folder, fix the imports and list it in runSuites([...]).
 // Export `desc`, `workspace` and `run` (`setup` is optional). Order: setup -> beforeEach builds `workspace` -> run -> afterEach.
+import type { Page } from '@playwright/test';
 import type { test as Test } from './utils/fixtures';
-import { Workspace } from './e2e-helper';
+import type { Workspace } from './e2e-helper';
 
 // Suite name in the report, also used by --grep
 export const desc = 'What this suite checks';
@@ -37,20 +38,21 @@ export function setup(test: typeof Test) {
 
 // Only needed when a suite has more than one case (e.g. 2 cases): one function per case, called from run() in order.
 // With a single case, put the steps directly in run().
-async function firstCase() {
+async function firstCase(page: Page) {
   // These also work here. Import `test` as a value: import { test } from './utils/fixtures'
   // test.skip(true, 'reason'); // skips the rest of this suite, but its collection is already created
-  // await someAction('sample-request');
+  // await setAuth(page, 'sample-request', 'bearer', { token: 'abc' });
   // await expect(locator).toBeVisible();
 }
 
-async function secondCase() {
-  // await anotherAction('sample-folder');
+async function secondCase(page: Page) {
+  // await verifyRequestPane(page, 'sample-folder', 'Auth', { contains: ['Bearer Token'] });
   // await expect(locator).toHaveText('value');
 }
 
-// The collection already exists. Actions come from utils/page/actions.
-export async function run() {
-  await firstCase();
-  await secondCase();
+// The collection already exists. `page` (the VS Code window) is passed to every action (utils/page/actions) and check (utils/page/assertions);
+// editorLocators(page) / sidebarLocators(page) give locators for your own checks.
+export async function run(page: Page) {
+  await firstCase(page);
+  await secondCase(page);
 }
