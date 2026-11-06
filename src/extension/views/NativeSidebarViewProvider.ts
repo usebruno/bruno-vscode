@@ -5,7 +5,8 @@ import { validateSchema } from '../app/collections';
 import { parseCollection, parseFolder, parseRequest } from '../utils/parse';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import logsStore from '../store/logs';
-import { basename, dirname, doesItExist, isInside, isSameDir, readText, META_FILES, type CollectionFormat } from '../utils/file';
+import { basename, dirname, doesItExist, isInside, isSameDir, readText, META_FILES } from '../utils/file';
+import type { CollectionFormat } from '../../utils/collection';
 import type { OpenedCollections } from '../store/opened-collections';
 import { startCase } from 'lodash';
 
@@ -403,6 +404,7 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       if (entry.params[0] !== 'request') {
         return this.findMatchesIn(entry.uri, collection, filter, matches);
       }
+
       const matched = this.doesItMatch(entry.name, filter);
       if (matched) {
         matches.add(entry.uri.toString());
@@ -426,6 +428,7 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
   private async readCollection(dir: vscode.Uri, config: vscode.Uri, source: CollectionRoot['source']): Promise<CollectionRoot | undefined> {
     try {
       const { name, ignore } = await this.readCollectionConfig(config);
+
       return {
         uid: uidFor(dir),
         name: name || basename(dir),
@@ -451,7 +454,9 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       } catch {
         throw new Error('Unable to parse json in bruno.json');
       }
+
       await validateSchema(parsed);
+
       return { name: parsed.name as string, ignore: parsed.ignore };
     }
 
@@ -481,13 +486,16 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       if (name.startsWith('.') || ignored.has(name)) {
         return undefined;
       }
+
       const uri = vscode.Uri.joinPath(dir, name);
       if (fileType & vscode.FileType.Directory) {
         return this.readFolder(uri, name, collection.format);
       }
+
       if ((fileType & vscode.FileType.File) && name.endsWith(requestExt) && !metaFiles.includes(name)) {
         return this.readRequest(uri, name.slice(0, -requestExt.length), collection.format);
       }
+
       return undefined;
     }));
 
@@ -511,6 +519,7 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       if (meta?.name && meta.name !== 'Untitled Folder') {
         entry.name = meta.name;
       }
+
       if (typeof meta?.seq === 'number') {
         entry.seq = meta.seq;
       }
@@ -526,11 +535,14 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       const content = await readText(uri);
       const parsed = parseRequest(content, { format });
       const requestType = REQUEST_TYPES[parsed?.type];
+
       if (!requestType) {
         // Not a request (e.g. an unrelated .yml file in a yml collection).
         return undefined;
       }
+
       const method = String(parsed?.request?.method ?? (requestType === 'GRAPHQL' ? 'POST' : 'GET')).toUpperCase() as RequestMethod;
+
       return {
         uri,
         name: parsed?.name || fileStem,
@@ -650,6 +662,13 @@ export class Entity extends vscode.TreeItem {
       this.tooltip = `${uri.toString()} cannot be read. Close it, or bring the folder back.`;
     } else if (type === 'collection') {
       this.iconPath = new vscode.ThemeIcon('folder-library');
+      // A click on the name opens the collection's settings.
+      // With a command set, VS Code expands and collapses only from the chevron.
+      this.command = {
+        command: 'bruno.sidebar.settings',
+        title: 'Open Collection Settings',
+        arguments: [this]
+      };
     } else if (type === 'folder') {
       this.iconPath = new vscode.ThemeIcon('folder');
     } else {

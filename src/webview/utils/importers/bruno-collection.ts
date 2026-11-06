@@ -22,25 +22,4 @@ export const processBrunoCollection = async (jsonData: any) => {
   }
 };
 
-export const isBrunoCollection = (data: any) => {
-  if (typeof data !== 'object' || data === null) {
-    return false;
-  }
-
-  // Must have a version field that is a non-empty string
-  if (typeof data.version !== 'string' || !data.version.trim()) {
-    return false;
-  }
-
-  // Must have a name field that is a non-empty string
-  if (typeof data.name !== 'string' || !data.name.trim()) {
-    return false;
-  }
-
-  // Must have an items array
-  if (!Array.isArray(data.items)) {
-    return false;
-  }
-
-  return true;
-};
+export { isBrunoCollection } from '../../../utils/collection';

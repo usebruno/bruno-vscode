@@ -1,14 +1,19 @@
 import * as vscode from 'vscode';
+import type { GrpcRequest, HttpItemSettings, HttpRequest, ItemType, WebSocketRequest } from '@bruno-types';
 import { stringifyCollection, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
-import { Entity, NativeSidebarViewProvider, CollectionRoot, findCollectionConfig } from '../views/NativeSidebarViewProvider';
-import type { OpenedCollections } from '../store/opened-collections';
+
+import { convertToBruno, isUnbundledCollectionRoot, readImportFile, writeCollection, IMPORT_SOURCE_LABELS } from '../utils/import';
+import { writeCollectionConfig } from '../utils/collection-v2';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { openRunnerPanel } from '../panels/runner-panel';
-import { parseCollection, parseFolder, parseRequest } from '../utils/parse';
+import type { OpenedCollections } from '../store/opened-collections';
+import logsStore from '../store/logs';
 import { stringifyJson } from '../utils/common';
+import { basename, dirname, doesItExist, isInside, readText, writeText, META_FILES } from '../utils/file';
+import type { CollectionFormat } from '../../utils/collection';
 import { sanitizeName, validateName } from '../utils/filesystem';
-import { basename, dirname, doesItExist, isInside, readText, writeText, META_FILES, type CollectionFormat } from '../utils/file';
-import type { GrpcRequest, HttpItemSettings, HttpRequest, ItemType, WebSocketRequest } from '@bruno-types';
+import { parseCollection, parseFolder, parseRequest } from '../utils/parse';
+import { Entity, NativeSidebarViewProvider, CollectionRoot, findCollectionConfig } from '../views/NativeSidebarViewProvider';
 
 /**
  * Commands behind the native sidebar tree's context menu, title bar and keybindings.
@@ -250,6 +255,7 @@ function getNewRequestTemplate(type: NewRequestType, name: string, seq: number):
 type SidebarCommands =
   | 'bruno.sidebar.refresh'
   | 'bruno.sidebar.createCollection'
+  | 'bruno.sidebar.importCollection'
   | 'bruno.sidebar.search'
   | 'bruno.sidebar.clearSearch'
   | 'bruno.sidebar.openCollection'
@@ -316,6 +322,10 @@ export function registerSidebarCommands(
 
   register('bruno.sidebar.createCollection', async () => {
     await handleCreateCollection(provider, treeView, openedCollections);
+  });
+
+  register('bruno.sidebar.importCollection', async () => {
+    await handleImportCollection(provider, treeView, openedCollections);
   });
 
   register('bruno.sidebar.openCollection', async () => {
@@ -442,30 +452,12 @@ async function handleCreateCollection(
     return;
   }
 
-  const [location] = await vscode.window.showOpenDialog({
-    canSelectFiles: false,
-    canSelectFolders: true,
-    canSelectMany: false,
-    openLabel: 'Create Here',
-    title: 'Where should the collection be created?',
-    defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri
-  }) ?? [];
+  const location = await pickCollectionLocation(provider, 'Where should the collection be created?');
   if (!location) {
     return;
   }
 
-  const enclosedCollection = await provider.findRootEntity(location);
-  if (enclosedCollection) {
-    throw new Error(`Cannot create a collection inside the collection "${enclosedCollection.label}"`);
-  }
-
-  const format = await vscode.window.showQuickPick<vscode.QuickPickItem & { value: CollectionFormat }>(
-    [
-      { label: 'OpenCollection (YAML)', description: 'Industry-standard YAML format (.yml files)', value: 'yml' },
-      { label: 'BRU', description: "Bruno's native file format (.bru files)", value: 'bru' }
-    ],
-    { placeHolder: 'File format for the requests in this collection' }
-  );
+  const format = await pickCollectionFormat();
   if (!format) {
     return;
   }
@@ -477,28 +469,151 @@ async function handleCreateCollection(
   }
 
   await vscode.workspace.fs.createDirectory(dir);
-  await writeCollectionConfig(dir, collectionName, format.value);
+  await writeCollectionConfig(dir, collectionName, format);
+  await showNewCollection(provider, treeView, openedCollections, dir);
+}
 
+/**
+ * Import a Postman, Insomnia, OpenAPI, WSDL, OpenCollection or Bruno export
+ * as a new collection. Conversion runs here on the extension host, and the
+ * files are written through workspace.fs, so the source file and the
+ * destination can both be on a remote.
+ */
+async function handleImportCollection(
+  provider: NativeSidebarViewProvider,
+  treeView: vscode.TreeView<Entity>,
+  openedCollections: OpenedCollections
+): Promise<void> {
+  const [file] = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    openLabel: 'Import',
+    title: 'Choose a collection or API spec to import',
+    filters: { 'Collections and API specs': ['json', 'yaml', 'yml', 'wsdl', 'xml'], 'All files': ['*'] }
+  }) ?? [];
+
+  if (!file) {
+    return;
+  }
+
+  const imported = readImportFile(await readText(file), basename(file));
+
+  if (isUnbundledCollectionRoot(imported)) {
+    // Importing this would create an empty copy; the requests sit next to the file.
+    const open = 'Open Collection';
+    const choice = await vscode.window.showInformationMessage(
+      `"${basename(file)}" is the config of a collection stored as separate files, not an export. Open that collection instead?`,
+      open
+    );
+    if (choice === open) {
+      await showNewCollection(provider, treeView, openedCollections, dirname(file));
+    }
+    return;
+  }
+
+  /**
+   * Only for openapi specs
+   */
+  let groupBy: 'tags' | 'path' | undefined;
+  if (imported.source === 'openapi') {
+    const grouping = await vscode.window.showQuickPick<vscode.QuickPickItem & { value: 'tags' | 'path' }>(
+      [
+        { label: 'Tags', description: 'Group requests by OpenAPI tags', value: 'tags' },
+        { label: 'Paths', description: 'Group requests by URL path structure', value: 'path' }
+      ],
+      { placeHolder: 'How should the requests be grouped into folders?' }
+    );
+    if (!grouping) {
+      return;
+    }
+    groupBy = grouping.value;
+  }
+
+  const location = await pickCollectionLocation(provider, 'Where should the imported collection be created?');
+  if (!location) {
+    return;
+  }
+
+  const format = await pickCollectionFormat();
+  if (!format) {
+    return;
+  }
+
+  const { dir, skipped, issues } = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Importing ${IMPORT_SOURCE_LABELS[imported.source]} collection` },
+    async () => {
+      const converted = await convertToBruno(imported, { groupBy, collectionFormat: format });
+      const written = await writeCollection(converted.collection, location, format);
+      return { ...written, issues: converted.issues };
+    }
+  );
+
+  await showNewCollection(provider, treeView, openedCollections, dir);
+
+  if (skipped.length) {
+    vscode.window.showWarningMessage(
+      `${skipped.length} request(s) could not be converted and were left out: ${skipped.join(', ')}`
+    );
+  }
+
+  if (issues.length) {
+    // Scripts the converter could not translate, and the like. Each goes to the Bruno log for the details.
+    for (const issue of issues) {
+      logsStore.addLog(issue.severity === 'error' ? 'error' : 'warn', [`[Import] ${issue.path}: ${issue.message}`]);
+    }
+    vscode.window.showWarningMessage(
+      `Imported with ${issues.length} issue(s); see the Bruno logs for details`
+    );
+  }
+}
+
+/** A folder to create a collection in; refuses one inside a collection already shown, which the tree would hide. */
+async function pickCollectionLocation(provider: NativeSidebarViewProvider, title: string): Promise<vscode.Uri | undefined> {
+  const [location] = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: 'Create Here',
+    title,
+    defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri
+  }) ?? [];
+  if (!location) {
+    return undefined;
+  }
+
+  const enclosedCollection = await provider.findRootEntity(location);
+  if (enclosedCollection) {
+    throw new Error(`Cannot create a collection inside the collection "${enclosedCollection.label}"`);
+  }
+
+  return location;
+}
+
+async function pickCollectionFormat(): Promise<CollectionFormat | undefined> {
+  const format = await vscode.window.showQuickPick<vscode.QuickPickItem & { value: CollectionFormat }>(
+    [
+      { label: 'OpenCollection (YAML)', description: 'Industry-standard YAML format (.yml files)', value: 'yml' },
+      { label: 'BRU', description: "Bruno's native file format (.bru files)", value: 'bru' }
+    ],
+    { placeHolder: 'File format for the requests in this collection' }
+  );
+  return format?.value;
+}
+
+/** Put a collection that was just written on disk into the tree and select it. */
+async function showNewCollection(
+  provider: NativeSidebarViewProvider,
+  treeView: vscode.TreeView<Entity>,
+  openedCollections: OpenedCollections,
+  dir: vscode.Uri
+): Promise<void> {
   // Inside a workspace folder the scan finds it on its own; elsewhere it has to be remembered.
   if (!vscode.workspace.getWorkspaceFolder(dir)) {
     await openedCollections.add(dir);
   }
 
   await revealCollection(provider, treeView, dir);
-}
-
-/** The same config files the Bruno app writes for a new collection. */
-async function writeCollectionConfig(dir: vscode.Uri, name: string, format: CollectionFormat): Promise<void> {
-  const ignore = ['node_modules', '.git'];
-
-  if (format === 'yml') {
-    const brunoConfig = { opencollection: '1.0.0', name, type: 'collection', ignore };
-    const content = await stringifyCollection({ meta: { name } }, brunoConfig, { format });
-    await writeText(vscode.Uri.joinPath(dir, 'opencollection.yml'), content);
-  } else {
-    const brunoConfig = { version: '1', name, type: 'collection', ignore };
-    await writeText(vscode.Uri.joinPath(dir, 'bruno.json'), await stringifyJson(brunoConfig));
-  }
 }
 
 /** Rescan now rather than after the debounce, so the collection at `uri` is there to select. */

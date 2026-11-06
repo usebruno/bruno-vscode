@@ -56,6 +56,7 @@ import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, parseBruFileMet
 import { getProcessEnvVars } from '../store/process-env';
 import collectionWatcher from '../app/collection-watcher';
 import { transformBrunoConfigBeforeSave } from '../utils/transformBrunoConfig';
+import { defaultBrunoConfig, defaultCollectionRoot } from '../../utils/collection';
 import { REQUEST_TYPES } from '../utils/constants';
 import { parseRequest, parseRequestViaWorker, parseCollection, parseFolder } from '../utils/parse';
 
@@ -188,27 +189,17 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       }
 
       const uid = generateUidBasedOnHash(dirPath);
-      let brunoConfig: BrunoConfig = {
-        version: '1',
-        name: collectionName,
-        type: 'collection',
-        ignore: ['node_modules', '.git']
-      };
+      if (format !== 'yml' && format !== 'bru') {
+        throw new Error(`Invalid format: ${format}`);
+      }
+      const brunoConfig: BrunoConfig = defaultBrunoConfig(collectionName, format);
 
       if (format === 'yml') {
-        brunoConfig = {
-          opencollection: '1.0.0',
-          name: collectionName,
-          type: 'collection',
-          ignore: ['node_modules', '.git']
-        };
-        const content = await stringifyCollection({ meta: { name: collectionName } }, brunoConfig, { format });
+        const content = await stringifyCollection(defaultCollectionRoot(collectionName), brunoConfig, { format });
         await writeFile(path.join(dirPath, 'opencollection.yml'), content);
-      } else if (format === 'bru') {
+      } else {
         const content = await stringifyJson(brunoConfig);
         await writeFile(path.join(dirPath, 'bruno.json'), content);
-      } else {
-        throw new Error(`Invalid format: ${format}`);
       }
 
       const lastOpenedStore = new LastOpenedCollections();
@@ -274,23 +265,11 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         fs.copyFileSync(sourceFilePath, newFilePath);
       }
 
-      let brunoConfig: BrunoConfig;
+      const brunoConfig: BrunoConfig = defaultBrunoConfig(collectionName, format === 'yml' ? 'yml' : 'bru');
       if (format === 'yml') {
-        brunoConfig = {
-          opencollection: '1.0.0',
-          name: collectionName,
-          type: 'collection',
-          ignore: ['node_modules', '.git']
-        };
-        const content = await stringifyCollection({ meta: { name: collectionName } }, brunoConfig, { format });
+        const content = await stringifyCollection(defaultCollectionRoot(collectionName), brunoConfig, { format });
         await writeFile(path.join(dirPath, 'opencollection.yml'), content);
       } else {
-        brunoConfig = {
-          version: '1',
-          name: collectionName,
-          type: 'collection',
-          ignore: ['node_modules', '.git']
-        };
         const content = await stringifyJson(brunoConfig);
         await writeFile(path.join(dirPath, 'bruno.json'), content);
       }
@@ -1247,6 +1226,10 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
+  /**
+   * @deprecated Local-disk only (Node fs/path). The native sidebar uses `writeCollection` in
+   * src/extension/app/import-collection.ts, which lays out the same files through workspace.fs and so works on remotes.
+   */
   const importCollection = async (
     collection: any,
     collectionLocation: string,
@@ -1265,29 +1248,17 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       const uid = generateUidBasedOnHash(dirPath);
 
       // Use existing brunoConfig from collection if available, otherwise create new
-      let brunoConfig: BrunoConfig = collection.brunoConfig || (format === 'yml'
-        ? {
-          opencollection: '1.0.0',
-          name: collectionName,
-          type: 'collection',
-          ignore: ['node_modules', '.git']
-        }
-        : {
-          version: '1',
-          name: collectionName,
-          type: 'collection',
-          ignore: ['node_modules', '.git']
-        });
+      let brunoConfig: BrunoConfig = collection.brunoConfig || defaultBrunoConfig(collectionName, format === 'yml' ? 'yml' : 'bru');
 
       if (format === 'yml') {
-        const content = await stringifyCollection(collection.root || { meta: { name: collectionName } }, brunoConfig, { format });
+        const content = await stringifyCollection(collection.root || defaultCollectionRoot(collectionName), brunoConfig, { format });
         await writeFile(path.join(dirPath, 'opencollection.yml'), content);
       } else {
         const content = await stringifyJson(brunoConfig);
         await writeFile(path.join(dirPath, 'bruno.json'), content);
 
         // Write collection.bru for BRU format (contains collection root settings)
-        const collectionContent = await stringifyCollection(collection.root || { meta: { name: collectionName } }, brunoConfig, { format });
+        const collectionContent = await stringifyCollection(collection.root || defaultCollectionRoot(collectionName), brunoConfig, { format });
         await writeFile(path.join(dirPath, 'collection.bru'), collectionContent);
       }
 
@@ -1621,7 +1592,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         }
 
         let collectionName = 'Imported Collection';
-        let brunoConfig: BrunoConfig = { name: collectionName, version: '1', type: 'collection', ignore: ['node_modules', '.git'] };
+        let brunoConfig: BrunoConfig = defaultBrunoConfig(collectionName, 'bru');
 
         if (fs.existsSync(openCollectionYmlPath)) {
           try {
