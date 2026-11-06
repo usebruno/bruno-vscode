@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { CollectionFormat } from '../../utils/collection';
 
 /**
  * URI and file helpers that stay inside the VS Code API.
@@ -7,8 +8,6 @@ import * as vscode from 'vscode';
  * directly, so callers work on any scheme VS Code can open: file://,
  * vscode-remote://, vscode-vfs://, and so on.
  */
-
-export type CollectionFormat = 'bru' | 'yml';
 
 /** Per-format metadata files that live beside requests but are not requests. */
 export const META_FILES: Record<CollectionFormat, string[]> = {

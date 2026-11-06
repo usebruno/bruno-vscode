@@ -99,7 +99,7 @@
     "viewsWelcome": [
       {
         "view": "bruno.nativeSidebarView",
-        "contents": "No Bruno collections were found in the open folders.\n[Create Collection](command:bruno.sidebar.createCollection)\n[Open Collection](command:bruno.sidebar.openCollection)",
+        "contents": "No Bruno collections were found in the open folders.\n[Create Collection](command:bruno.sidebar.createCollection)\n[Open Collection](command:bruno.sidebar.openCollection)\n[Import Collection](command:bruno.sidebar.importCollection)",
         "when": "bruno.nativeComponents && bruno.sidebar.empty"
       }
     ],
@@ -275,6 +275,12 @@
         "title": "Create Collection",
         "category": "Bruno",
         "icon": "$(file-directory-create)"
+      },
+      {
+        "command": "bruno.sidebar.importCollection",
+        "title": "Import Collection",
+        "category": "Bruno",
+        "icon": "$(file-symlink-directory)"
       },
       {
         "command": "bruno.sidebar.search",
@@ -457,14 +463,19 @@
           "group": "navigation@4"
         },
         {
-          "command": "bruno.sidebar.refresh",
+          "command": "bruno.sidebar.importCollection",
           "when": "view == bruno.nativeSidebarView",
           "group": "navigation@5"
         },
         {
-          "command": "bruno.openPreferences",
+          "command": "bruno.sidebar.refresh",
           "when": "view == bruno.nativeSidebarView",
           "group": "navigation@6"
+        },
+        {
+          "command": "bruno.openPreferences",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
@@ -596,6 +607,10 @@
         },
         {
           "command": "bruno.sidebar.openCollection",
+          "when": "bruno.nativeComponents"
+        },
+        {
+          "command": "bruno.sidebar.importCollection",
           "when": "bruno.nativeComponents"
         },
         {
@@ -811,8 +826,8 @@
     "@reduxjs/toolkit": "^1.8.0",
     "@tabler/icons": "^1.46.0",
     "@tippyjs/react": "^4.2.6",
-    "@usebruno/common": "0.26.0",
-    "@usebruno/converters": "0.24.0",
+    "@usebruno/common": "0.27.0",
+    "@usebruno/converters": "0.25.0",
     "@usebruno/filestore": "0.13.0",
     "@usebruno/js": "0.54.0",
     "@usebruno/lang": "0.40.0",
