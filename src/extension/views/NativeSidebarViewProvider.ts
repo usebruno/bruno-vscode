@@ -570,29 +570,32 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     };
 
     for (const collection of collections) {
+      const directory = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(dirname(collection.uri), basename(collection.uri))
+      );
+      this.contentWatchers.push(
+        directory,
+        directory.onDidCreate(() => this.scheduleRefresh()),
+        directory.onDidDelete(() => this.scheduleRefresh())
+      );
+
       if (!collection.available) {
-        // Rescan once the missing folder, or a config file inside it, shows up.
-        const appears = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(dirname(collection.uri), basename(collection.uri))
-        );
+        // Rescan once a config file shows up inside the missing folder.
         const configAppears = vscode.workspace.createFileSystemWatcher(
           new vscode.RelativePattern(collection.uri, `{${COLLECTION_CONFIG_FILES.join(',')}}`)
         );
         this.contentWatchers.push(
-          appears,
-          appears.onDidCreate(() => this.scheduleRefresh()),
           configAppears,
-          configAppears.onDidCreate(() => this.scheduleRefresh())
-        );
+          configAppears.onDidCreate(() => this.scheduleRefresh()));
         continue;
       }
 
-      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(collection.uri, '**/*'));
+      const contents = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(collection.uri, '**/*'));
       this.contentWatchers.push(
-        watcher,
-        watcher.onDidCreate(onContentChange),
-        watcher.onDidDelete(onContentChange),
-        watcher.onDidChange(onContentChange)
+        contents,
+        contents.onDidCreate(onContentChange),
+        contents.onDidDelete(onContentChange),
+        contents.onDidChange(onContentChange)
       );
     }
   }
