@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { ResponsePaneTab, TextCheck } from '../../e2e-helper';
-import { editorLocators, openItemTab, openResponseTab, sendRequestByName } from './actions';
+import { editorLocators, openResponseTab, openTab, sendRequestByName } from './actions';
 
 async function expectText(panel: Locator, check: TextCheck): Promise<void> {
   for (const text of check.contains ?? []) {
@@ -14,7 +14,7 @@ async function expectText(panel: Locator, check: TextCheck): Promise<void> {
 // Checks the text of a tab of a collection, folder or request.
 // e.g. verifyRequestPane(page, 'request-1', 'Body', { contains: ['"name": "bruno"'], notContains: ['password'] })
 export async function verifyRequestPane(page: Page, target: string, tab: string, check: TextCheck): Promise<void> {
-  await openItemTab(page, target, tab);
+  await openTab(page, target, tab);
   await expectText(editorLocators(page).itemPane(), check);
 }
 

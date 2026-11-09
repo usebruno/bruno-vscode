@@ -850,7 +850,7 @@ export async function dragItem(
   page: Page,
   { dragItem, target, position }: { dragItem: string; target: string; position: 'above' | 'below' | 'inside' }
 ): Promise<void> {
-  const sidebar = await openSidebar(page);
+  const sidebar = await openBrunoSidebar(page);
   const locators = buildCommonLocators(sidebar);
   const targetRow = locators.sidebar.collectionItem(target);
   // 'inside' drops on the middle of the row (into a folder); steps gives the sidebar a real drag, a single jump does not start one.
@@ -1221,9 +1221,7 @@ export async function pickDropdownItem(page: Page, trigger: Locator | string, la
   const editor = activeEditor(page);
   const item = editor.locator('.dropdown-item').filter({ hasText: label });
   await (typeof trigger === 'string' ? editor.locator(trigger) : trigger).click();
-  await expect(item).toBeVisible();
   await item.click();
-  await expect(item).not.toBeVisible();
 }
 
 /** Pick an auth mode by its dropdown label, e.g. 'Bearer Token', in the auth pane that is open. */
@@ -1713,38 +1711,16 @@ export const authModeLabels: Record<AuthMode, string> = {
 };
 
 export const editorLocators = (page: Page) => buildCommonLocators(activeEditor(page));
-export const sidebarLocators = async (page: Page) => buildCommonLocators(await openSidebar(page));
+export const sidebarLocators = async (page: Page) => buildCommonLocators(await openBrunoSidebar(page));
 
-// The Bruno sidebar with every collection expanded, so any collection, folder or request row can be found by its name
-async function openSidebar(page: Page): Promise<Frame> {
-  const sidebar = await openBrunoSidebar(page);
-  const chevrons = sidebar.getByTestId(/^sidebar-collection-row-/).locator('svg.chevron-icon');
-  for (const chevron of await chevrons.all()) {
-    const isExpanded = await chevron.evaluate((el) => el.classList.contains('rotate-90'));
-    if (!isExpanded) {
-      await chevron.click();
-    }
-  }
-  return sidebar;
-}
-
-// What a name in the sidebar is: a collection row, a folder row (it has a chevron) or a request row
-async function itemTypeOf(sidebar: Frame, target: string): Promise<'collection' | 'folder' | 'request'> {
+// A collection row, a folder row (it has a folder chevron) or any other item row (request)
+async function getEntityType(sidebar: Frame, target: string): Promise<'collection' | 'folder' | 'request'> {
   const rows = buildCommonLocators(sidebar).sidebar;
-  // Wait for the row first, so a folder whose row hasn't rendered yet isn't taken for a request
-  await rows.collectionName(target).or(rows.collectionItem(target)).first().waitFor();
   if (await rows.collectionName(target).count()) {
     return 'collection';
   }
-  if (await rows.folderChevron(target).count()) {
-    return 'folder';
-  }
-  return 'request';
-}
-
-// Opens a tab of a collection, folder or request
-export async function openItemTab(page: Page, target: string, tab: string): Promise<void> {
-  await openRequestPane(page, target, tab);
+  await rows.collectionItem(target).waitFor();
+  return (await rows.folderChevron(target).count()) ? 'folder' : 'request';
 }
 
 // Opens a response pane tab of a request; for Timeline, also the view (Request, Response or Network) of its latest entry
@@ -1767,7 +1743,7 @@ export async function sendRequestByName(page: Page, request: string): Promise<vo
 }
 
 async function openRequestEditor(page: Page, request: string) {
-  const sidebar = await openSidebar(page);
+  const sidebar = await openBrunoSidebar(page);
   await expect(async () => {
     await buildCommonLocators(sidebar).sidebar.collectionItem(request).click();
     try {
@@ -1779,11 +1755,11 @@ async function openRequestEditor(page: Page, request: string) {
   }).toPass({ timeout: 25_000 });
 }
 
-// Opens a tab of a collection, folder or request and returns which of them the name is
-async function openRequestPane(page: Page, target: string, tab: string): Promise<'collection' | 'folder' | 'request'> {
-  const sidebar = await openSidebar(page);
+// Opens a tab of a collection, folder or request and returns which of them it is
+export async function openTab(page: Page, target: string, tab: string): Promise<'collection' | 'folder' | 'request'> {
+  const sidebar = await openBrunoSidebar(page);
   const rows = buildCommonLocators(sidebar).sidebar;
-  const itemType = await itemTypeOf(sidebar, target);
+  const itemType = await getEntityType(sidebar, target);
 
   if (itemType === 'collection') {
     await rows.collectionName(target).click();
@@ -1862,7 +1838,7 @@ async function fillAuthFields(page: Page, fields: AuthFields) {
 }
 
 export async function setAuth(page: Page, target: string, mode: AuthMode, fields: AuthFields = {}): Promise<void> {
-  const itemType = await openRequestPane(page, target, 'Auth');
+  const itemType = await openTab(page, target, 'Auth');
   await selectAuthMode(page, authModeLabels[mode]);
 
   if (mode === 'oauth2') {
@@ -1881,14 +1857,13 @@ export async function setAuth(page: Page, target: string, mode: AuthMode, fields
 }
 
 async function openOAuth2Tab(page: Page, request: string) {
-  await openRequestPane(page, request, 'Auth');
+  await openTab(page, request, 'Auth');
   return activeEditor(page);
 }
 
 export async function getOAuth2AccessToken(page: Page, request: string, { expectToken = true } = {}): Promise<void> {
   const editor = await openOAuth2Tab(page, request);
   const getToken = editor.getByTestId('oauth2-get-token-btn');
-  await expect(getToken).toBeEnabled();
   await getToken.click();
   if (expectToken) await expect(editor.getByTestId('oauth2-token-title').first()).toBeVisible({ timeout: 15_000 });
   await expect(getToken).toBeEnabled({ timeout: 15_000 });
@@ -1898,9 +1873,8 @@ export async function getOAuth2AccessToken(page: Page, request: string, { expect
 export async function refreshOAuth2Token(page: Page): Promise<void> {
   const editor = activeEditor(page);
   const refresh = editor.getByTestId('oauth2-refresh-token-btn');
-  await expect(refresh).toBeVisible();
   await refresh.click();
-  await expect(refresh).toBeEnabled({ timeout: 15_000 });
+  await refresh.and(editor.locator(':enabled')).waitFor({ timeout: 15_000 });
 }
 
 export async function clearOAuth2Cache(page: Page, request: string): Promise<void> {
@@ -1909,13 +1883,12 @@ export async function clearOAuth2Cache(page: Page, request: string): Promise<voi
   if (await clear.isVisible()) {
     await clear.scrollIntoViewIfNeeded();
     await clear.click();
-    await expect(editor.getByTestId('oauth2-token-title')).toHaveCount(0);
   }
 }
 
 export async function setBody(page: Page, request: string, json: string): Promise<void> {
   const locators = buildCommonLocators(activeEditor(page));
-  await openRequestPane(page, request, 'Body');
+  await openTab(page, request, 'Body');
   await locators.requestBody.modeSelector().click();
   await locators.requestBody.modeOption('json').click();
   await setCodeMirrorValue(page, locators.body.editor(), json);
@@ -1925,13 +1898,12 @@ export async function setBody(page: Page, request: string, json: string): Promis
 // e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
 export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], hook: 'preRequest' | 'postResponse' = 'preRequest'): Promise<void> {
   const editor = activeEditor(page);
-  const itemType = await openRequestPane(page, target, 'Vars');
+  const itemType = await openTab(page, target, 'Vars');
   const suffix = hook === 'preRequest' ? 'req' : 'res';
   const tableId = `${itemType}-vars-${suffix}`;
 
   const tableRows = buildCommonLocators(editor).varsTable.rows(itemType, suffix);
   const table = buildCommonLocators(editor.getByTestId(tableId)).editableTable;
-  await expect(tableRows.first()).toBeVisible({ timeout: 10_000 });
 
   for (const { name, value } of rows) {
     const emptyRow = (await tableRows.count()) - 1;

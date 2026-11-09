@@ -446,6 +446,7 @@ const Collection = ({ collection, searchText }: CollectionProps) => {
         onKeyDown={handleKeyDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
+        aria-expanded={!collectionIsCollapsed}
         data-testid={`sidebar-collection-row-${collection.name}`}
       >
         <div
