@@ -972,8 +972,9 @@ class CollectionWatcher {
       // A create event also fires when an existing file is replaced (atomic saves, git checkout).
       // handleRequestFile sends metadata only, which a request already parsed in an open tab keeps
       // ignoring, so files open in an editor also get the full content: the change handler updates
-      // them and keeps any draft. Other files stay metadata-only, so a git pull stays cheap.
-      if (isDocumentRegistered(pathname)) {
+      // them and keeps any draft. Other files stay metadata-only, so a git pull stays cheap. A nested
+      // collection's root file is not a request: it keeps the marker handleRequestFile sent.
+      if (isDocumentRegistered(pathname) && !isNestedCollectionRootFile(pathname, collectionPath)) {
         await this.handleRequestFileChange(pathname, collectionUid, collectionPath);
       }
     }
