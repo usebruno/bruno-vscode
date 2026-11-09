@@ -132,4 +132,27 @@ describe('CollectionWatcher create events for request files', () => {
 
     expect(sent.mock.calls).toEqual([metadataOnlyAdd]);
   });
+
+  test('keep the nested collection marker when a nested collection root file open in an editor is replaced', async () => {
+    createCollection({ openInEditor: false });
+    const nestedRootPath = path.join(collectionPath, 'nested', 'collection.bru');
+    fs.mkdirSync(path.dirname(nestedRootPath));
+    fs.writeFileSync(nestedRootPath, 'meta {\n  name: nested\n}\n');
+    registerDocument({ uri: { fsPath: nestedRootPath } } as never);
+    const sent = vi.fn();
+    setMessageSender(sent);
+    new CollectionWatcher().setupWatchersOnly(collectionPath, COLLECTION_UID);
+
+    try {
+      await createListeners.get('**/*.bru')!({ fsPath: nestedRootPath });
+    } finally {
+      unregisterDocument(nestedRootPath);
+    }
+
+    expect(sent.mock.calls).toEqual([
+      ['main:collection-tree-updated', 'addFile', expect.objectContaining({
+        error: { message: 'This is a nested collection, not a request.' }
+      })]
+    ]);
+  });
 });
