@@ -3,7 +3,7 @@ import { test } from "./utils/fixtures";
 import { Context } from "./context";
 import { buildCommonLocators } from "./utils/page/locators";
 import {
-  createCollectionV2, createFolder, createRequestInFolder, createRequestV2, deleteRequestV2, exportCollectionV2,
+  createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2, deleteRequestV2, exportCollectionV2,
   openBrunoSidebar, removeCollection, runCommand, saveRequestV2,
   sendRequest, setAuth, setCodeMirrorValue, takeScreenshot,
 } from "./utils/page/actions";
@@ -124,6 +124,7 @@ export async function performE2E<const EnvName extends string = never>(config: C
 
       const ctx = await createCollectionV2(page, sidebar, collection.name, index !== 0, collection.format)
       collections.push(collection.name)
+      await expandCollection(sidebar, collection.name)
 
       for (const { folder, parent } of folders) {
         await createFolder(sidebar, parent ?? collection.name, folder.name, !parent)
