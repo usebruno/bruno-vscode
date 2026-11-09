@@ -1501,40 +1501,6 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
-  registerHandler('renderer:export-collection-zip', async (args) => {
-    const [collectionPath, collectionName] = args as [string, string];
-
-    const saveUri = await vscode.window.showSaveDialog({
-      title: 'Export Collection as ZIP',
-      defaultUri: vscode.Uri.file(`${sanitizeName(collectionName)}.zip`),
-      filters: { 'Zip Files': ['zip'] }
-    });
-    if (!saveUri) {
-      return { success: false, canceled: true };
-    }
-
-    const ignoredDirectories = ['node_modules', '.git'];
-    const zip = new AdmZip();
-
-    const addDirectoryToArchive = (dirPath: string, archivePath: string) => {
-      for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-        const fullPath = path.join(dirPath, entry.name);
-        if (entry.isDirectory()) {
-          if (!ignoredDirectories.includes(entry.name)) {
-            addDirectoryToArchive(fullPath, path.posix.join(archivePath, entry.name));
-          }
-        } else {
-          zip.addLocalFile(fullPath, archivePath);
-        }
-      }
-    };
-
-    addDirectoryToArchive(collectionPath, '');
-    await zip.writeZipPromise(saveUri.fsPath);
-
-    return { success: true, filePath: saveUri.fsPath };
-  });
-
   registerHandler('renderer:is-bruno-collection-zip', async (args) => {
     const [zipFilePath] = args as [string];
     try {
