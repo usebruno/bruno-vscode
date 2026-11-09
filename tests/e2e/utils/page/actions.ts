@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import AdmZip from 'adm-zip';
 import { Page, Frame, FrameLocator, Locator, expect, TestType, PlaywrightTestOptions, PlaywrightTestArgs, PlaywrightWorkerArgs, PlaywrightWorkerOptions } from '@playwright/test';
 import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
@@ -1666,8 +1667,9 @@ export async function deleteRequestV2(page: Page, sidebar: Frame, ctx: Context, 
 }
 
 /**
- * Export a collection in Bruno JSON format through the real UI: collection "⋯" menu → Export → Bruno Collection → save dialog.
+ * Export a collection as a ZIP through the real UI: collection "⋯" menu → Export → Bruno Collection (ZIP) → save dialog.
  * Needs `files.simpleDialog.enable` so the save dialog renders as a quick input. The file is saved next to the collection folder.
+ * Returns the paths of the files inside the ZIP.
  */
 export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Context) {
   const sidebarElements = buildCommonLocators(sidebar).sidebar;
@@ -1680,10 +1682,10 @@ export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Contex
   await expect(webview.getByRole('heading', { name: 'Export Collection' })).toBeVisible();
 
   // anti-pattern: the export options are clickable divs, not buttons, so there is no role to target
-  await webview.getByText('Bruno Collection', { exact: true }).click();
+  await webview.getByText('Bruno Collection (ZIP)', { exact: true }).click();
 
   // Save dialog (simple dialog): replace the prefilled path with one inside the collection's location
-  const exportPath = path.join(ctx.collectionLocation, `${ctx.collectionName}.json`);
+  const exportPath = path.join(ctx.collectionLocation, `${ctx.collectionName}.zip`);
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
   await expect(saveInput).toBeVisible();
   await saveInput.fill(exportPath);
@@ -1696,7 +1698,7 @@ export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Contex
 
   // verify the exported file on disk
   await expect.poll(() => fs.existsSync(exportPath), { message: `${exportPath} should be exported` }).toBe(true);
-  return JSON.parse(fs.readFileSync(exportPath, 'utf8'));
+  return new AdmZip(exportPath).getEntries().map((entry) => entry.entryName);
 }
 
 export const authModeLabels: Record<AuthMode, string> = {

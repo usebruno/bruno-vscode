@@ -151,12 +151,12 @@ export async function performE2E<const EnvName extends string = never>(config: C
       }
 
       if (collection.export) {
-        const exported = await exportCollectionV2(page, sidebar, ctx)
+        const exportedFiles = await exportCollectionV2(page, sidebar, ctx)
 
         // verify the export reflects the deletes
-        const exportedNames = (exported.items ?? []).map((item: { name: string }) => item.name);
-        const remainingNames = requests.filter(({ request }) => !request.delete).map(({ request }) => request.name);
-        expect(exportedNames.sort()).toEqual(remainingNames.sort());
+        for (const request of collection.requests) {
+          expect(exportedFiles.includes(`${request.name}.${collection.format}`)).toBe(!request.delete);
+        }
       }
     }
   }
