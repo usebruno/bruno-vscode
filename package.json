@@ -367,6 +367,18 @@
         "icon": "$(edit)"
       },
       {
+        "command": "bruno.sidebar.moveUp",
+        "title": "Move Up",
+        "category": "Bruno",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "bruno.sidebar.moveDown",
+        "title": "Move Down",
+        "category": "Bruno",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "bruno.sidebar.revealInFinder",
         "title": "Reveal in Finder",
         "category": "Bruno",
@@ -575,19 +587,29 @@
           "group": "3_edit@5"
         },
         {
+          "command": "bruno.sidebar.moveUp",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(folder|request:)/",
+          "group": "4_order@1"
+        },
+        {
+          "command": "bruno.sidebar.moveDown",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(folder|request:)/",
+          "group": "4_order@2"
+        },
+        {
           "command": "bruno.sidebar.revealInFinder",
           "when": "view == bruno.nativeSidebarView && viewItem != collection:unavailable && !isWeb && isMac",
-          "group": "4_misc@1"
+          "group": "5_misc@1"
         },
         {
           "command": "bruno.sidebar.revealInFileExplorer",
           "when": "view == bruno.nativeSidebarView && viewItem != collection:unavailable && !isWeb && isWindows",
-          "group": "4_misc@1"
+          "group": "5_misc@1"
         },
         {
           "command": "bruno.sidebar.revealInFileManager",
           "when": "view == bruno.nativeSidebarView && viewItem != collection:unavailable && !isWeb && isLinux",
-          "group": "4_misc@1"
+          "group": "5_misc@1"
         },
         {
           "command": "bruno.sidebar.delete",
@@ -659,6 +681,14 @@
         },
         {
           "command": "bruno.sidebar.rename",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.moveDown",
           "when": "false"
         },
         {
@@ -751,6 +781,16 @@
         "command": "bruno.sidebar.paste",
         "key": "ctrl+v",
         "mac": "cmd+v",
+        "when": "focusedView == bruno.nativeSidebarView"
+      },
+      {
+        "command": "bruno.sidebar.moveUp",
+        "key": "alt+up",
+        "when": "focusedView == bruno.nativeSidebarView"
+      },
+      {
+        "command": "bruno.sidebar.moveDown",
+        "key": "alt+down",
         "when": "focusedView == bruno.nativeSidebarView"
       }
     ]

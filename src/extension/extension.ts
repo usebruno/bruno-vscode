@@ -34,6 +34,7 @@ import { stateManager } from './webview/state-manager';
 import { BrunoEditorProvider, registerScriptErrorSourceHandler } from './editors/bruno-editor-provider';
 import { SidebarViewProvider } from './views/SidebarViewProvider';
 import { NativeSidebarViewProvider } from './views/NativeSidebarViewProvider';
+import { SidebarDragAndDropController } from './views/SidebarDragAndDropController';
 import { registerSidebarCommands } from './commands/sidebar-commands';
 import { OpenedCollections } from './store/opened-collections';
 import { WorkspaceCollectionsProvider } from './views/WorkspaceCollectionsProvider';
@@ -223,6 +224,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const nativeSidebarProvider = new NativeSidebarViewProvider(openedCollections);
     const nativeSidebarView = vscode.window.createTreeView(NativeSidebarViewProvider.viewType, {
       treeDataProvider: nativeSidebarProvider,
+      dragAndDropController: new SidebarDragAndDropController(nativeSidebarProvider),
       showCollapseAll: true
     });
     context.subscriptions.push(nativeSidebarView, nativeSidebarProvider, openedCollections);

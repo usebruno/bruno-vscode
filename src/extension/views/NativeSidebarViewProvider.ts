@@ -31,7 +31,7 @@ export interface CollectionRoot {
 }
 
 /** A folder or request found inside a collection, before it becomes a tree item. */
-interface ChildEntry {
+export interface ChildEntry {
   uri: vscode.Uri;
   name: string;
   seq?: number;
@@ -465,11 +465,12 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
   }
 
   /**
-   * List the folders and requests directly inside `dir`. Folder names and
-   * ordering come from folder.bru / folder.yml when present; request names,
-   * types and methods come from the parsed request file.
+   * List the folders and requests directly inside `dir`, in the order the tree
+   * shows them. Folder names and ordering come from folder.bru / folder.yml
+   * when present; request names, types and methods come from the parsed
+   * request file. This is kept public so that reordering can work from the same listing.
    */
-  private async readChildren(dir: vscode.Uri, collection: CollectionRoot): Promise<ChildEntry[]> {
+  async readChildren(dir: vscode.Uri, collection: CollectionRoot): Promise<ChildEntry[]> {
     let entries: [string, vscode.FileType][];
     try {
       entries = await vscode.workspace.fs.readDirectory(dir);

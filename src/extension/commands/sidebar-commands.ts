@@ -9,6 +9,8 @@ import { openRunnerPanel } from '../panels/runner-panel';
 import type { OpenedCollections } from '../store/opened-collections';
 import logsStore from '../store/logs';
 import { stringifyJson } from '../utils/common';
+import { closeTabsUnder, moveWithEditors } from '../utils/editor';
+import { isMovable, shiftItem } from '../utils/reorder';
 import { basename, dirname, doesItExist, isInside, readText, writeText, META_FILES } from '../utils/file';
 import type { CollectionFormat } from '../../utils/collection';
 import { sanitizeName, validateName } from '../utils/filesystem';
@@ -62,64 +64,6 @@ function validateItemName(value: string): string | undefined {
     return 'No valid file name can be made from this name';
   }
   return undefined;
-}
-
-/** Close editors showing `uri` or anything under it, before it is deleted or moved. */
-async function closeTabsUnder(uri: vscode.Uri): Promise<void> {
-  for (const group of vscode.window.tabGroups.all) {
-    for (const tab of group.tabs) {
-      const input = tab.input;
-      if (input && typeof input === 'object' && 'uri' in input) {
-        const tabUri = (input as { uri: vscode.Uri }).uri;
-        if (tabUri.toString() === uri.toString() || isInside(tabUri, uri)) {
-          await vscode.window.tabGroups.close(tab);
-        }
-      }
-    }
-  }
-}
-
-/** Bruno editor tabs showing `uri` or anything under it, as they are before a move. */
-function brunoEditorTabsUnder(uri: vscode.Uri): { uri: vscode.Uri; viewColumn: vscode.ViewColumn; isActive: boolean }[] {
-  const found: { uri: vscode.Uri; viewColumn: vscode.ViewColumn; isActive: boolean }[] = [];
-  for (const group of vscode.window.tabGroups.all) {
-    for (const tab of group.tabs) {
-      const input = tab.input;
-      if (input instanceof vscode.TabInputCustom
-        && input.viewType === BrunoEditorProvider.viewType
-        && (input.uri.toString() === uri.toString() || isInside(input.uri, uri))) {
-        found.push({ uri: input.uri, viewColumn: group.viewColumn, isActive: tab.isActive });
-      }
-    }
-  }
-  return found;
-}
-
-/**
- * Put the Bruno editor back on files that were open in it before `oldUri` moved to `newUri`.
- * VS Code re-resolves a moved custom editor and, because the Bruno editor is not the
- * default for these extensions, can land the file in the text editor instead.
- */
-async function restoreBrunoEditors(
-  openEditors: ReturnType<typeof brunoEditorTabsUnder>,
-  oldUri: vscode.Uri,
-  newUri: vscode.Uri
-): Promise<void> {
-  for (const { uri, viewColumn, isActive } of openEditors) {
-    const movedUri = newUri.with({ path: newUri.path + uri.path.slice(oldUri.path.length) });
-    const alreadyBrunoEditor = brunoEditorTabsUnder(movedUri).some((tab) => tab.uri.toString() === movedUri.toString());
-
-    if (alreadyBrunoEditor) {
-      continue;
-    }
-
-    await closeTabsUnder(movedUri); // Close the obsolete file
-    // Open Bruno editor for the updated file
-    await vscode.commands.executeCommand('vscode.openWith', movedUri, BrunoEditorProvider.viewType, {
-      viewColumn,
-      preserveFocus: !isActive
-    });
-  }
 }
 
 /** Update the display name inside a request or folder file without changing anything else. */
@@ -269,6 +213,8 @@ type SidebarCommands =
   | 'bruno.sidebar.copy'
   | 'bruno.sidebar.paste'
   | 'bruno.sidebar.rename'
+  | 'bruno.sidebar.moveUp'
+  | 'bruno.sidebar.moveDown'
   | 'bruno.sidebar.delete'
   // One id per platform label; package.json shows the one matching isMac / isWindows / isLinux.
   | 'bruno.sidebar.revealInFinder'
@@ -370,6 +316,14 @@ export function registerSidebarCommands(
 
   register('bruno.sidebar.rename', async (item) => {
     await handleRename(item, getTarget);
+  });
+
+  register('bruno.sidebar.moveUp', async (item) => {
+    await handleMove(item, getTarget, 'up', provider);
+  });
+
+  register('bruno.sidebar.moveDown', async (item) => {
+    await handleMove(item, getTarget, 'down', provider);
   });
 
   for (const id of ['bruno.sidebar.revealInFinder', 'bruno.sidebar.revealInFileExplorer', 'bruno.sidebar.revealInFileManager'] as const) {
@@ -949,17 +903,22 @@ async function handleRename(item: Entity | undefined, getTarget: GetTargetFn) {
   }
 
   if (moving) {
-    const openBefore = brunoEditorTabsUnder(entity.uri);
-
-    const edit = new vscode.WorkspaceEdit();
-    edit.renameFile(entity.uri, newUri, { overwrite: false });
-
-    if (!(await vscode.workspace.applyEdit(edit))) {
-      throw new Error(`Could not rename "${entity.label}"`);
-    }
-
-    await restoreBrunoEditors(openBefore, entity.uri, newUri);
+    await moveWithEditors(entity.uri, newUri);
   }
+}
+
+/** Move Up / Move Down: one place among the folders, or the requests, of the same directory. */
+async function handleMove(item: Entity | undefined, getTarget: GetTargetFn, direction: 'up' | 'down', provider: NativeSidebarViewProvider) {
+  const entity = getTarget(item, 'folder', 'request');
+
+  if (!entity || !isMovable(entity)) {
+    return;
+  }
+
+  await vscode.window.withProgress(
+    { location: { viewId: NativeSidebarViewProvider.viewType } },
+    () => shiftItem(provider, entity, direction)
+  );
 }
 
 async function handleRevealFileInOS(item: Entity | undefined, getTarget: GetTargetFn) {
