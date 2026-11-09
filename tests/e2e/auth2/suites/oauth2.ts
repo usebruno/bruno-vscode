@@ -65,7 +65,7 @@ async function verifyClientCredentials(page: Page) {
 
   await setAuth(page, 'cc-wrong-secret', 'oauth2', { ...clientCredentials, clientSecret: 'not-the-secret' });
   await clearOAuth2Cache(page, 'cc-wrong-secret');
-  await getOAuth2AccessToken(page, 'cc-wrong-secret', { expectToken: false });
+  await getOAuth2AccessToken(page, 'cc-wrong-secret', { waitForToken: false });
   await sendRequestAndVerify(page, 'cc-wrong-secret', 401);
 }
 
@@ -78,7 +78,7 @@ async function verifyPasswordCredentials(page: Page) {
 
   await setAuth(page, 'pw-wrong-password', 'oauth2', { ...passwordCredentials, password: 'wrong-password' });
   await clearOAuth2Cache(page, 'pw-wrong-password');
-  await getOAuth2AccessToken(page, 'pw-wrong-password', { expectToken: false });
+  await getOAuth2AccessToken(page, 'pw-wrong-password', { waitForToken: false });
   await sendRequestAndVerify(page, 'pw-wrong-password', 401);
 }
 
@@ -101,7 +101,7 @@ async function verifyTokenLifecycle(page: Page) {
 async function verifyValidation(page: Page) {
   await setAuth(page, 'validation', 'oauth2', { grantType: 'clientCredentials', accessTokenUrl: CLIENT_CREDENTIALS_URL, addCredentialsTo: 'requestBody' });
   await clearOAuth2Cache(page, 'validation');
-  await getOAuth2AccessToken(page, 'validation', { expectToken: false });
+  await getOAuth2AccessToken(page, 'validation', { waitForToken: false });
   await sendRequestAndVerify(page, 'validation', 401);
 }
 

@@ -1863,11 +1863,11 @@ async function openOAuth2Tab(page: Page, request: string) {
   return activeEditor(page);
 }
 
-export async function getOAuth2AccessToken(page: Page, request: string, { expectToken = true } = {}): Promise<void> {
+export async function getOAuth2AccessToken(page: Page, request: string, { waitForToken = true } = {}): Promise<void> {
   const editor = await openOAuth2Tab(page, request);
   const getToken = editor.getByTestId('oauth2-get-token-btn');
   await getToken.click();
-  if (expectToken) {
+  if (waitForToken) {
     await editor.getByTestId('oauth2-token-title').first().waitFor({ timeout: 15_000 });
   }
 }

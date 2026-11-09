@@ -1,6 +1,6 @@
-import { Frame, Page, expect } from "@playwright/test";
+import { expect, type Frame, type Page } from "@playwright/test";
 import { test } from "./utils/fixtures";
-import { Context } from "./context";
+import type { Context } from "./context";
 import { buildCommonLocators } from "./utils/page/locators";
 import {
   createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2, deleteRequestV2, exportCollectionV2,
