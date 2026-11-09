@@ -589,6 +589,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
         onFocus={handleFocus}
         onBlur={handleBlur}
         onContextMenu={handleContextMenu}
+        aria-expanded={isFolder ? !itemIsCollapsed : undefined}
         data-testid={`sidebar-collection-item-row-${item.name}`}
       >
         <div className="flex items-center h-full w-full">

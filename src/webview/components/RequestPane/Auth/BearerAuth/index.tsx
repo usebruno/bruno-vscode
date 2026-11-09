@@ -27,6 +27,7 @@ const BearerAuth = ({
 }: any) => {
   const dispatch = useDispatch();
   const { storedTheme } = useTheme();
+  const itemType = item?.type === 'folder' ? 'folder' : 'request';
 
   // Use the request prop directly like OAuth2ClientCredentials does
   const bearerToken = get(request, 'auth.bearer.token', '');
@@ -55,7 +56,7 @@ const BearerAuth = ({
   return (
     <StyledWrapper className="mt-2 w-full">
       <label className="block mb-1">Token</label>
-      <div className="single-line-editor-wrapper flex items-center" data-testid="request-auth-bearer-token">
+      <div className="single-line-editor-wrapper flex items-center" data-testid={`${itemType}-auth-bearer-token`}>
         <SingleLineEditor
           value={bearerToken}
           theme={storedTheme}
