@@ -19,6 +19,7 @@ const md5 = (value: string) => crypto.createHash('md5').update(value).digest('he
 
 function parseDigestHeader(header: string): Record<string, string> {
   const fields: Record<string, string> = {};
+  // Drop the "Digest " prefix, then read each key=value pair; the value is either quoted (key="a, b") or bare (key=abc)
   for (const [, key, quoted, bare] of header.replace(/^Digest\s+/i, '').matchAll(/(\w+)=(?:"([^"]*)"|([^,\s]*))/g)) {
     fields[key] = quoted ?? bare;
   }

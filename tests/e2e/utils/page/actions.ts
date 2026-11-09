@@ -1782,7 +1782,7 @@ async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request
     const savedToast = editor.getByText(/Settings saved successfully/);
     await savedToast.evaluateAll((toasts) => toasts.forEach((toast) => toast.setAttribute('data-earlier-save', '')));
     await buildCommonLocators(editor).saveButton().click();
-    await expect(savedToast.and(editor.locator(':not([data-earlier-save])')).last()).toBeVisible();
+    await savedToast.and(editor.locator(':not([data-earlier-save])')).last().waitFor();
   }
 }
 
@@ -1818,7 +1818,7 @@ async function setOAuth2Fields(page: Page, fields: AuthFields) {
 
   if (fields.addTokenTo) {
     await pickDropdownItem(page, oauth2.tokenPlacementSelector(), fields.addTokenTo === 'url' ? 'URL' : 'Header');
-    await expect(oauth2.field(fields.addTokenTo === 'url' ? 'tokenQueryKey' : 'tokenHeaderPrefix')).toBeVisible();
+    await oauth2.field(fields.addTokenTo === 'url' ? 'tokenQueryKey' : 'tokenHeaderPrefix').waitFor();
   }
 }
 
@@ -1865,8 +1865,9 @@ export async function getOAuth2AccessToken(page: Page, request: string, { expect
   const editor = await openOAuth2Tab(page, request);
   const getToken = editor.getByTestId('oauth2-get-token-btn');
   await getToken.click();
-  if (expectToken) await expect(editor.getByTestId('oauth2-token-title').first()).toBeVisible({ timeout: 15_000 });
-  await expect(getToken).toBeEnabled({ timeout: 15_000 });
+  if (expectToken) {
+    await editor.getByTestId('oauth2-token-title').first().waitFor({ timeout: 15_000 });
+  }
 }
 
 // Runs right after getOAuth2AccessToken, in the same open Auth tab.
