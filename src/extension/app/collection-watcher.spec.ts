@@ -4,6 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { CollectionWatcher, setMessageSender } from './collection-watcher';
 import { registerDocument, unregisterDocument } from '../editors/dirty-state-manager';
+import collectionsReducer, {
+  collectionAddFileEvent,
+  collectionChangeFileEvent
+} from 'providers/ReduxStore/slices/collections';
 
 type Listener = (uri: { fsPath: string }) => Promise<void>;
 
@@ -28,6 +32,8 @@ vi.mock('vscode', async (importOriginal) => {
   };
 });
 
+const COLLECTION_UID = 'collection-1';
+
 const request = (marker: string) => `meta {
   name: sign in
   type: http
@@ -48,22 +54,48 @@ script:post-response {
 let collectionPath: string;
 let requestPath: string;
 
-// Writes a collection with one request and fires the create event VS Code reports when an atomic
-// save replaces that request's file.
-const replaceRequestFile = async ({ openInEditor }: { openInEditor: boolean }): Promise<ReturnType<typeof vi.fn>> => {
+// A collection with one request whose post-response script logs 'v1'.
+const createCollection = ({ openInEditor }: { openInEditor: boolean }): void => {
   collectionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'bruno-watcher-'));
   fs.writeFileSync(path.join(collectionPath, 'bruno.json'), JSON.stringify({ version: '1', name: 'c', type: 'collection' }));
   requestPath = path.join(collectionPath, 'sign-in.bru');
-  fs.writeFileSync(requestPath, request('v2'));
+  fs.writeFileSync(requestPath, request('v1'));
   if (openInEditor) {
     registerDocument({ uri: { fsPath: requestPath } } as never);
   }
+};
 
-  const sent = vi.fn();
-  setMessageSender(sent);
-  new CollectionWatcher().setupWatchersOnly(collectionPath, 'collection-1');
+// Replaces the request file the way an atomic save does (new content renamed over the old file),
+// then fires the create event VS Code reports for it.
+const replaceRequestFile = async (marker: string): Promise<void> => {
+  const tempPath = `${requestPath}.tmp`;
+  fs.writeFileSync(tempPath, request(marker));
+  fs.renameSync(tempPath, requestPath);
   await createListeners.get('**/*.bru')!({ fsPath: requestPath });
-  return sent;
+};
+
+type CollectionsState = ReturnType<typeof collectionsReducer>;
+
+// Applies the tree updates sent by the extension to the collections reducer, as useIpcEvents does.
+const applyTreeUpdates = (calls: unknown[][]): CollectionsState => {
+  const initialState = {
+    collections: [{ uid: COLLECTION_UID, name: 'c', pathname: collectionPath, items: [], environments: [], brunoConfig: {} }],
+    collectionSortOrder: 'default',
+    activeConnections: {}
+  } as unknown as CollectionsState;
+
+  return calls
+    .filter(([channel]) => channel === 'main:collection-tree-updated')
+    .reduce<CollectionsState>((state, [, type, payload]) => {
+      if (type === 'addFile') return collectionsReducer(state, collectionAddFileEvent(payload as never));
+      if (type === 'change') return collectionsReducer(state, collectionChangeFileEvent(payload as never));
+      return state;
+    }, initialState);
+};
+
+const postResponseScript = (calls: unknown[][]): string | undefined => {
+  const item = applyTreeUpdates(calls).collections[0].items.find((i) => i.type === 'http-request');
+  return item?.request?.script?.res;
 };
 
 const metadataOnlyAdd = ['main:collection-tree-updated', 'addFile', expect.objectContaining({ partial: true })];
@@ -75,24 +107,28 @@ afterEach(() => {
 });
 
 describe('CollectionWatcher create events for request files', () => {
-  test('send the full request when the file is open in an editor', async () => {
-    const sent = await replaceRequestFile({ openInEditor: true });
+  test('update a request open in an editor when its file is replaced', async () => {
+    createCollection({ openInEditor: true });
+    const sent = vi.fn();
+    setMessageSender(sent);
+    const watcher = new CollectionWatcher();
+    // An editor loads its request in full before any change on disk.
+    await watcher.loadSingleRequest(requestPath, COLLECTION_UID, collectionPath, sent);
+    watcher.setupWatchersOnly(collectionPath, COLLECTION_UID);
+    expect(postResponseScript(sent.mock.calls)).toContain("console.log('v1')");
 
-    expect(sent).toHaveBeenCalledWith(
-      'main:collection-tree-updated',
-      'change',
-      expect.objectContaining({
-        data: expect.objectContaining({
-          request: expect.objectContaining({ script: expect.objectContaining({ res: expect.stringContaining('v2') }) })
-        })
-      })
-    );
-    // The metadata-only event for the sidebar is still sent first.
-    expect(sent.mock.calls[0]).toEqual(metadataOnlyAdd);
+    await replaceRequestFile('v2');
+
+    expect(postResponseScript(sent.mock.calls)).toContain("console.log('v2')");
   });
 
-  test('send only the metadata when the file is not open', async () => {
-    const sent = await replaceRequestFile({ openInEditor: false });
+  test('send only the metadata when the replaced file is not open', async () => {
+    createCollection({ openInEditor: false });
+    const sent = vi.fn();
+    setMessageSender(sent);
+    new CollectionWatcher().setupWatchersOnly(collectionPath, COLLECTION_UID);
+
+    await replaceRequestFile('v2');
 
     expect(sent.mock.calls).toEqual([metadataOnlyAdd]);
   });
