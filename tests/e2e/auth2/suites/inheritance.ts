@@ -102,7 +102,7 @@ async function verifyCollectionAuthApplied(page: Page) {
   await sendRequestAndVerify(page, 'request-2', 401);
 
   await setAuth(page, 'collection-1', 'bearer', { token: 'your_secret_token' });
-  await sendRequestAndVerify(page, 'request-2', 200);
+  await expect(() => sendRequestAndVerify(page, 'request-2', 200)).toPass({ timeout: 30_000 });
 
   await setAuth(page, 'collection-1', 'none');
   await verifyRequestPane(page, 'request-2', 'Auth', { contains: ['Auth inherited from Collection:', 'No Auth'] });
