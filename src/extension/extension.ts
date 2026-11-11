@@ -39,7 +39,7 @@ import logsStore from './store/logs';
 import { registerTreeCommands, registerMainCommands } from './commands';
 import { registerDirtyStateHandlers, registerSaveHandler } from './editors/dirty-state-manager';
 import { createOAuth2UriHandler } from './ipc/network/authorize-user-in-system-browser';
-import { openTransientRequestPanel } from './panels/transient-request-panel';
+import { openTransientRequestPanel, TransientRequestEditorProvider } from './panels/transient-request-panel';
 import { AppItem } from '@bruno-types';
 
 let extensionActivated = false;
@@ -120,6 +120,19 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerCustomEditorProvider(
       BrunoEditorProvider.viewType,
       brunoEditorProvider,
+      {
+        webviewOptions: {
+          retainContextWhenHidden: true
+        },
+        supportsMultipleEditorsPerDocument: false
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      TransientRequestEditorProvider.viewType,
+      new TransientRequestEditorProvider(context),
       {
         webviewOptions: {
           retainContextWhenHidden: true

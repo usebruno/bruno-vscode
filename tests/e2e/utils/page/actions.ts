@@ -1329,12 +1329,18 @@ export async function createTransientRequest(
 
 /**
  * Close a VS Code editor tab by its title (clicks the tab's close button).
+ * Pass `unsavedChoice` for a dirty tab to answer the save prompt (needs `window.dialogStyle: 'custom'`).
  */
-export async function closeEditorTab(page: Page, title: string): Promise<void> {
+export async function closeEditorTab(page: Page, title: string, unsavedChoice?: 'Save' | "Don't Save"): Promise<void> {
   const locators = buildCommonLocators(page);
   const tab = locators.workbench.editorTab(title);
   await tab.hover();
   await locators.workbench.editorTabClose(title).click();
+
+  if (unsavedChoice) {
+    await page.locator('.monaco-dialog-box').getByRole('button', { name: unsavedChoice, exact: true }).click();
+  }
+
   await expect(tab).toHaveCount(0, { timeout: 2_000 });
 }
 

@@ -363,6 +363,16 @@
           }
         ],
         "priority": "option"
+      },
+      {
+        "viewType": "bruno.transientRequest",
+        "displayName": "Bruno Transient Request",
+        "selector": [
+          {
+            "filenamePattern": "bruno-transient:/**"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "languages": [
@@ -393,13 +403,7 @@
         "command": "bruno.saveFromEditor",
         "key": "ctrl+s",
         "mac": "cmd+s",
-        "when": "activeCustomEditorId == 'bruno.requestEditor'"
-      },
-      {
-        "command": "bruno.saveFromEditor",
-        "key": "ctrl+s",
-        "mac": "cmd+s",
-        "when": "activeWebviewPanelId == 'bruno.transientRequest'"
+        "when": "activeCustomEditorId == 'bruno.requestEditor' || activeCustomEditorId == 'bruno.transientRequest'"
       }
     ]
   },
