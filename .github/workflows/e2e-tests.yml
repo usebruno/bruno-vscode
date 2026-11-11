@@ -1,12 +1,10 @@
 name: e2e tests
 
 on:
+  push:
+    branches:
+      - feature/sidebar-native-migration
   workflow_dispatch:
-    inputs:
-      tests:
-        description: 'Spec paths or regexes to run, space separated (empty = whole suite), e.g. tests/e2e/collection tests/e2e/sidebar'
-        required: false
-        default: ''
 
 # A second run on the same branch replaces the one in progress.
 concurrency:
@@ -52,9 +50,7 @@ jobs:
         run: npm run test:keycloak:up
 
       - name: Run e2e tests
-        env:
-          TESTS: ${{ github.event.inputs.tests }}
-        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" npx playwright test $TESTS
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" npm run test:e2e
 
       - name: Stop Keycloak
         if: always()
