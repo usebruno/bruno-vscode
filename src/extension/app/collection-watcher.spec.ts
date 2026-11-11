@@ -53,15 +53,25 @@ script:post-response {
 
 let collectionPath: string;
 let requestPath: string;
+const pathsOpenInEditor: string[] = [];
+
+const openInBrunoEditor = (filePath: string): void => {
+  registerDocument({ uri: { fsPath: filePath } } as never);
+  pathsOpenInEditor.push(filePath);
+};
+
+const writeBrunoJson = (dir: string, name: string): void => {
+  fs.writeFileSync(path.join(dir, 'bruno.json'), JSON.stringify({ version: '1', name, type: 'collection' }));
+};
 
 // A collection with one request whose post-response script logs 'v1'.
 const createCollection = ({ openInEditor }: { openInEditor: boolean }): void => {
   collectionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'bruno-watcher-'));
-  fs.writeFileSync(path.join(collectionPath, 'bruno.json'), JSON.stringify({ version: '1', name: 'c', type: 'collection' }));
+  writeBrunoJson(collectionPath, 'c');
   requestPath = path.join(collectionPath, 'sign-in.bru');
   fs.writeFileSync(requestPath, request('v1'));
   if (openInEditor) {
-    registerDocument({ uri: { fsPath: requestPath } } as never);
+    openInBrunoEditor(requestPath);
   }
 };
 
@@ -87,8 +97,12 @@ const applyTreeUpdates = (calls: unknown[][]): CollectionsState => {
   return calls
     .filter(([channel]) => channel === 'main:collection-tree-updated')
     .reduce<CollectionsState>((state, [, type, payload]) => {
-      if (type === 'addFile') return collectionsReducer(state, collectionAddFileEvent(payload as never));
-      if (type === 'change') return collectionsReducer(state, collectionChangeFileEvent(payload as never));
+      if (type === 'addFile') {
+        return collectionsReducer(state, collectionAddFileEvent(payload as never));
+      }
+      if (type === 'change') {
+        return collectionsReducer(state, collectionChangeFileEvent(payload as never));
+      }
       return state;
     }, initialState);
 };
@@ -101,7 +115,7 @@ const postResponseScript = (calls: unknown[][]): string | undefined => {
 const metadataOnlyAdd = ['main:collection-tree-updated', 'addFile', expect.objectContaining({ partial: true })];
 
 afterEach(() => {
-  unregisterDocument(requestPath);
+  pathsOpenInEditor.splice(0).forEach(unregisterDocument);
   fs.rmSync(collectionPath, { recursive: true, force: true });
   createListeners.clear();
 });
@@ -133,21 +147,19 @@ describe('CollectionWatcher create events for request files', () => {
     expect(sent.mock.calls).toEqual([metadataOnlyAdd]);
   });
 
-  test('keep the nested collection marker when a nested collection root file open in an editor is replaced', async () => {
+  test('keep the nested collection marker on a create event for a nested collection root file open in an editor', async () => {
     createCollection({ openInEditor: false });
-    const nestedRootPath = path.join(collectionPath, 'nested', 'collection.bru');
-    fs.mkdirSync(path.dirname(nestedRootPath));
+    const nestedPath = path.join(collectionPath, 'nested');
+    fs.mkdirSync(nestedPath);
+    writeBrunoJson(nestedPath, 'nested');
+    const nestedRootPath = path.join(nestedPath, 'collection.bru');
     fs.writeFileSync(nestedRootPath, 'meta {\n  name: nested\n}\n');
-    registerDocument({ uri: { fsPath: nestedRootPath } } as never);
+    openInBrunoEditor(nestedRootPath);
     const sent = vi.fn();
     setMessageSender(sent);
     new CollectionWatcher().setupWatchersOnly(collectionPath, COLLECTION_UID);
 
-    try {
-      await createListeners.get('**/*.bru')!({ fsPath: nestedRootPath });
-    } finally {
-      unregisterDocument(nestedRootPath);
-    }
+    await createListeners.get('**/*.bru')!({ fsPath: nestedRootPath });
 
     expect(sent.mock.calls).toEqual([
       ['main:collection-tree-updated', 'addFile', expect.objectContaining({
