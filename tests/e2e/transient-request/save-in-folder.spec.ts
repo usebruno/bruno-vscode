@@ -45,15 +45,15 @@ test.describe('Save a transient request into a folder', () => {
       await expect(quickInputWidget).toBeHidden();
     });
 
-    await test.step('Verify the request file was written inside the folder', async () => {
-      expect(fs.existsSync(path.join(tmpDir, collectionName, folderName, `${requestName}.yml`))).toBe(true);
-    });
-
     await test.step('Verify the request is visible under the folder in the sidebar', async () => {
       const sidebarLocators = buildCommonLocators(sidebar);
 
       await expandFolder(sidebar, folderName);
       await expect(sidebarLocators.sidebar.collectionItem(requestName)).toBeVisible({ timeout: 10_000 });
+    });
+
+    await test.step('Verify the request file was written inside the folder', async () => {
+      expect(fs.existsSync(path.join(tmpDir, collectionName, folderName, `${requestName}.yml`))).toBe(true);
     });
   });
 });
