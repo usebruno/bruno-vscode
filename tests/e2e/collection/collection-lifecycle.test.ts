@@ -12,7 +12,8 @@ import {
   runCollection,
   setCollectionHeaders,
   setCollectionVars,
-  takeScreenshot
+  takeScreenshot,
+  toKeyValue
 } from '../utils/page/actions';
 import { buildCommonLocators } from '../utils/page/locators';
 import { parseCollection } from '@usebruno/filestore';
@@ -40,10 +41,6 @@ const updatedSettings = {
   vars: { apiVersion: 'version-updated' },
   headers: { 'x-lifecycle': 'header-updated' },
 };
-
-// Exported vars/headers are `{ name, value }` lists; key them by name to compare with the settings above.
-const toKeyValue = (entries: { name: string, value: string }[] = []) =>
-  Object.fromEntries(entries.map(({ name, value }) => [name, value]));
 
 test('Collection lifecycle: settings, vars, headers, run request, clone, delete, move, run collection, export', async ({ page }) => {
   const { sidebar, ctx } = await createSetup({

@@ -64,7 +64,7 @@ type CollectionConfig<EnvName extends string = string> = {
   name: string,
   vars?: KeyValue,
   headers?: KeyValue,
-  presets?: { requestUrl: string },
+  presets?: { requestUrl?: string },
   folders?: FolderConfig<EnvName>[],
   requests?: RequestConfig<EnvName>[]
   export?: boolean

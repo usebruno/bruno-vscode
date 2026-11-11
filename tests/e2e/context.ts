@@ -11,7 +11,7 @@ export class Context {
     this.collections.set(name, { name, location });
   }
 
-  collection(name: string): CollectionInfo {
+  getCollection(name: string): CollectionInfo {
     const collection = this.collections.get(name);
 
     if (!collection) {

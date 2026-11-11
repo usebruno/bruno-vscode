@@ -1,11 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import AdmZip from 'adm-zip';
-import { Page, Frame, FrameLocator, Locator, expect, TestType, PlaywrightTestOptions, PlaywrightTestArgs, PlaywrightWorkerArgs, PlaywrightWorkerOptions } from '@playwright/test';
+import { expect, type Page, type Frame, type FrameLocator, type Locator, type TestType, type PlaywrightTestOptions, type PlaywrightTestArgs, type PlaywrightWorkerArgs, type PlaywrightWorkerOptions } from '@playwright/test';
 import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
-import { Context } from '../../context';
-import { VSCodeFixture, VSCodeOptions } from '../fixtures';
+import type { Context } from '../../context';
+import type { VSCodeFixture, VSCodeOptions } from '../fixtures';
 import type { AuthFields, AuthMode, CollectionSettingsConfig, KeyValue, ResponsePaneTab } from '../../e2e-helper';
 
 // The editor pane currently in focus (request, folder settings or collection settings).
@@ -1594,13 +1594,9 @@ export async function fillRequestDetails(webview: FrameLocator, ctx: Context, ty
   }
 }
 
-export async function clearField(field: Locator, via: 'keyboard' | 'mouse' = 'keyboard') {
-  if (via === 'keyboard') {
-    await field.click();
-    await field.press('ControlOrMeta+a');
-  } else {
-    await field.click({ clickCount: 3 });
-  }
+export async function clearField(field: Locator) {
+  await field.click();
+  await field.press('ControlOrMeta+a');
 
   await field.press('Backspace');
 }
@@ -1688,7 +1684,7 @@ export async function exportCollection(page: Page, sidebar: Frame, ctx: Context,
   await webview.getByText('Bruno Collection (ZIP)', { exact: true }).click();
 
   // Save dialog (simple dialog): replace the prefilled path with one inside the collection's location
-  const exportPath = path.join(ctx.collection(collectionName).location, `${collectionName}.zip`);
+  const exportPath = path.join(ctx.getCollection(collectionName).location, `${collectionName}.zip`);
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
   await saveInput.fill(exportPath);
   await expect(async () => {
@@ -2025,7 +2021,10 @@ export async function setCollectionHeaders(page: Page, settings: Frame, headers:
 }
 
 export async function setCollectionPresets(settings: Frame, presets: NonNullable<CollectionSettingsConfig['presets']>) {
-  await setPresetBaseUrl(settings, presets.requestUrl);
+  if (presets.requestUrl) {
+    await setPresetBaseUrl(settings, presets.requestUrl);
+  }
+
   await saveCollectionSettings(settings, 'presets');
 }
 
@@ -2036,4 +2035,8 @@ export function exportedRequestPaths(entries: string[], format: 'yml' | 'bru'): 
   return entries
     .filter((entry) => entry.endsWith(`.${format}`) && !entry.startsWith('environments/') && !nonRequestFiles.includes(path.posix.basename(entry)))
     .map((entry) => entry.slice(0, -`.${format}`.length));
+}
+
+export function toKeyValue(entries: { name: string, value: string }[] = []): KeyValue<string> {
+  return Object.fromEntries(entries.map(({ name, value }) => [name, value]));
 }

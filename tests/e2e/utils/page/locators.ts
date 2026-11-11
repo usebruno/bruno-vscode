@@ -1,4 +1,4 @@
-import { Frame, Page, Locator, FrameLocator } from '@playwright/test';
+import type { Frame, Page, Locator, FrameLocator } from '@playwright/test';
 
 /**
  * Centralised Playwright locators for the e2e suite.
@@ -22,6 +22,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     collectionItemLabel: (name: string) => frame.getByTestId(`collection-item-label-${name}`),
     folder: (name: string) => frame.getByTestId(`sidebar-collection-item-row-${name}`),
     folderChevron: (name: string) => frame.getByTestId(`folder-chevron-${name}`),
+    // The single item named `name` anywhere inside folder `folderName` (item names are unique per test).
     folderChild: (folderName: string, name: string) =>
       frame.getByTestId(`sidebar-collection-item-row-${folderName}`).locator('..').getByTestId(`sidebar-collection-item-row-${name}`),
     addMenu: () => frame.getByTestId('collections-header-add-menu'),
