@@ -30,7 +30,7 @@ test.describe('NTLM auth', () => {
   test('authenticates requests with NTLM', async ({ page, tmpDir }) => {
     const collectionName = 'NTLM';
     const sidebar = await openBrunoSidebar(page);
-    await importCollection(page, sidebar, path.resolve(__dirname, 'fixtures/ntlm-collection.json'), tmpDir, collectionName);
+    await importCollection(sidebar, path.resolve(__dirname, 'fixtures/ntlm-collection.json'), tmpDir, collectionName);
     // Each request opens in its own webview, which would cover the next one's Send button, so close it first.
     let openTab: string | undefined;
     const sendTo = async (requestName: string, expectedStatus: number) => {

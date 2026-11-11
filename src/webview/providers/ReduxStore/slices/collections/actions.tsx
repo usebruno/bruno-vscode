@@ -2621,14 +2621,6 @@ export const openCollectionEvent = (uid: any, pathname: any, brunoConfig: any, s
   const { ipcRenderer } = window;
 
   return new Promise<void>((resolve, reject) => {
-    // In sidebar mode, skip auto-opened collections (shouldPersist=false)
-    // Sidebar should only show manually opened/created collections
-    const isSidebar = (window as any).BRUNO_WEBVIEW_MODE === 'sidebar';
-    if (isSidebar && !shouldPersist) {
-      resolve();
-      return;
-    }
-
     const state = getState();
 
     const existingCollection = state.collections.collections.find(

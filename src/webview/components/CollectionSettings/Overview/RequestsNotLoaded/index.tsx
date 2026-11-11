@@ -7,7 +7,6 @@ import { isItemARequest, itemIsOpenedInTabs } from 'utils/tabs/index';
 import { getDefaultRequestPaneTab } from 'utils/collections/index';
 import { addTab, focusTab } from 'providers/ReduxStore/slices/tabs';
 import { RootState } from 'providers/ReduxStore';
-import { isSidebarMode, openRequestInVSCodeEditor } from 'utils/webviewMode';
 
 interface RequestsNotLoadedProps {
   collection: React.ReactNode;
@@ -30,11 +29,6 @@ const RequestsNotLoaded = ({
   const handleRequestClick = (item: any) => (e: any) => {
     e.preventDefault();
     if (!isItemARequest(item)) {
-      return;
-    }
-
-    if (isSidebarMode()) {
-      openRequestInVSCodeEditor(item.pathname);
       return;
     }
 

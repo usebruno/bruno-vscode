@@ -14,11 +14,10 @@ test.describe('Folder management', () => {
     const collectionName = 'Folder Collection';
     const folderName = 'Orders';
 
-    await createCollection(page, sidebar, collectionName, tmpDir);
+    await createCollection(sidebar, collectionName, tmpDir);
     await createFolder(sidebar, collectionName, folderName);
 
-    const collectionId = `collection-${collectionName.replace(/\s+/g, '-').toLowerCase()}`;
-    const folderRow = buildCommonLocators(sidebar.locator(`#${collectionId}`)).sidebar.collectionItem(folderName);
+    const folderRow = buildCommonLocators(sidebar).sidebar.collectionItem(folderName);
     await expect(folderRow).toBeVisible();
     expect(findFilesWithName(tmpDir, 'folder.yml')).toHaveLength(1);
   });

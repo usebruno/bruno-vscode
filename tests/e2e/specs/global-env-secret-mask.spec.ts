@@ -53,7 +53,7 @@ test.describe('Global environment secrets', () => {
   test('marking a variable secret masks it in request tab', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Secret Mask';
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     fs.writeFileSync(path.join(findCollectionDir(tmpDir), 'Masked.bru'), REQUEST_BRU, 'utf8');
 

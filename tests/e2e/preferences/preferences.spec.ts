@@ -30,6 +30,7 @@ import {
   UNTRUSTED_TOKEN_URL,
   UNTRUSTED_WS_URL
 } from '../ssl/client-certificate/server/mtls-certs';
+import type { Sidebar } from '../utils/page/sidebar';
 
 const PANEL_TITLE = 'Bruno Preferences';
 // Node's error for a certificate whose issuing CA isn't trusted.
@@ -38,9 +39,9 @@ const EXTENSION_VERSION = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')
 ).version as string;
 
-async function openPreferences(page: Page, sidebar: Frame): Promise<Frame> {
+async function openPreferences(page: Page, sidebar: Sidebar): Promise<Frame> {
   await buildCommonLocators(sidebar).sidebar.preferencesButton().click();
-  const prefs = await getWebviewFrame(page, (frame) => buildCommonLocators(frame).preferences.root(), sidebar);
+  const prefs = await getWebviewFrame(page, (frame) => buildCommonLocators(frame).preferences.root());
   await expect(buildCommonLocators(prefs).preferences.root()).toBeVisible();
   return prefs;
 }
@@ -60,13 +61,12 @@ async function focusEditorTab(page: Page, title: string): Promise<void> {
 
 // Create a .bru collection and write one GET request file per entry in `requests` (name -> url).
 async function setupCollection(
-  page: Page,
-  sidebar: Frame,
+  sidebar: Sidebar,
   tmpDir: string,
   collectionName: string,
   requests: Record<string, string>
 ): Promise<string> {
-  await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+  await createCollection(sidebar, collectionName, tmpDir, 'bru');
   const collectionDir = findCollectionDir(tmpDir);
   Object.entries(requests).forEach(([name, url], i) => {
     const bru = [
@@ -213,7 +213,7 @@ test.describe('Preferences', () => {
 
   test('Request Timeout is applied to outgoing requests', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    await setupCollection(page, sidebar, tmpDir, 'Timeout Prefs', {
+    await setupCollection(sidebar, tmpDir, 'Timeout Prefs', {
       Slow: `${TEST_SERVER_LOCAL_URL}/delay/2000`
     });
 
@@ -239,7 +239,7 @@ test.describe('Preferences', () => {
 
   test('SSL/TLS Certificate Verification controls whether untrusted certificates are accepted', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    await setupCollection(page, sidebar, tmpDir, 'SSL Prefs', {
+    await setupCollection(sidebar, tmpDir, 'SSL Prefs', {
       Untrusted: UNTRUSTED_HTTPS_URL
     });
 
@@ -265,8 +265,8 @@ test.describe('Preferences', () => {
 
   test('SSL/TLS Certificate Verification applies to WebSocket connections', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    await createCollection(page, sidebar, 'SSL Prefs Ws', tmpDir);
-    await createRequestByType(page, sidebar, 'SSL Prefs Ws', { name: 'Untrusted Ws', url: UNTRUSTED_WS_URL, type: 'WebSocket' });
+    await createCollection(sidebar, 'SSL Prefs Ws', tmpDir);
+    await createRequestByType(sidebar, 'SSL Prefs Ws', { name: 'Untrusted Ws', url: UNTRUSTED_WS_URL, type: 'WebSocket' });
 
     const prefs = await openPreferences(page, sidebar);
     const ui = buildCommonLocators(prefs).preferences;
@@ -291,10 +291,10 @@ test.describe('Preferences', () => {
 
   test('SSL/TLS Certificate Verification applies to gRPC requests', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    await createCollection(page, sidebar, 'SSL Prefs Grpc', tmpDir);
+    await createCollection(sidebar, 'SSL Prefs Grpc', tmpDir);
     const protoPath = path.join(findCollectionDir(tmpDir, 'opencollection.yml'), 'echo.proto');
     fs.copyFileSync(path.resolve(__dirname, '../utils/fixtures/echo.proto'), protoPath);
-    await createRequestByType(page, sidebar, 'SSL Prefs Grpc', { name: 'Untrusted Grpc', url: UNTRUSTED_GRPC_URL, type: 'gRPC' });
+    await createRequestByType(sidebar, 'SSL Prefs Grpc', { name: 'Untrusted Grpc', url: UNTRUSTED_GRPC_URL, type: 'gRPC' });
 
     const prefs = await openPreferences(page, sidebar);
     const ui = buildCommonLocators(prefs).preferences;
@@ -322,7 +322,7 @@ test.describe('Preferences', () => {
 
   test('SSL/TLS Certificate Verification applies to OAuth2 token requests', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    await setupCollection(page, sidebar, tmpDir, 'SSL Prefs OAuth2', {
+    await setupCollection(sidebar, tmpDir, 'SSL Prefs OAuth2', {
       Protected: UNTRUSTED_HTTPS_URL
     });
 
@@ -356,7 +356,7 @@ test.describe('Preferences', () => {
 
   test('Store and Send Cookies toggles control the cookie jar', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    await setupCollection(page, sidebar, tmpDir, 'Cookie Prefs', {
+    await setupCollection(sidebar, tmpDir, 'Cookie Prefs', {
       Cookies: `${TEST_SERVER_LOCAL_URL}/cookies/echo`
     });
 
@@ -401,7 +401,7 @@ test.describe('Preferences', () => {
 
   test('Auto Save writes request changes to disk only while enabled', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
-    const collectionDir = await setupCollection(page, sidebar, tmpDir, 'Autosave Prefs', {
+    const collectionDir = await setupCollection(sidebar, tmpDir, 'Autosave Prefs', {
       Ping: `${TEST_SERVER_LOCAL_URL}/ping`
     });
     const readRequestFile = () => fs.readFileSync(path.join(collectionDir, 'Ping.bru'), 'utf8');

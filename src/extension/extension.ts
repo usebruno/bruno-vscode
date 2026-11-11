@@ -9,7 +9,7 @@ import {
 
 import { setExtensionContext as setPreferencesContext } from './store/preferences';
 import { setExtensionContext as setGlobalEnvContext } from './store/global-environments';
-import { setExtensionContext as setLastCollectionsContext } from './store/last-opened-collections';
+import LastOpenedCollections, { setExtensionContext as setLastCollectionsContext } from './store/last-opened-collections';
 import { setExtensionContext as setLastWorkspacesContext } from './store/last-opened-workspaces';
 import { setExtensionContext as setDefaultWorkspaceContext } from './store/default-workspace';
 import { setExtensionContext as setEnvSecretsContext } from './store/env-secrets';
@@ -19,7 +19,7 @@ import { setExtensionContext as setCookiesContext, cookiesStore } from './store/
 import { setExtensionContext as setOAuth2Context } from './store/oauth2';
 
 import registerPreferencesIpc from './ipc/preferences';
-import registerCollectionIpc, { setSidebarWebviewGetter } from './ipc/collection';
+import registerCollectionIpc from './ipc/collection';
 import registerFilesystemIpc from './ipc/filesystem';
 import registerGlobalEnvironmentsIpc from './ipc/global-environments';
 import registerNetworkIpc from './ipc/network/index';
@@ -32,7 +32,6 @@ import { setMessageSender as setCollectionsMessageSender, setEventEmitter as set
 
 import { stateManager } from './webview/state-manager';
 import { BrunoEditorProvider, registerScriptErrorSourceHandler } from './editors/bruno-editor-provider';
-import { SidebarViewProvider } from './views/SidebarViewProvider';
 import { NativeSidebarViewProvider } from './views/NativeSidebarViewProvider';
 import { SidebarDragAndDropController } from './views/SidebarDragAndDropController';
 import { registerSidebarCommands } from './commands/sidebar-commands';
@@ -133,21 +132,6 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
-  const sidebarProvider = new SidebarViewProvider(context.extensionUri, stateManager);
-  setSidebarWebviewGetter(() => sidebarProvider.getWebview());
-
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      SidebarViewProvider.viewType,
-      sidebarProvider,
-      {
-        webviewOptions: {
-          retainContextWhenHidden: true
-        }
-      }
-    )
-  );
-
   const workspaceCollectionsProvider = new WorkspaceCollectionsProvider();
 
   context.subscriptions.push(
@@ -173,7 +157,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   registerTreeCommands(context, workspaceCollectionsProvider);
-  registerMainCommands(context, sidebarProvider);
+  registerMainCommands(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openTransientRequest',
@@ -213,23 +197,34 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
-  // NATIVE_COMPONENTS=true swaps the webview sidebar for the native tree view.
-  // Both views live in the Bruno container; package.json shows one or the other
-  // based on this context key.
-  const nativeMode = process.env.NATIVE_COMPONENTS === 'true';
-  void vscode.commands.executeCommand('setContext', 'bruno.nativeComponents', nativeMode);
+  const openedCollections = new OpenedCollections(context.globalState);
+  const nativeSidebarProvider = new NativeSidebarViewProvider(openedCollections);
+  const nativeSidebarView = vscode.window.createTreeView(NativeSidebarViewProvider.viewType, {
+    treeDataProvider: nativeSidebarProvider,
+    dragAndDropController: new SidebarDragAndDropController(nativeSidebarProvider),
+    showCollapseAll: true
+  });
+  context.subscriptions.push(nativeSidebarView, nativeSidebarProvider, openedCollections);
+  registerSidebarCommands(context, nativeSidebarProvider, nativeSidebarView, openedCollections);
+  carryOverLegacyOpenedCollections(context, openedCollections);
+}
 
-  if (nativeMode) {
-    const openedCollections = new OpenedCollections(context.globalState);
-    const nativeSidebarProvider = new NativeSidebarViewProvider(openedCollections);
-    const nativeSidebarView = vscode.window.createTreeView(NativeSidebarViewProvider.viewType, {
-      treeDataProvider: nativeSidebarProvider,
-      dragAndDropController: new SidebarDragAndDropController(nativeSidebarProvider),
-      showCollapseAll: true
-    });
-    context.subscriptions.push(nativeSidebarView, nativeSidebarProvider, openedCollections);
-    registerSidebarCommands(context, nativeSidebarProvider, nativeSidebarView, openedCollections);
+/**
+ * Carry the collections the webview sidebar had open into the tree's own list,
+ * once, so they are not lost when the tree takes over. The old list is still
+ * written by flows that remain, so it is not read again after this.
+ */
+function carryOverLegacyOpenedCollections(context: vscode.ExtensionContext, openedCollections: OpenedCollections): void {
+  const CARRIED_OVER_KEY = 'bruno.sidebar.carriedOverLastOpened';
+  if (context.globalState.get<boolean>(CARRIED_OVER_KEY)) {
+    return;
   }
+  void (async () => {
+    for (const collectionPath of new LastOpenedCollections().getAll()) {
+      await openedCollections.add(vscode.Uri.file(collectionPath));
+    }
+    await context.globalState.update(CARRIED_OVER_KEY, true);
+  })();
 }
 
 export function deactivate(): void {

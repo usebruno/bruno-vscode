@@ -71,20 +71,11 @@
       ],
       "bruno": [
         {
-          "type": "webview",
-          "id": "bruno.sidebarView",
-          "name": "Collections",
-          "contextualTitle": "Bruno Collections",
-          "icon": "$(folder-library)",
-          "when": "!bruno.nativeComponents"
-        },
-        {
           "type": "tree",
           "id": "bruno.nativeSidebarView",
           "name": "Collections",
           "contextualTitle": "Bruno Collections",
-          "icon": "$(folder-library)",
-          "when": "bruno.nativeComponents"
+          "icon": "$(folder-library)"
         }
       ],
       "explorer": [
@@ -100,7 +91,7 @@
       {
         "view": "bruno.nativeSidebarView",
         "contents": "No Bruno collections were found in the open folders.\n[Create Collection](command:bruno.sidebar.createCollection)\n[Open Collection](command:bruno.sidebar.openCollection)\n[Import Collection](command:bruno.sidebar.importCollection)",
-        "when": "bruno.nativeComponents && bruno.sidebar.empty"
+        "when": "bruno.sidebar.empty"
       }
     ],
     "commands": [
@@ -130,30 +121,6 @@
         "title": "Open Collection Settings",
         "category": "Bruno",
         "icon": "$(settings-gear)"
-      },
-      {
-        "command": "bruno.createCollection",
-        "title": "Create Collection",
-        "category": "Bruno",
-        "icon": "$(file-directory-create)"
-      },
-      {
-        "command": "bruno.openCollection",
-        "title": "Open Collection",
-        "category": "Bruno",
-        "icon": "$(folder-opened)"
-      },
-      {
-        "command": "bruno.importCollection",
-        "title": "Import Collection",
-        "category": "Bruno",
-        "icon": "$(file-symlink-directory)"
-      },
-      {
-        "command": "bruno.refreshSidebar",
-        "title": "Refresh",
-        "category": "Bruno",
-        "icon": "$(refresh)"
       },
       {
         "command": "bruno.newRequest",
@@ -232,11 +199,6 @@
       {
         "command": "bruno.openVariables",
         "title": "Open Variables",
-        "category": "Bruno"
-      },
-      {
-        "command": "bruno.openCreateCollection",
-        "title": "Create Collection",
         "category": "Bruno"
       },
       {
@@ -435,21 +397,6 @@
           "group": "navigation"
         },
         {
-          "command": "bruno.createCollection",
-          "when": "view == bruno.sidebarView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "bruno.openCollection",
-          "when": "view == bruno.sidebarView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "bruno.importCollection",
-          "when": "view == bruno.sidebarView",
-          "group": "navigation@3"
-        },
-        {
           "command": "bruno.refreshWorkspaceCollections",
           "when": "view == bruno.workspaceCollections",
           "group": "navigation"
@@ -558,7 +505,7 @@
         },
         {
           "command": "bruno.sidebar.settings",
-          "when": "view == bruno.nativeSidebarView && viewItem =~ /^collection(:opened)?$/",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
           "group": "2_run@2"
         },
         {
@@ -624,24 +571,20 @@
       ],
       "commandPalette": [
         {
-          "command": "bruno.sidebar.createCollection",
-          "when": "bruno.nativeComponents"
+          "command": "bruno.sidebar.createCollection"
         },
         {
-          "command": "bruno.sidebar.openCollection",
-          "when": "bruno.nativeComponents"
+          "command": "bruno.sidebar.openCollection"
         },
         {
-          "command": "bruno.sidebar.importCollection",
-          "when": "bruno.nativeComponents"
+          "command": "bruno.sidebar.importCollection"
         },
         {
-          "command": "bruno.sidebar.search",
-          "when": "bruno.nativeComponents"
+          "command": "bruno.sidebar.search"
         },
         {
           "command": "bruno.sidebar.clearSearch",
-          "when": "bruno.nativeComponents && bruno.sidebar.filtered"
+          "when": "bruno.sidebar.filtered"
         },
         {
           "command": "bruno.sidebar.closeCollection",

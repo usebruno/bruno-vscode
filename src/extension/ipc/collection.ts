@@ -80,35 +80,6 @@ const environmentSecretsStore = new EnvironmentSecretsStore();
 const collectionSecurityStore = new CollectionSecurityStore();
 const uiStateSnapshotStore = new UiStateSnapshotStore();
 
-let sidebarWebviewGetter: (() => vscode.Webview | undefined) | null = null;
-
-export function setSidebarWebviewGetter(getter: () => vscode.Webview | undefined): void {
-  sidebarWebviewGetter = getter;
-}
-
-// Tracks the item the sidebar is currently highlighting, so a deactivating or
-// closing panel can clear the highlight without stomping a newer active item.
-let activeSidebarItemUid: string | null = null;
-
-// Tell the sidebar which item (request/folder/collection) is open in the active
-// editor, so it can highlight the matching row. Pass null to clear.
-export function notifyActiveItemToSidebar(itemUid: string | null): void {
-  activeSidebarItemUid = itemUid;
-  const sidebar = sidebarWebviewGetter?.();
-  if (sidebar) {
-    stateManager.sendTo(sidebar, 'main:set-active-item', itemUid);
-  }
-}
-
-// Clear the sidebar highlight, but only if `itemUid` is still the highlighted
-// item. Safe to call when a panel deactivates or is disposed regardless of
-// event ordering: if another item became active first, this is a no-op.
-export function clearActiveItemFromSidebar(itemUid: string): void {
-  if (activeSidebarItemUid === itemUid) {
-    notifyActiveItemToSidebar(null);
-  }
-}
-
 interface Environment {
   name: string;
   variables: Array<{ name: string; value: string | number | boolean | Record<string, unknown> | null; secret?: boolean; uid?: string; dataType?: BrunoVariableDataType }>;
@@ -2177,14 +2148,9 @@ get {
         stateManager.sendTo(currentWebview, channel, ...args);
       };
       const watchedPaths = collectionWatcher.getWatchedCollectionPaths();
-      const sidebarWebview = sidebarWebviewGetter?.();
-      const isSidebar = sidebarWebview && currentWebview === sidebarWebview;
       for (const collectionPath of watchedPaths) {
         try {
-          const collectionUid = await loadCollectionMetadata(collectionPath, panelSender, isSidebar);
-          if (isSidebar && collectionUid) {
-            await collectionWatcher.loadFullCollection(collectionPath, collectionUid, panelSender);
-          }
+          await loadCollectionMetadata(collectionPath, panelSender, false);
         } catch (err) {
           console.error(`[Collection IPC] Error replaying collection for ${collectionPath}:`, err);
         }

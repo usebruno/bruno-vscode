@@ -4,8 +4,8 @@ import type { ItemType } from '@bruno-types';
 import { insomniaToBruno, openApiToBruno, openCollectionToBruno, postmanToBruno, wsdlToBruno } from '@usebruno/converters';
 import { transformExampleStatusInCollection } from '@usebruno/common';
 import { stringifyEnvironment, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
-import { sanitizeName } from './filesystem';
-import { doesItExist, writeText } from './file';
+import { sanitizeName, uniqueFolderName } from './filesystem';
+import { writeText } from './file';
 import { isObject } from '../../utils/object';
 import type {
   CollectionFormat,
@@ -147,6 +147,45 @@ function unsupported(fileName: string): Error {
  */
 export function isUnbundledCollectionRoot(file: ImportFile): boolean {
   return file.source === 'opencollection' && file.data.bundled !== true && !Array.isArray(file.data.items);
+}
+
+/**
+ * The collection's own name, read from where each kind of export keeps it.
+ * A WSDL names its service only once parsed, so it gives nothing here.
+ */
+export function getImportedCollectionName(file: ImportFile): string | undefined {
+  if (file.source === 'wsdl') {
+    return undefined;
+  }
+
+  const { data } = file;
+  let name: unknown;
+
+  switch (file.source) {
+    case 'bruno':
+    case 'insomnia':
+      // Insomnia v5 exports carry the name at the top; v4 exports keep it on the workspace resource.
+      name = data.name ?? (Array.isArray(data.resources)
+        ? data.resources.find((resource) => isObject(resource) && resource._type === 'workspace')?.name
+        : undefined);
+      break;
+
+    case 'postman': {
+      const info = isObject(data.collection) ? data.collection.info : data.info;
+      name = isObject(info) ? info.name : undefined;
+      break;
+    }
+
+    case 'openapi':
+      name = isObject(data.info) ? data.info.title : undefined;
+      break;
+
+    case 'opencollection':
+      name = isObject(data.info) ? data.info.name : undefined;
+      break;
+  }
+
+  return typeof name === 'string' && name.trim() ? name.trim() : undefined;
 }
 
 /** Parse the file and recognise its kind by shape, as the Import Collection panel does. */
@@ -437,13 +476,4 @@ async function writeItems(
 function requestFileName(item: ImportedItem, format: CollectionFormat): string {
   const filename = (item.filename || item.name).replace(/\.(bru|yml)$/, '');
   return `${filename}.${format}`;
-}
-
-/** "Name", then "Name - 1", "Name - 2", ... until nothing exists at that path, as the Bruno app does. */
-async function uniqueFolderName(baseName: string, location: vscode.Uri): Promise<string> {
-  let name = baseName;
-  for (let n = 1; await doesItExist(vscode.Uri.joinPath(location, sanitizeName(name))); n++) {
-    name = `${baseName} - ${n}`;
-  }
-  return name;
 }

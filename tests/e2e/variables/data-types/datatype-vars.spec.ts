@@ -34,7 +34,7 @@ const NESTED_REQUEST_BRU = [
 async function openTypedVars(page: Page, tmpDir: string): Promise<Frame> {
   const sidebar = await openBrunoSidebar(page);
   const collectionName = 'Typed Vars';
-  await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+  await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
   const collectionDir = findCollectionDir(tmpDir);
   fs.writeFileSync(path.join(collectionDir, 'Typed.bru'), TYPED_REQUEST_BRU, 'utf8');
@@ -117,7 +117,7 @@ test.describe('Data types in request variables', () => {
   test('object vars inherited from folder and collection render as JSON in the popover', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Inherited Vars';
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     const folderDir = path.join(collectionDir, FOLDER_NAME);

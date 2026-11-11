@@ -11,6 +11,7 @@ import {
   openCollectionSettings
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
+import type { Sidebar } from '../../utils/page/sidebar';
 
 const FIXTURE = path.resolve(__dirname, './fixtures/environments-collection.json');
 const COLLECTION_NAME = 'Environments Collection';
@@ -18,13 +19,13 @@ const REQUEST_NAME = 'Alpha Request';
 
 test.describe('Environment selection across panels', () => {
   test('the selected environment reaches panels opened after the selection', async ({ page, tmpDir }) => {
-    let sidebar!: Frame;
+    let sidebar!: Sidebar;
     let editor!: Frame;
     let envTab!: Frame;
 
     await test.step('import a collection with environments and open a request', async () => {
       sidebar = await openBrunoSidebar(page);
-      await importCollection(page, sidebar, FIXTURE, tmpDir, COLLECTION_NAME);
+      await importCollection(sidebar, FIXTURE, tmpDir, COLLECTION_NAME);
       await expandCollection(sidebar, COLLECTION_NAME);
       editor = await openRequest(page, sidebar, COLLECTION_NAME, REQUEST_NAME);
     });
@@ -55,7 +56,7 @@ test.describe('Environment selection across panels', () => {
     });
 
     await test.step('collection settings opened afterwards shows the active environment', async () => {
-      const settings = await openCollectionSettings(page, sidebar, COLLECTION_NAME);
+      const settings = await openCollectionSettings(sidebar, COLLECTION_NAME);
       await expect(buildCommonLocators(settings).environments.selectorTrigger()).toHaveText(/Staging/);
     });
   });

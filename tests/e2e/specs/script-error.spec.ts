@@ -7,12 +7,12 @@ import {
   openBrunoSidebar,
   createCollection,
   createFolder,
-  openNewRequestPanel,
-  createRequest,
+  createRequestByType,
   openRequest,
   sendRequest,
   findCollectionDir,
-  setCodeMirrorValue
+  setCodeMirrorValue,
+  expandFolder
 } from '../utils/page/actions';
 
 const TEST_SERVER = 'http://127.0.0.1:8081';
@@ -60,7 +60,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Script Error';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'Boom.bru'), FAILING_REQUEST_BRU, 'utf8');
@@ -89,7 +89,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Pre Request Script Error';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'PreBoom.bru'), FAILING_PRE_REQUEST_BRU, 'utf8');
@@ -112,7 +112,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Script Error Navigation';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'Boom.bru'), FAILING_REQUEST_BRU, 'utf8');
@@ -136,7 +136,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Partial Script Writes';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.mkdirSync(path.join(collectionDir, 'environments'), { recursive: true });
@@ -167,7 +167,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Inherited Script Error';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'collection.bru'), [
@@ -197,7 +197,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Empty Url';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'NoUrl.bru'), [
@@ -215,7 +215,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Bad Host';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'BadHost.bru'), [
@@ -240,7 +240,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Script Error Icon';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'PreBoom.bru'), FAILING_PRE_REQUEST_BRU, 'utf8');
@@ -263,13 +263,12 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Unsaved Folder Script';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
     await createFolder(sidebar, collectionName, 'sub');
 
-    const newRequestPanel = await openNewRequestPanel(page, sidebar, 'sub', true);
-    await createRequest(page, newRequestPanel, sidebar, collectionName, 'Boom', `${TEST_SERVER}/capture`);
+    await createRequestByType(sidebar, collectionName, { name: 'Boom', url: `${TEST_SERVER}/capture`, folder: 'sub' });
 
-    await buildCommonLocators(sidebar).sidebar.collectionItem('sub').click();
+    await sidebar.itemAction('sub', 'settings');
 
     const settings = await frameWith(page, '[data-testid="folder-settings"]');
     await settings.locator('[role="tab"]').filter({ hasText: 'Script' }).first().click();
@@ -298,7 +297,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Folder Error Editing';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
     await createFolder(sidebar, collectionName, 'sub');
 
     const collectionDir = findCollectionDir(tmpDir);
@@ -314,7 +313,7 @@ test.describe('Script errors in the response pane', () => {
       'get {', `  url: ${TEST_SERVER}/capture`, '  body: none', '  auth: inherit', '}', ''
     ].join('\n'), 'utf8');
 
-    await buildCommonLocators(sidebar).sidebar.folderChevron('sub').click();
+    await expandFolder(sidebar, 'sub');
 
     const editor = await openRequest(page, sidebar, collectionName, 'Boom');
     await sendRequest(editor);
@@ -348,7 +347,7 @@ test.describe('Script errors in the response pane', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Empty Url Script';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'NoUrl.bru'), [

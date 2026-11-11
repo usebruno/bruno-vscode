@@ -26,9 +26,9 @@ async function stageSettingsEdits(
   format: 'yml' | 'bru'
 ): Promise<Frame> {
   const sidebar = await openBrunoSidebar(page);
-  await createCollection(page, sidebar, collectionName, tmpDir, format);
+  await createCollection(sidebar, collectionName, tmpDir, format);
 
-  const settings = await openCollectionSettings(page, sidebar, collectionName);
+  const settings = await openCollectionSettings(sidebar, collectionName);
   await addCollectionHeader(page, settings, HEADER_NAME, HEADER_VALUE);
   await setPresetBaseUrl(settings, PRESET_URL);
 

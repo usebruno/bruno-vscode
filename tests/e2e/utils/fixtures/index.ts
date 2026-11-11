@@ -53,6 +53,17 @@ async function waitForPort(port: number, timeoutMs = 25_000): Promise<void> {
   throw new Error(`Port ${port} never opened within ${timeoutMs}ms`);
 }
 
+/**
+ * The sidebar's commands use VS Code's own dialogs and context menus. Rendered
+ * inside the workbench they can be driven like any other DOM; as OS windows
+ * they cannot.
+ */
+const WORKBENCH_DIALOG_SETTINGS: Record<string, unknown> = {
+  'files.simpleDialog.enable': true,
+  'window.dialogStyle': 'custom',
+  'window.menuStyle': 'custom'
+};
+
 /** Write VS Code user settings to suppress welcome/trust dialogs and speed up startup */
 function writeVSCodeSettings(userDataDir: string, extraSettings: Record<string, unknown> = {}): void {
   const userDir = path.join(userDataDir, 'User');
@@ -75,6 +86,7 @@ function writeVSCodeSettings(userDataDir: string, extraSettings: Record<string, 
       'workbench.welcomePage.walkthroughs.openOnInstall': false,
       'workbench.accounts.experimental.showEntitlements': false,
       'accessibility.signUpPlaceholder': false,
+      ...WORKBENCH_DIALOG_SETTINGS,
       ...extraSettings,
     }, null, 2)
   );
@@ -90,6 +102,7 @@ function launchVSCode(
     `--extensionDevelopmentPath=${EXTENSION_ROOT}`,
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
+    '--disable-extensions',
     '--no-sandbox',
     '--disable-updates',
     '--disable-workspace-trust',
@@ -258,7 +271,7 @@ export const test = base.extend<VSCodeFixture & VSCodeOptions, SuiteWorkerFixtur
 
     const sidebar = await openBrunoSidebar(page);
     for (const collectionDir of collectionDirs) {
-      await openCollectionFromDisk(page, sidebar, collectionDir);
+      await openCollectionFromDisk(sidebar, collectionDir);
     }
 
     await use(page);

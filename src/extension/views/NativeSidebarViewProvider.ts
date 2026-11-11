@@ -127,7 +127,7 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     if (!element) {
       const collections = await this.getCollections();
       const collectionsToShow = this._filter ? await this.filterEntries(collections) : collections;
-      return collectionsToShow.map((collection) => this.rootEntity(collection));
+      return collectionsToShow.map((collection) => this.createRootEntity(collection));
     }
 
     if (element.type === 'request' || !element.collection.available) {
@@ -155,17 +155,37 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     }
     const parentUri = dirname(element.uri);
     if (isSameDir(parentUri, element.collection.uri)) {
-      return this.rootEntity(element.collection);
+      return this.createRootEntity(element.collection);
     }
     const folder = await this.readFolder(parentUri, basename(parentUri), element.collection.format);
     return this.createEntity(folder.name, this.folderState(), parentUri, element.collection, 'folder');
+  }
+
+  /** The tree item for the request file at `uri`, when it sits in a shown collection; undefined otherwise. */
+  async findRequestEntity(uri: vscode.Uri): Promise<Entity | undefined> {
+    const root = await this.findRootEntity(uri);
+
+    if (!root || !root.collection.available || isSameDir(uri, root.collection.uri)) {
+      return undefined;
+    }
+
+    const { format } = root.collection;
+    const name = basename(uri);
+
+    if (!name.endsWith(`.${format}`) || META_FILES[format].includes(name)) {
+      return undefined;
+    }
+
+    const entry = await this.readRequest(uri, name.slice(0, -(format.length + 1)), format);
+
+    return entry && this.createEntity(entry.name, vscode.TreeItemCollapsibleState.None, uri, root.collection, ...entry.params);
   }
 
   /** The shown collection that is, or contains, `uri`; undefined when none does. */
   async findRootEntity(uri: vscode.Uri): Promise<Entity | undefined> {
     const collections = await this.getCollections();
     const match = collections.find((collection) => isSameDir(collection.uri, uri) || isInside(uri, collection.uri));
-    return match && this.rootEntity(match);
+    return match && this.createRootEntity(match);
   }
 
   /** Forget the discovered collections and rebuild the whole tree. */
@@ -324,7 +344,7 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     return { uid: uidFor(dir), name: basename(dir), uri: dir, format: 'bru', ignore: [], source: 'opened', available: false };
   }
 
-  private rootEntity(collection: CollectionRoot): Entity {
+  private createRootEntity(collection: CollectionRoot): Entity {
     return this.createEntity(
       collection.name,
       collection.available ? this.folderState() : vscode.TreeItemCollapsibleState.None,
@@ -348,9 +368,11 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     ...params: EntityParams
   ): Entity {
     const item = new Entity(label, collapsibleState, uri, collection, ...params);
+
     if (this._filter) {
       item.id = `${item.id}#filter:${this._filter}`;
     }
+
     return item;
   }
 

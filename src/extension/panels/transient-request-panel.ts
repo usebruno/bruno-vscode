@@ -23,7 +23,6 @@ import {
   hasHandler
 } from '../ipc/handlers';
 import { loadCollectionMetadata } from '../app/collections';
-import { notifyActiveItemToSidebar, clearActiveItemFromSidebar } from '../ipc/collection';
 import collectionWatcher from '../app/collection-watcher';
 import { AppItem } from '@bruno-types';
 
@@ -82,20 +81,16 @@ export async function openTransientRequestPanel(
   stateManager.addWebview(panel.webview);
   stateManager.setActiveEditorWebview(panel.webview);
 
-  notifyActiveItemToSidebar(itemUid);
   panel.onDidChangeViewState((e) => {
     if (e.webviewPanel.active) {
       stateManager.setActiveEditorWebview(panel.webview);
-      notifyActiveItemToSidebar(itemUid);
     } else {
-      clearActiveItemFromSidebar(itemUid);
     }
   });
 
   panel.onDidDispose(() => {
     stateManager.broadcast('main:transient-request-closed', { collectionUid, itemUid });
 
-    clearActiveItemFromSidebar(itemUid);
     if (savedPanels.has(itemUid)) {
       savedPanels.delete(itemUid);
       stateManager.removeWebview(panel.webview);

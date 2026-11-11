@@ -26,7 +26,7 @@ test.describe('Data types in collection & environment variables', () => {
   test('collection Vars: an object value shows as JSON with a type selector reflecting the on-disk type', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Typed Coll';
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.writeFileSync(path.join(collectionDir, 'collection.bru'), [
@@ -60,7 +60,7 @@ test.describe('Data types in collection & environment variables', () => {
   test('environment Vars: typed values display, and choosing a type persists it to the env file', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Typed Env';
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.mkdirSync(path.join(collectionDir, 'environments'), { recursive: true });
@@ -103,7 +103,7 @@ test.describe('Data types in collection & environment variables', () => {
   test('folder Vars: an object value shows as JSON with a type selector reflecting the on-disk type', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Typed Folder';
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
     await createFolder(sidebar, collectionName, 'sub');
 
     const collectionDir = findCollectionDir(tmpDir);
@@ -112,10 +112,7 @@ test.describe('Data types in collection & environment variables', () => {
     ].join('\n'), 'utf8');
 
     // Open folder settings via the folder row's context menu.
-    const folderRow = buildCommonLocators(sidebar).sidebar.collectionItem('sub');
-    await folderRow.hover();
-    await buildCommonLocators(sidebar).sidebar.itemMenu('sub').click();
-    await sidebar.locator('[role="menuitem"]').filter({ hasText: 'Settings' }).click();
+    await sidebar.itemAction('sub', 'settings');
 
     const settings = await frameWith(page, '[data-testid="folder-settings"]');
     await settings.locator('[role="tab"]').filter({ hasText: 'Vars' }).first().click();

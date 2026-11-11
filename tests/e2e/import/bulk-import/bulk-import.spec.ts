@@ -1,13 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '../../utils/fixtures';
-import {
-  openBrunoSidebar,
-  importMultipleCollections,
-  openImportPanelWithFiles,
-  mockBrowseDirectory,
-} from '../../utils/page/actions';
-import { buildCommonLocators } from '../../utils/page/locators';
+import { openBrunoSidebar, importCollections, openImportReview } from '../../utils/page/actions';
 
 const FIXTURES = {
   weather: path.resolve(__dirname, 'fixtures/weather-api-collection.json'),
@@ -27,53 +21,47 @@ test.describe('Bulk import', () => {
     fs.mkdirSync(selectiveDir, { recursive: true });
 
     await test.step('imports every collection in the selection', async () => {
-      const editor = await importMultipleCollections(page, sidebar, fixtures, importAllDir, expectedNames);
-      const importPanel = buildCommonLocators(editor).importCollection;
-
-      const rows = importPanel.rows();
-      await expect(rows).toHaveCount(2);
-      for (let i = 0; i < 2; i++) {
-        await expect(rows.nth(i)).toHaveAttribute('data-status', 'success');
-      }
+      await importCollections(sidebar, fixtures, importAllDir, expectedNames);
 
       for (const name of expectedNames) {
         expect(fs.existsSync(path.join(importAllDir, name, 'opencollection.yml'))).toBe(true);
       }
-
-      await importPanel.close().click();
     });
 
-    await test.step('imports only the collections left selected', async () => {
-      const editor = await openImportPanelWithFiles(page, sidebar, fixtures);
-      const importPanel = buildCommonLocators(editor).importCollection;
+    await test.step('imports only the collections left checked', async () => {
+      const review = await openImportReview(sidebar, fixtures);
 
-      const rows = importPanel.rows();
-      const selectedCount = importPanel.selectedCount();
-      await expect(rows).toHaveCount(2);
-      await expect(selectedCount).toHaveText('2 of 2 selected');
+      await expect(review.rows()).toHaveCount(2);
+      for (const name of expectedNames) {
+        await expect(review.checkbox(name)).toBeChecked();
+      }
 
-      await test.step('searching narrows the rows without changing the selection', async () => {
-        await importPanel.search().fill('Inventory');
-        await expect(rows).toHaveCount(1);
-        await expect(importPanel.row('Inventory Service')).toBeVisible();
-        await expect(selectedCount).toHaveText('2 of 2 selected');
+      await test.step('filtering narrows the rows without changing the selection', async () => {
+        await review.filter('Inventory');
+        await expect(review.rows()).toHaveCount(1);
+        await expect(review.row('Inventory Service')).toBeVisible();
+
+        await review.filter('');
+        await expect(review.rows()).toHaveCount(2);
+        for (const name of expectedNames) {
+          await expect(review.checkbox(name)).toBeChecked();
+        }
       });
 
-      await test.step('deselecting a filtered row drops it from the selection', async () => {
-        await importPanel.rowCheckbox('Inventory Service').uncheck();
-        await expect(selectedCount).toHaveText('1 of 2 selected');
+      await test.step('unchecking a filtered row drops it from the import', async () => {
+        await review.filter('Inventory');
+        await review.checkbox('Inventory Service').uncheck();
 
-        await importPanel.search().fill('');
-        await expect(rows).toHaveCount(2);
+        await review.filter('');
+        await expect(review.rows()).toHaveCount(2);
+        await expect(review.checkbox('Inventory Service')).not.toBeChecked();
+        await expect(review.checkbox('Weather API')).toBeChecked();
       });
 
-      await mockBrowseDirectory(editor, selectiveDir);
-      await importPanel.browse().click();
-      await expect(importPanel.location()).toHaveValue(selectiveDir);
+      await review.submit(selectiveDir, 'yml');
 
-      await importPanel.submit().click();
-
-      await expect(importPanel.progressSummary()).toHaveText('1 of 1 collections imported');
+      // A second "Weather API" row joins the one from the first step.
+      await expect(sidebar.locators.collectionName('Weather API')).toHaveCount(2, { timeout: 20_000 });
       expect(fs.existsSync(path.join(selectiveDir, 'Weather API', 'opencollection.yml'))).toBe(true);
       expect(fs.existsSync(path.join(selectiveDir, 'Inventory Service'))).toBe(false);
     });

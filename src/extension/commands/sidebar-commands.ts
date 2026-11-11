@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import type { GrpcRequest, HttpItemSettings, HttpRequest, ItemType, WebSocketRequest } from '@bruno-types';
 import { stringifyCollection, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
 
-import { convertToBruno, isUnbundledCollectionRoot, readImportFile, writeCollection, IMPORT_SOURCE_LABELS } from '../utils/import';
+import { convertToBruno, getImportedCollectionName, isUnbundledCollectionRoot, readImportFile, writeCollection, IMPORT_SOURCE_LABELS, type ImportFile } from '../utils/import';
+import { readCollectionZip, writeCollectionZip, type CollectionZip } from '../utils/import-zip';
 import { writeCollectionConfig } from '../utils/collection-v2';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { openRunnerPanel } from '../panels/runner-panel';
@@ -295,11 +296,11 @@ export function registerSidebarCommands(
   });
 
   register('bruno.sidebar.settings', async (item) => {
-    await handleCollectionSettings(item, getTarget);
+    await handleSettings(item, getTarget);
   });
 
   register('bruno.sidebar.clone', async (item) => {
-    await handleClone(item, getTarget);
+    await handleClone(item, getTarget, provider, treeView, openedCollections);
   });
 
   register('bruno.sidebar.export', async (item) => {
@@ -338,6 +339,31 @@ export function registerSidebarCommands(
 
   // Paste is hidden until something has been copied in this session.
   void vscode.commands.executeCommand('setContext', HAS_COPIED_ITEM_KEY, false);
+
+  // Select the row of the request shown in the active editor, so the tree
+  // follows the editor the way the webview sidebar highlighted it.
+  const selectActiveRequest = async (): Promise<void> => {
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    const uri = input instanceof vscode.TabInputCustom || input instanceof vscode.TabInputText ? input.uri : undefined;
+
+    if (!uri || !treeView.visible) {
+      return;
+    }
+
+    const entity = await provider.findRequestEntity(uri);
+    if (entity) {
+      await treeView.reveal(entity, { select: true, focus: false });
+    }
+  };
+
+  const onTabsChanged = (): void => {
+    // A reveal can fail while the tree is mid-refresh; the next tab change tries again.
+    void selectActiveRequest().catch((): void => undefined);
+  };
+  context.subscriptions.push(
+    vscode.window.tabGroups.onDidChangeTabs(onTabsChanged),
+    vscode.window.tabGroups.onDidChangeTabGroups(onTabsChanged)
+  );
 }
 
 type GetTargetFn = (item: Entity | undefined, ...types: Entity['type'][]) => Entity | undefined;
@@ -427,50 +453,97 @@ async function handleCreateCollection(
   await showNewCollection(provider, treeView, openedCollections, dir);
 }
 
+/** An export that parsed, with the kind of document it holds. */
+interface ExportCandidate {
+  file: vscode.Uri;
+  imported: ImportFile;
+}
+
+/** A Bruno collection zipped as its files; unpacked as it is, in its own format. */
+interface ZipCandidate {
+  file: vscode.Uri;
+  zip: CollectionZip;
+}
+
+type ImportCandidate = ExportCandidate | ZipCandidate;
+
+function isZipCandidate(candidate: ImportCandidate): candidate is ZipCandidate {
+  return 'zip' in candidate;
+}
+
+function getCandidateName(candidate: ImportCandidate): string {
+  return (
+    isZipCandidate(candidate)
+      ? candidate.zip.name
+      : getImportedCollectionName(candidate.imported)
+  ) ?? basename(candidate.file);
+}
+
+function getCandidateSource(candidate: ImportCandidate): string {
+  return isZipCandidate(candidate) ? 'Bruno zip' : IMPORT_SOURCE_LABELS[candidate.imported.source];
+}
+
+interface ImportPickItem extends vscode.QuickPickItem {
+  candidate: ImportCandidate;
+}
+
 /**
- * Import a Postman, Insomnia, OpenAPI, WSDL, OpenCollection or Bruno export
- * as a new collection. Conversion runs here on the extension host, and the
- * files are written through workspace.fs, so the source file and the
- * destination can both be on a remote.
+ * Import Postman, Insomnia, OpenAPI, WSDL, OpenCollection or Bruno exports, or
+ * zipped Bruno collections, as new collections. The chosen files are listed
+ * for review, where any can be unchecked and more added, then they share one
+ * location, and the exports one format. Conversion runs here on the extension
+ * host, and the files are written through workspace.fs, so the sources and the
+ * destination can all be on a remote.
  */
 async function handleImportCollection(
   provider: NativeSidebarViewProvider,
   treeView: vscode.TreeView<Entity>,
   openedCollections: OpenedCollections
 ): Promise<void> {
-  const [file] = await vscode.window.showOpenDialog({
-    canSelectFiles: true,
-    canSelectFolders: false,
-    canSelectMany: false,
-    openLabel: 'Import',
-    title: 'Choose a collection or API spec to import',
-    filters: { 'Collections and API specs': ['json', 'yaml', 'yml', 'wsdl', 'xml'], 'All files': ['*'] }
-  }) ?? [];
-
-  if (!file) {
+  const files = await pickImportFiles();
+  if (!files.length) {
     return;
   }
 
-  const imported = readImportFile(await readText(file), basename(file));
+  let candidates: ImportCandidate[];
+  if (files.length === 1) {
+    // One file is read on its own, so a file Bruno cannot import is an error rather than a note.
+    const candidate = await readImportCandidate(files[0]);
 
-  if (isUnbundledCollectionRoot(imported)) {
-    // Importing this would create an empty copy; the requests sit next to the file.
-    const open = 'Open Collection';
-    const choice = await vscode.window.showInformationMessage(
-      `"${basename(file)}" is the config of a collection stored as separate files, not an export. Open that collection instead?`,
-      open
-    );
-    if (choice === open) {
-      await showNewCollection(provider, treeView, openedCollections, dirname(file));
+    if (!isZipCandidate(candidate) && isUnbundledCollectionRoot(candidate.imported)) {
+      const { file } = candidate;
+      // Importing this would create an empty copy; the requests sit next to the file.
+      const open = 'Open Collection';
+      const choice = await vscode.window.showInformationMessage(
+        `"${basename(file)}" is the config of a collection stored as separate files, not an export. Open that collection instead?`,
+        open
+      );
+      if (choice === open) {
+        await showNewCollection(provider, treeView, openedCollections, dirname(file));
+      }
+      return;
     }
+
+    candidates = [candidate];
+  } else {
+    candidates = await readImportCandidates(files);
+    if (!candidates.length) {
+      return;
+    }
+  }
+
+  const selected = await reviewImportCandidates(candidates);
+  if (!selected?.length) {
     return;
   }
 
   /**
    * Only for openapi specs
    */
+  const nonZipSelected = selected.filter((candidate): candidate is ExportCandidate => !isZipCandidate(candidate));
+
   let groupBy: 'tags' | 'path' | undefined;
-  if (imported.source === 'openapi') {
+  if (nonZipSelected.some(({ imported }) => imported.source === 'openapi')) {
     const grouping = await vscode.window.showQuickPick<vscode.QuickPickItem & { value: 'tags' | 'path' }>(
       [
         { label: 'Tags', description: 'Group requests by OpenAPI tags', value: 'tags' },
@@ -484,26 +557,72 @@ async function handleImportCollection(
     groupBy = grouping.value;
   }
 
-  const location = await pickCollectionLocation(provider, 'Where should the imported collection be created?');
+  const location = await pickCollectionLocation(
+    provider,
+    selected.length === 1 ? 'Where should the imported collection be created?' : 'Where should the imported collections be created?'
+  );
   if (!location) {
     return;
   }
 
-  const format = await pickCollectionFormat();
-  if (!format) {
+  // A zip keeps the format it was written in; only converted exports need one chosen.
+  const format = nonZipSelected.length ? await pickCollectionFormat() : undefined;
+  if (nonZipSelected.length && !format) {
     return;
   }
 
-  const { dir, skipped, issues } = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Importing ${IMPORT_SOURCE_LABELS[imported.source]} collection` },
-    async () => {
-      const converted = await convertToBruno(imported, { groupBy, collectionFormat: format });
-      const written = await writeCollection(converted.collection, location, format);
-      return { ...written, issues: converted.issues };
+  const dirs: vscode.Uri[] = [];
+  const failed: string[] = [];
+  const skipped: string[] = [];
+  const issues: string[] = [];
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: selected.length === 1
+        ? `Importing ${getCandidateSource(selected[0])} collection`
+        : `Importing ${selected.length} collections`
+    },
+    async (progress) => {
+      for (const candidate of selected) {
+        const { file } = candidate;
+        progress.report({ message: basename(file) });
+        try {
+          if (isZipCandidate(candidate)) {
+            dirs.push(await writeCollectionZip(candidate.zip, location));
+            continue;
+          }
+
+          const converted = await convertToBruno(candidate.imported, { groupBy, collectionFormat: format });
+          const written = await writeCollection(converted.collection, location, format);
+          const { name } = converted.collection;
+
+          dirs.push(written.dir);
+          skipped.push(...written.skipped.map((request) => `${name}: ${request}`));
+
+          // Scripts the converter could not translate, and the like. Each goes to the Bruno log for the details.
+          for (const issue of converted.issues) {
+            logsStore.addLog(issue.severity === 'error' ? 'error' : 'warn', [`[Import] ${name}: ${issue.path}: ${issue.message}`]);
+            issues.push(issue.path);
+          }
+        } catch (err) {
+          failed.push(`${basename(file)}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     }
   );
 
-  await showNewCollection(provider, treeView, openedCollections, dir);
+  if (dirs.length > 0) {
+    await showNewCollection(provider, treeView, openedCollections, ...dirs);
+  }
+
+  if (selected.length > 1) {
+    vscode.window.showInformationMessage(`Imported ${dirs.length} of ${selected.length} collections`);
+  }
+
+  if (failed.length) {
+    vscode.window.showErrorMessage(`${failed.length} collection(s) could not be imported: ${failed.join('; ')}`);
+  }
 
   if (skipped.length) {
     vscode.window.showWarningMessage(
@@ -512,14 +631,132 @@ async function handleImportCollection(
   }
 
   if (issues.length) {
-    // Scripts the converter could not translate, and the like. Each goes to the Bruno log for the details.
-    for (const issue of issues) {
-      logsStore.addLog(issue.severity === 'error' ? 'error' : 'warn', [`[Import] ${issue.path}: ${issue.message}`]);
-    }
     vscode.window.showWarningMessage(
       `Imported with ${issues.length} issue(s); see the Bruno logs for details`
     );
   }
+}
+
+async function pickImportFiles(): Promise<vscode.Uri[]> {
+  return await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: true,
+    openLabel: 'Import',
+    title: 'Choose collections or API specs to import',
+    filters: { 'Collections and API specs': ['json', 'yaml', 'yml', 'wsdl', 'zip'] }
+  }) ?? [];
+}
+
+/** A zip is told by its extension, anything else is parsed as an export. */
+async function readImportCandidate(file: vscode.Uri): Promise<ImportCandidate> {
+  const name = basename(file);
+
+  if (name.toLowerCase().endsWith('.zip')) {
+    return { file, zip: readCollectionZip(await vscode.workspace.fs.readFile(file), name) };
+  }
+
+  return { file, imported: readImportFile(await readText(file), name) };
+}
+
+/**
+ * Read a batch of files, keeping those Bruno can import. The rest are reported
+ * together rather than stopping the import.
+ */
+async function readImportCandidates(files: vscode.Uri[]): Promise<ImportCandidate[]> {
+  const candidates: ImportCandidate[] = [];
+  const leftOut: string[] = [];
+
+  for (const file of files) {
+    try {
+      const candidate = await readImportCandidate(file);
+
+      if (!isZipCandidate(candidate) && isUnbundledCollectionRoot(candidate.imported)) {
+        leftOut.push(`"${basename(file)}" is the config of a collection stored as separate files; use Open Collection for it`);
+        continue;
+      }
+
+      candidates.push(candidate);
+    } catch (err) {
+      leftOut.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  if (leftOut.length) {
+    vscode.window.showWarningMessage(`${leftOut.length} file(s) were left out. ${leftOut.join('. ')}`);
+  }
+
+  return candidates;
+}
+
+/**
+ * List the files for review in a multi-select quick pick, every one checked.
+ * Its "Add files" button opens the file dialog again, which is how more than
+ * one file gets in where the dialog picks a single file at a time (the simple
+ * dialog of remote and browser workbenches). Resolves to the checked files,
+ * or undefined when dismissed.
+ */
+function reviewImportCandidates(initial: ImportCandidate[]): Promise<ImportCandidate[] | undefined> {
+  const addFiles: vscode.QuickInputButton = { iconPath: new vscode.ThemeIcon('add'), tooltip: 'Add files' };
+  const candidates = [...initial];
+
+  const picker = vscode.window.createQuickPick<ImportPickItem>();
+  picker.title = 'Collections to import';
+  picker.placeholder = 'Unchecked collections are left out';
+  picker.canSelectMany = true;
+  picker.buttons = [addFiles];
+
+  const showItems = (checked: Set<ImportCandidate>): void => {
+    picker.items = candidates.map((candidate) => ({
+      label: getCandidateName(candidate),
+      description: `${getCandidateSource(candidate)} · ${basename(candidate.file)}`,
+      candidate
+    }));
+    picker.selectedItems = picker.items.filter((item) => checked.has(item.candidate));
+  };
+
+  showItems(new Set(candidates));
+
+  return new Promise((resolve, reject) => {
+    // The file dialog takes the quick input over, which hides the picker; that hide is not a dismissal.
+    let addingFiles = false;
+
+    picker.onDidTriggerButton(() => {
+      addingFiles = true;
+      const checked = new Set(picker.selectedItems.map((item) => item.candidate));
+
+      void (async () => {
+        const knownFiles = new Set(candidates.map(({ file }) => file.toString()));
+        const files = (await pickImportFiles()).filter((file) => !knownFiles.has(file.toString()));
+
+        for (const candidate of await readImportCandidates(files)) {
+          candidates.push(candidate);
+          checked.add(candidate);
+        }
+
+        showItems(checked);
+        addingFiles = false;
+        picker.show();
+      })().catch((err: unknown) => {
+        picker.dispose();
+        reject(err);
+      });
+    });
+
+    picker.onDidAccept(() => {
+      resolve(picker.selectedItems.map((item) => item.candidate));
+      picker.hide();
+    });
+
+    picker.onDidHide(() => {
+      if (!addingFiles) {
+        resolve(undefined);
+        picker.dispose();
+      }
+    });
+
+    picker.show();
+  });
 }
 
 /** A folder to create a collection in; refuses one inside a collection already shown, which the tree would hide. */
@@ -560,14 +797,16 @@ async function showNewCollection(
   provider: NativeSidebarViewProvider,
   treeView: vscode.TreeView<Entity>,
   openedCollections: OpenedCollections,
-  dir: vscode.Uri
+  ...dirs: vscode.Uri[]
 ): Promise<void> {
-  // Inside a workspace folder the scan finds it on its own; elsewhere it has to be remembered.
-  if (!vscode.workspace.getWorkspaceFolder(dir)) {
-    await openedCollections.add(dir);
+  for (const dir of dirs) {
+    // Inside a workspace folder the scan finds it on its own; elsewhere it has to be remembered.
+    if (!vscode.workspace.getWorkspaceFolder(dir)) {
+      await openedCollections.add(dir);
+    }
   }
 
-  await revealCollection(provider, treeView, dir);
+  await revealCollection(provider, treeView, dirs[0]);
 }
 
 /** Rescan now rather than after the debounce, so the collection at `uri` is there to select. */
@@ -717,33 +956,59 @@ async function handleRequestsRun(item: Entity | undefined, getTarget: GetTargetF
   await openRunnerPanel(context, entity.collection.uri.fsPath, entity.uri.fsPath, folderUid);
 }
 
-async function handleCollectionSettings(item: Entity | undefined, getTarget: GetTargetFn) {
-  const entity = getTarget(item, 'collection');
-  if (!entity) {
-    return;
-  }
-
-  await vscode.commands.executeCommand('bruno.openSettings', entity.uri);
-}
-
-async function handleClone(item: Entity | undefined, getTarget: GetTargetFn) {
-  const entity = getTarget(item, 'collection', 'folder', 'request');
+/** Collection settings open in their panel; folder settings are the folder file in the Bruno editor. */
+async function handleSettings(item: Entity | undefined, getTarget: GetTargetFn) {
+  const entity = getTarget(item, 'collection', 'folder');
   if (!entity) {
     return;
   }
 
   if (entity.type === 'collection') {
-    // The Clone Collection panel asks for the name and location and does the copy.
-    await openCollectionPanel(entity, 'bruno.openCloneCollection');
+    await vscode.commands.executeCommand('bruno.openSettings', entity.uri);
     return;
   }
 
+  // A folder created outside Bruno has no folder file yet; the editor needs one to show.
+  const { format } = entity.collection;
+  const folderFile = vscode.Uri.joinPath(entity.uri, `folder.${format}`);
+
+  if (!(await doesItExist(folderFile))) {
+    await writeText(folderFile, await stringifyFolder({ meta: { name: entity.label } }, { format }));
+  }
+
+  await vscode.commands.executeCommand('vscode.openWith', folderFile, BrunoEditorProvider.viewType);
+}
+
+async function handleClone(
+  item: Entity | undefined,
+  getTarget: GetTargetFn,
+  provider: NativeSidebarViewProvider,
+  treeView: vscode.TreeView<Entity>,
+  openedCollections: OpenedCollections
+) {
+  const entity = getTarget(item, 'collection', 'folder', 'request');
+  if (!entity || (entity.type === 'collection' && !entity.collection.available)) {
+    return;
+  }
+
+  const prompts: Record<Entity['type'], string> = {
+    collection: 'Name for the cloned collection',
+    folder: 'Name for the cloned folder',
+    request: 'Name for the cloned request'
+  };
+
   const name = await vscode.window.showInputBox({
-    prompt: entity.type === 'folder' ? 'Name for the cloned folder' : 'Name for the cloned request',
+    prompt: prompts[entity.type],
     value: `${entity.label} copy`,
     validateInput: validateItemName
   });
+
   if (!name) {
+    return;
+  }
+
+  if (entity.type === 'collection') {
+    await cloneCollection(entity, name.trim(), provider, treeView, openedCollections);
     return;
   }
 
@@ -777,6 +1042,34 @@ async function handleClone(item: Entity | undefined, getTarget: GetTargetFn) {
   }
 }
 
+/** Copy the collection's folder to a chosen location under `name`, rename it inside, and show it. */
+async function cloneCollection(
+  entity: Entity,
+  name: string,
+  provider: NativeSidebarViewProvider,
+  treeView: vscode.TreeView<Entity>,
+  openedCollections: OpenedCollections
+): Promise<void> {
+  const location = await pickCollectionLocation(provider, 'Where should the clone be created?');
+  if (!location) {
+    return;
+  }
+
+  const dir = vscode.Uri.joinPath(location, sanitizeName(name));
+  if (await doesItExist(dir)) {
+    throw new Error(`A folder named "${basename(dir)}" already exists there`);
+  }
+
+  await vscode.workspace.fs.copy(entity.uri, dir, { overwrite: false });
+
+  const config = await findCollectionConfig(dir);
+  if (config) {
+    await updateNameInFile(config, 'collection', name, entity.collection.format);
+  }
+
+  await showNewCollection(provider, treeView, openedCollections, dir);
+}
+
 async function handleExport(item: Entity | undefined, getTarget: GetTargetFn): Promise<void> {
   const entity = getTarget(item, 'collection');
   if (!entity) {
@@ -790,7 +1083,7 @@ async function handleExport(item: Entity | undefined, getTarget: GetTargetFn): P
  * The Clone and Export panels predate the native sidebar and take a collection
  * uid plus a local path, so they are only offered for collections on disk.
  */
-async function openCollectionPanel(entity: Entity, command: 'bruno.openCloneCollection' | 'bruno.openExportCollection'): Promise<void> {
+async function openCollectionPanel(entity: Entity, command: 'bruno.openExportCollection'): Promise<void> {
   if (!entity.collection.available) {
     return;
   }
