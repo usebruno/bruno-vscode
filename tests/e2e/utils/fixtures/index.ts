@@ -96,13 +96,16 @@ function launchVSCode(
   executablePath: string,
   debugPort: number,
   userDataDir: string,
+  extensionsDir: string,
   workspacePath: string
 ): ChildProcess {
   const args = [
     `--extensionDevelopmentPath=${EXTENSION_ROOT}`,
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
-    '--disable-extensions',
+    // An empty extensions folder, so only the extension under development runs. 
+    // `--disable-extensions` would do the same but shows a toast.
+    `--extensions-dir=${extensionsDir}`,
     '--no-sandbox',
     '--disable-updates',
     '--disable-workspace-trust',
@@ -175,6 +178,7 @@ const SUITE_SETTINGS = { 'files.simpleDialog.enable': true, 'window.dialogStyle'
 async function launchWorkbench({ vscodeSettings }: { vscodeSettings: Record<string, unknown> }, use: (page: Page) => Promise<void>): Promise<void> {
   const debugPort = await getFreePort();
   const userDataDir = makeTempDir('bruno-vscode-test-');
+  const extensionsDir = makeTempDir('bruno-vscode-extensions-');
 
   // Create a temp workspace folder so the extension host has a workspace to run against
   const workspacePath = makeTempDir('bruno-workspace-');
@@ -182,7 +186,7 @@ async function launchWorkbench({ vscodeSettings }: { vscodeSettings: Record<stri
   writeVSCodeSettings(userDataDir, vscodeSettings);
 
   const executablePath = await resolveExecutable();
-  const proc = launchVSCode(executablePath, debugPort, userDataDir, workspacePath);
+  const proc = launchVSCode(executablePath, debugPort, userDataDir, extensionsDir, workspacePath);
 
   let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
 
@@ -226,6 +230,7 @@ async function launchWorkbench({ vscodeSettings }: { vscodeSettings: Record<stri
     await new Promise<void>(r => setTimeout(r, 1500));
     proc.kill('SIGKILL');
     fs.rmSync(userDataDir, { recursive: true, force: true });
+    fs.rmSync(extensionsDir, { recursive: true, force: true });
     fs.rmSync(workspacePath, { recursive: true, force: true });
   }
 }

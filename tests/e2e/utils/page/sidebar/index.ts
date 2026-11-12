@@ -568,12 +568,22 @@ export class NativeSidebar {
     await this.collectionAction(collectionName, 'paste');
   }
 
+  /**
+   * Drop `itemName` onto `folderName` and wait for the move to land: the tree
+   * shows the folder expanded with the item one level under it, and the row
+   * in the item's old place goes once its collection has rescanned.
+   */
   async dragItemIntoFolder(itemName: string, folderName: string): Promise<void> {
     const itemRow = this.itemRow(itemName);
     const folderRow = this.itemRow(folderName);
     await expect(itemRow).toBeVisible();
     await expect(folderRow).toBeVisible();
+    const folderLevel = Number(await folderRow.getAttribute('aria-level'));
+
     await itemRow.dragTo(folderRow, { steps: 15 });
+
+    await expect(itemRow.and(this.tree.locator(`[aria-level="${folderLevel + 1}"]`))).toHaveCount(1, { timeout: 15_000 });
+    await expect(itemRow).toHaveCount(1, { timeout: 15_000 });
   }
 
   /**

@@ -6,7 +6,6 @@ import {
   createRequestByType,
   createFolder,
   expandCollection,
-  collapseCollection,
   expandFolder,
   dragItemIntoFolder,
   findFilesWithName,
@@ -36,17 +35,14 @@ test.describe('Drag and drop requests', () => {
     await test.step('Drag the request into the destination folder', async () => {
       await expandCollection(sidebar, sourceCollection);
       await expandCollection(sidebar, destinationCollection);
+      // Resolves once the only row with this name sits in the folder, so the source collection has lost it.
       await dragItemIntoFolder(sidebar, requestName, folderName);
-      // The tree expands the folder it was dropped in, so hide the destination to check the source is empty.
-      await collapseCollection(sidebar, destinationCollection);
-      await expect(locators.sidebar.collectionItem(requestName)).toHaveCount(0);
     });
 
     await test.step('Verify the request is inside the destination folder', async () => {
       await expandCollection(sidebar, destinationCollection);
       await expandFolder(sidebar, folderName);
 
-      // The row was gone before the folder was expanded, so its return proves it moved there.
       await expect(locators.sidebar.collectionItem(requestName)).toBeVisible();
       const moved = findFilesWithName(tmpDir, `${requestName}.yml`);
       expect(moved).toHaveLength(1);

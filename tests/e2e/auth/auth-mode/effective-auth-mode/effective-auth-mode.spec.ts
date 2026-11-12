@@ -23,17 +23,16 @@ test.describe('Effective auth mode resolution', () => {
     const collectionName = 'effective-auth-mode-collection';
     const sidebar = await openBrunoSidebar(page);
     const locators = buildCommonLocators(activeEditor(page));
-    const sidebarLocators = buildCommonLocators(sidebar);
 
     const setFolderAuth = async (folderName: string, mode: string) => {
-      await sidebarLocators.sidebar.folder(folderName).click();
+      await sidebar.itemAction(folderName, 'settings');
       await locators.paneTabs.folderSettingsTab('auth').click();
       await selectAuthMode(page, mode);
       await locators.saveButton().click();
     };
 
     await test.step('Set auth type for the collection as Basic Auth (bruno / della)', async () => {
-      await sidebarLocators.sidebar.collectionName(collectionName).click();
+      await sidebar.openCollectionSettings(collectionName);
       await locators.paneTabs.collectionSettingsTab('auth').click();
       await selectAuthMode(page, 'Basic Auth');
       await setCodeMirrorValue(page, locators.auth.basicUsernameEditor('collection'), 'bruno');
