@@ -218,18 +218,8 @@
         "category": "Bruno"
       },
       {
-        "command": "bruno.openNewRequest",
-        "title": "New Request",
-        "category": "Bruno"
-      },
-      {
         "command": "bruno.openExportCollection",
         "title": "Export Collection",
-        "category": "Bruno"
-      },
-      {
-        "command": "bruno.openCloneCollection",
-        "title": "Clone Collection",
         "category": "Bruno"
       },
       {

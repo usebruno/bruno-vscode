@@ -7,9 +7,7 @@ import { openRunnerPanel } from '../panels/runner-panel';
 import { openGlobalEnvironmentsPanel } from '../panels/global-environments-panel';
 import { openPreferencesPanel } from '../panels/preferences-panel';
 import { openEnvironmentSettingsPanel } from '../panels/environment-settings-panel';
-import { openNewRequestPanel } from '../panels/new-request-panel';
 import { openExportCollectionPanel } from '../panels/export-collection-panel';
-import { openCloneCollectionPanel } from '../panels/clone-collection-panel';
 import { handleInvoke } from '../ipc/handlers';
 import collectionWatcher from '../app/collection-watcher';
 import { getCollectionFormat } from '../utils/filesystem';
@@ -200,31 +198,11 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.openNewRequest', async (
-      collectionUid: string,
-      collectionPath: string,
-      itemUid?: string | null,
-      itemPath?: string | null
-    ) => {
-      await openNewRequestPanel(context, collectionUid, collectionPath, itemUid, itemPath);
-    })
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openExportCollection', async (
       collectionUid: string,
       collectionPath: string
     ) => {
       await openExportCollectionPanel(context, collectionUid, collectionPath);
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.openCloneCollection', async (
-      collectionUid: string,
-      collectionPath: string
-    ) => {
-      await openCloneCollectionPanel(context, collectionUid, collectionPath);
     })
   );
 

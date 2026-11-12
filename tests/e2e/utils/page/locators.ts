@@ -29,13 +29,6 @@ export function buildCommonLocators(frame: FrameLike | Sidebar): PageLocators & 
 
 const buildLocators = (frame: FrameLike) => ({
   saveButton: () => frame.getByRole('button', { name: 'Save' }),
-  cloneCollection: {
-    container: () => frame.locator('.clone-container'),
-    nameInput: () => frame.locator('#name'),
-    locationInput: () => frame.locator('#location'),
-    browseButton: () => frame.locator('.browse-btn'),
-    submit: () => frame.locator('button[type="submit"]').filter({ hasText: 'Clone Collection' })
-  },
   collectionSettings: {
     container: () => frame.getByTestId('collection-settings'),
     // Overview → Requests line, e.g. "2 requests in collection".
