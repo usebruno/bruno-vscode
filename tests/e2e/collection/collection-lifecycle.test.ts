@@ -3,17 +3,19 @@ import { expect, test } from '../utils/fixtures';
 import {
   cloneRequest,
   deleteRequest,
+  dragItem,
+  expandFolder,
   exportCollection,
   exportedRequestPaths,
-  moveRequestToFolder,
   openCollectionRunner,
   openCollectionSettings,
   openRequestPaneTab,
   runCollection,
-  setCollectionHeaders,
-  setCollectionVars,
   takeScreenshot,
-  toKeyValue
+  toKeyValue,
+  toRows,
+  updateHeaders,
+  updateVars
 } from '../utils/page/actions';
 import { buildCommonLocators } from '../utils/page/locators';
 import { parseCollection } from '@usebruno/filestore';
@@ -85,27 +87,28 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
   }, page)
 
   // What should be left after the clone, delete and move below.
-  const remainingPaths = ['folder-1/request-1', 'request-1-clone', 'graphql-1'];
+  const remainingPaths = ['folder-1/request-1', 'request-1 copy', 'graphql-1'];
 
   const sidebarElements = buildCommonLocators(sidebar).sidebar;
 
   await test.step('Clone request-1', async () => {
     await cloneRequest(page, sidebar, COLLECTION, 'request-1')
-    await expect(sidebarElements.collectionItem('request-1-clone')).toBeVisible();
+    await expect(sidebarElements.collectionItem('request-1 copy')).toBeVisible();
   });
 
   await test.step('Clone graphql-1', async () => {
     await cloneRequest(page, sidebar, COLLECTION, 'graphql-1')
-    await expect(sidebarElements.collectionItem('graphql-1-clone')).toBeVisible();
+    await expect(sidebarElements.collectionItem('graphql-1 copy')).toBeVisible();
   });
 
-  await test.step('Delete graphql-1-clone', async () => {
-    await deleteRequest(page, sidebar, COLLECTION, 'graphql-1-clone')
-    await expect(sidebarElements.collectionItem('graphql-1-clone')).toHaveCount(0);
+  await test.step('Delete graphql-1 copy', async () => {
+    await deleteRequest(page, sidebar, COLLECTION, 'graphql-1 copy')
+    await expect(sidebarElements.collectionItem('graphql-1 copy')).toHaveCount(0);
   });
 
   await test.step('Move request-1 into folder-1', async () => {
-    await moveRequestToFolder(sidebar, COLLECTION, 'request-1', 'folder-1')
+    await dragItem(page, { dragItem: 'request-1', target: 'folder-1', position: 'inside' })
+    await expandFolder(sidebar, 'folder-1')
     await expect(sidebarElements.folderChild('folder-1', 'request-1')).toBeVisible();
   });
 
@@ -114,8 +117,8 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
     await openRequestPaneTab(settings, 'Overview');
     await expect(buildCommonLocators(settings).collectionSettings.requestsInfo()).toHaveText(`${remainingPaths.length} requests in collection`);
 
-    await setCollectionVars(page, settings, updatedSettings.vars);
-    await setCollectionHeaders(page, settings, updatedSettings.headers);
+    await updateVars(page, COLLECTION, toRows(updatedSettings.vars));
+    await updateHeaders(page, COLLECTION, toRows(updatedSettings.headers));
   });
 
   await test.step('Run collection', async () => {

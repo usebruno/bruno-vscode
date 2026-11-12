@@ -4,8 +4,8 @@ import { Context } from "./context";
 import { buildCommonLocators } from "./utils/page/locators";
 import {
   createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2,
-  deleteRequest, exportCollection, fillRequestDetails, openBrunoSidebar, openCollectionSettings, removeCollection, runCommand, saveRequestV2,
-  sendRequest, setAuth, setCollectionHeaders, setCollectionPresets, setCollectionVars, takeScreenshot,
+  deleteRequest, exportCollection, fillRequestDetails, openBrunoSidebar, removeCollection, runCommand, saveRequestV2,
+  sendRequest, setAuth, setHeaders, setPresets, setVars, takeScreenshot, toRows,
 } from "./utils/page/actions";
 
 export type KeyValue<T = string | number | boolean> = {
@@ -139,20 +139,16 @@ export async function createSetup<const EnvName extends string = never>(config: 
       await createCollectionV2(page, sidebar, ctx, collection.name, index !== 0, collection.format)
       collections.push(collection.name)
 
-      if (collection.vars || collection.headers || collection.presets) {
-        const settings = await openCollectionSettings(page, sidebar, collection.name);
+      if (collection.vars) {
+        await setVars(page, collection.name, toRows(collection.vars));
+      }
 
-        if (collection.vars) {
-          await setCollectionVars(page, settings, collection.vars);
-        }
+      if (collection.headers) {
+        await setHeaders(page, collection.name, toRows(collection.headers));
+      }
 
-        if (collection.headers) {
-          await setCollectionHeaders(page, settings, collection.headers);
-        }
-
-        if (collection.presets) {
-          await setCollectionPresets(settings, collection.presets);
-        }
+      if (collection.presets) {
+        await setPresets(page, collection.name, collection.presets);
       }
 
       await expandCollection(sidebar, collection.name)

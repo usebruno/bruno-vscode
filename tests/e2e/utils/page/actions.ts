@@ -1901,22 +1901,44 @@ export async function setBody(page: Page, request: string, json: string): Promis
   await saveRequest(page);
 }
 
-// e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
-export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], hook: 'preRequest' | 'postResponse' = 'preRequest'): Promise<void> {
-  const editor = activeEditor(page);
-  const itemType = await openTab(page, target, 'Vars');
-  const suffix = hook === 'preRequest' ? 'req' : 'res';
-  const tableId = `${itemType}-vars-${suffix}`;
+type TableRow = { name: string; value: string };
+type ItemType = 'collection' | 'folder' | 'request';
+type VarsHook = 'preRequest' | 'postResponse';
 
-  const tableRows = buildCommonLocators(editor).varsTable.rows(itemType, suffix);
-  const table = buildCommonLocators(editor.getByTestId(tableId)).editableTable;
+// Key/value tables in the open tab, shared by the set/update helpers.
+const varsTable = (page: Page, itemType: ItemType, hook: VarsHook) =>
+  activeEditor(page).getByTestId(`${itemType}-vars-${hook === 'preRequest' ? 'req' : 'res'}`);
+const headersTable = (page: Page, itemType: ItemType) => activeEditor(page).getByTestId(`${itemType}-headers`);
+
+// Types each row into the table's trailing empty row. Var names are plain inputs, header names are CodeMirror editors.
+async function addTableRows(page: Page, table: Locator, rows: TableRow[], nameField: 'input' | 'editor') {
+  const { editableTable } = buildCommonLocators(table);
+  const tableRows = table.locator('tbody tr');
 
   for (const { name, value } of rows) {
     const emptyRow = (await tableRows.count()) - 1;
-    await table.columnNameInput(emptyRow).fill(name);
-    await setCodeMirrorValue(page, table.columnValueEditor(emptyRow), value);
-  }
 
+    if (nameField === 'input') {
+      await editableTable.columnNameInput(emptyRow).fill(name);
+    } else {
+      await setCodeMirrorValue(page, editableTable.columnNameEditor(emptyRow), name);
+    }
+
+    await setCodeMirrorValue(page, editableTable.columnValueEditor(emptyRow), value);
+  }
+}
+
+// e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
+export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], hook: VarsHook = 'preRequest'): Promise<void> {
+  const itemType = await openTab(page, target, 'Vars');
+  await addTableRows(page, varsTable(page, itemType, hook), rows, 'input');
+  await saveItem(page, itemType);
+}
+
+// e.g. setHeaders('folder-1', [{ name: 'x-api-key', value: 'abc' }])
+export async function setHeaders(page: Page, target: string, rows: TableRow[]): Promise<void> {
+  const itemType = await openTab(page, target, 'Headers');
+  await addTableRows(page, headersTable(page, itemType), rows, 'editor');
   await saveItem(page, itemType);
 }
 
@@ -1926,25 +1948,15 @@ async function waitForSidebarToast(sidebar: Frame, text: string) {
   await toast.waitFor({ state: 'hidden', timeout: 10_000 });
 }
 
-/** Type into the open VS Code input box (showInputBox) and submit it. */
-async function submitInputBox(page: Page, value: string) {
+/** Fill the open VS Code input box (showInputBox) and submit it. */
+async function fillAndSubmitQuickInput(page: Page, value: string) {
   const input = buildCommonLocators(page).workbench.quickInputBox();
   await input.fill(value);
   await page.keyboard.press('Enter');
   await input.waitFor({ state: 'hidden', timeout: 10_000 });
 }
 
-export async function createFolderV2(page: Page, sidebar: Frame, collectionName: string, folderName: string) {
-  const { sidebar: sidebarElements } = buildCommonLocators(sidebar);
-  await sidebarElements.collectionName(collectionName).hover();
-  await sidebarElements.collectionMenuOptions(collectionName).click();
-  await sidebar.getByRole('menuitem', { name: 'New Folder' }).click();
-
-  await submitInputBox(page, folderName);
-  await waitForSidebarToast(sidebar, 'Folder created');
-}
-
-export async function cloneRequest(page: Page, sidebar: Frame, collectionName: string, name: string, cloneName = `${name}-clone`) {
+export async function cloneRequest(page: Page, sidebar: Frame, collectionName: string, name: string, cloneName = `${name} copy`) {
   await expandCollection(sidebar, collectionName);
 
   const { sidebar: sidebarElements } = buildCommonLocators(sidebar);
@@ -1952,80 +1964,50 @@ export async function cloneRequest(page: Page, sidebar: Frame, collectionName: s
   await sidebarElements.itemMenu(name).click();
   await sidebar.getByRole('menuitem', { name: 'Clone' }).click();
 
-  await submitInputBox(page, cloneName);
+  await fillAndSubmitQuickInput(page, cloneName);
   await waitForSidebarToast(sidebar, 'Request cloned');
 }
 
-/** Drag a request into a folder. `folderPath` is the folder's name, or "parent/child" for a nested folder. */
-export async function moveRequestToFolder(sidebar: Frame, collectionName: string, name: string, folderPath: string) {
-  await expandCollection(sidebar, collectionName);
-
-  const folders = folderPath.split('/');
-  const targetFolder = folders[folders.length - 1];
-
-  for (const folder of folders.slice(0, -1)) {
-    await expandFolder(sidebar, folder);
-  }
-
-  await dragItemIntoFolder(sidebar, name, targetFolder);
-  await expandFolder(sidebar, targetFolder);
-}
-
-/**
- * Set entries in a collection-settings key/value table and save: a row whose name matches is edited,
- * otherwise the entry goes into the trailing empty row.
- */
-async function setCollectionTableEntries(page: Page, settings: Frame, tab: 'Vars' | 'Headers', entries: KeyValue) {
-  await openRequestPaneTab(settings, tab);
-
-  const { collectionSettings } = buildCommonLocators(settings);
-  const table = tab === 'Vars' ? collectionSettings.preRequestVarsTable() : collectionSettings.headersTable();
+// Edits the value of existing rows, matched by name; fails if a name has no row (add those with setVars/setHeaders).
+async function updateTableRows(page: Page, table: Locator, rows: TableRow[]) {
   const { editableTable } = buildCommonLocators(table);
-  const rows = table.locator('tbody tr');
-  await rows.first().waitFor({ timeout: 10_000 });
+  await table.locator('tbody tr').first().waitFor({ timeout: 10_000 });
 
-  // Var names are plain inputs; header names are CodeMirror editors.
-  const getRowName = (row: number) => tab === 'Vars'
-    ? editableTable.columnNameInput(row).inputValue()
-    : editableTable.columnNameEditor(row).locator('.CodeMirror-line').innerText();
+  // Read every existing name in one round trip.
+  const names = await table.locator('[data-testid^="column-name-"]').evaluateAll((cells) => cells.map((cell) =>
+    (cell.querySelector('input')?.value ?? (cell.querySelector('.CodeMirror') as any)?.CodeMirror?.getValue() ?? '').trim()));
 
-  for (const [name, value] of Object.entries(entries)) {
-    const emptyRow = (await rows.count()) - 1;
-    let row = emptyRow;
+  for (const { name, value } of rows) {
+    const row = names.indexOf(name);
 
-    for (let i = 0; i < emptyRow; i++) {
-      if ((await getRowName(i)).trim() === name) {
-        row = i;
-        break;
-      }
+    if (row === -1) {
+      throw new Error(`No row named "${name}" to update`);
     }
 
-    if (row === emptyRow && tab === 'Vars') {
-      await editableTable.columnNameInput(row).fill(name);
-    } else if (row === emptyRow) {
-      await setCodeMirrorValue(page, editableTable.columnNameEditor(row), name);
-    }
-
-    await setCodeMirrorValue(page, editableTable.columnValueEditor(row), value.toString());
+    await setCodeMirrorValue(page, editableTable.columnValueEditor(row), value);
   }
-
-  await saveCollectionSettings(settings, tab.toLowerCase());
 }
 
-export async function setCollectionVars(page: Page, settings: Frame, vars: KeyValue) {
-  await setCollectionTableEntries(page, settings, 'Vars', vars);
+export async function updateVars(page: Page, target: string, rows: TableRow[], hook: VarsHook = 'preRequest'): Promise<void> {
+  const itemType = await openTab(page, target, 'Vars');
+  await updateTableRows(page, varsTable(page, itemType, hook), rows);
+  await saveItem(page, itemType);
 }
 
-export async function setCollectionHeaders(page: Page, settings: Frame, headers: KeyValue) {
-  await setCollectionTableEntries(page, settings, 'Headers', headers);
+export async function updateHeaders(page: Page, target: string, rows: TableRow[]): Promise<void> {
+  const itemType = await openTab(page, target, 'Headers');
+  await updateTableRows(page, headersTable(page, itemType), rows);
+  await saveItem(page, itemType);
 }
 
-export async function setCollectionPresets(settings: Frame, presets: NonNullable<CollectionSettingsConfig['presets']>) {
+export async function setPresets(page: Page, target: string, presets: NonNullable<CollectionSettingsConfig['presets']>): Promise<void> {
+  const itemType = await openTab(page, target, 'Presets');
+
   if (presets.requestUrl) {
-    await setPresetBaseUrl(settings, presets.requestUrl);
+    await buildCommonLocators(activeEditor(page)).requestUrl.editor().fill(presets.requestUrl);
   }
 
-  await saveCollectionSettings(settings, 'presets');
+  await saveItem(page, itemType);
 }
 
 /** Request paths ("folder/name") among an exported ZIP's entries; skips collection, folder and environment files. */
@@ -2039,4 +2021,9 @@ export function exportedRequestPaths(entries: string[], format: 'yml' | 'bru'): 
 
 export function toKeyValue(entries: { name: string, value: string }[] = []): KeyValue<string> {
   return Object.fromEntries(entries.map(({ name, value }) => [name, value]));
+}
+
+/** Inverse of toKeyValue: { a: 1 } → [{ name: 'a', value: '1' }]. */
+export function toRows(entries: KeyValue = {}): TableRow[] {
+  return Object.entries(entries).map(([name, value]) => ({ name, value: value.toString() }));
 }
