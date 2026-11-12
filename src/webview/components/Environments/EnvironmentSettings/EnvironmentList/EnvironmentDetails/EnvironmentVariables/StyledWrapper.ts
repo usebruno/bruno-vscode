@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { rgba } from 'polished';
 
 const Wrapper = styled.div`
   display: flex;
@@ -129,8 +130,8 @@ const Wrapper = styled.div`
     font-size: ${(props) => props.theme.font.size.sm};
     border-radius: ${(props) => props.theme.border.radius.base};
     border: none;
-    background: ${(props) => props.theme.brand};
-    color: ${(props) => props.theme.bg};
+    background: ${(props) => props.theme.button2.color.primary.bg};
+    color: ${(props) => props.theme.button2.color.primary.text};
     cursor: pointer;
     transition: opacity 0.15s ease;
 
@@ -142,9 +143,10 @@ const Wrapper = styled.div`
   .reset {
     background: transparent;
     padding: 6px 16px;
-    color: ${(props) => props.theme.brand};
+    color: ${(props) => props.theme.button2.color.primary.bg};
     &:hover {
-      opacity: 0.9;
+      opacity: 1;
+      background: ${(props) => rgba(props.theme.button2.color.primary.bg, 0.1)};
     }
   }
 
