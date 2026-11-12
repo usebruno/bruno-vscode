@@ -1,15 +1,16 @@
 import * as vscode from 'vscode';
-import type { GrpcRequest, HttpItemSettings, HttpRequest, ItemType, WebSocketRequest } from '@bruno-types';
+import type { GrpcRequest, HttpItemSettings, HttpRequest, HttpRequestBody, ItemType, WebSocketRequest } from '@bruno-types';
 import { stringifyCollection, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
 
 import { convertToBruno, getImportedCollectionName, isUnbundledCollectionRoot, readImportFile, writeCollection, IMPORT_SOURCE_LABELS, type ImportFile } from '../utils/import';
 import { readCollectionZip, writeCollectionZip, type CollectionZip } from '../utils/import-zip';
+import { getRequestFromCurlCommand, isCurlCommand, normalizeCurlCommand } from '../../utils/curl';
 import { writeCollectionConfig } from '../utils/collection-v2';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { openRunnerPanel } from '../panels/runner-panel';
 import type { OpenedCollections } from '../store/opened-collections';
 import logsStore from '../store/logs';
-import { stringifyJson } from '../utils/common';
+import { stringifyJson, uuid } from '../utils/common';
 import { closeTabsUnder, moveWithEditors } from '../utils/editor';
 import { isMovable, shiftItem } from '../utils/reorder';
 import { basename, dirname, doesItExist, isInside, readText, writeText, META_FILES } from '../utils/file';
@@ -96,8 +97,8 @@ async function updateNameInFile(uri: vscode.Uri, kind: 'request' | 'folder' | 'c
   }
 }
 
-/** The request kinds the New Request picker offers. */
-type NewRequestType = 'http' | 'graphql' | 'grpc' | 'ws';
+/** The New Request picker's entries: a kind of empty request, or one filled from a curl command. */
+type NewRequestType = 'http' | 'graphql' | 'grpc' | 'ws' | 'curl';
 
 interface NewRequestFile<Type extends ItemType, Request> {
   type: Type;
@@ -106,10 +107,13 @@ interface NewRequestFile<Type extends ItemType, Request> {
   request: Request;
 }
 
+type HttpRequestTemplate =
+  | (NewRequestFile<'http-request', HttpRequest> & { settings: HttpItemSettings })
+  | (NewRequestFile<'graphql-request', HttpRequest> & { settings: HttpItemSettings });
+
 /** A freshly created request as handed to the filestore, discriminated on `type`. */
 export type NewRequestTemplate =
-  | (NewRequestFile<'http-request', HttpRequest> & { settings: HttpItemSettings })
-  | (NewRequestFile<'graphql-request', HttpRequest> & { settings: HttpItemSettings })
+  | HttpRequestTemplate
   | NewRequestFile<'grpc-request', GrpcRequest>
   | NewRequestFile<'ws-request', WebSocketRequest>;
 
@@ -117,7 +121,9 @@ export type NewRequestTemplate =
  * The empty request Bruno creates for each kind, mirroring the webview's builders.
  * Headers always live under `request`: the filestore drops them anywhere else.
  */
-function getNewRequestTemplate(type: NewRequestType, name: string, seq: number): NewRequestTemplate {
+function getNewRequestTemplate(type: 'http' | 'graphql', name: string, seq: number): HttpRequestTemplate;
+function getNewRequestTemplate(type: Exclude<NewRequestType, 'curl'>, name: string, seq: number): NewRequestTemplate;
+function getNewRequestTemplate(type: Exclude<NewRequestType, 'curl'>, name: string, seq: number): NewRequestTemplate {
   const shared: Pick<HttpRequest, 'headers' | 'auth' | 'vars' | 'assertions'> = {
     headers: [],
     auth: { mode: 'inherit' },
@@ -195,6 +201,54 @@ function getNewRequestTemplate(type: NewRequestType, name: string, seq: number):
         settings: { encodeUrl: true }
       };
   }
+}
+
+/**
+ * An HTTP or GraphQL request carrying what the curl command says: URL, method,
+ * headers, body and basic auth. It is GraphQL when the URL ends in /graphql or
+ * the content type says so, the rule the webview's New Request form applies.
+ */
+function getRequestTemplateFromCurl(command: string, name: string, seq: number): HttpRequestTemplate {
+  const probe = getRequestFromCurlCommand(command);
+  const contentType = probe?.headers?.find((header) => header.name.toLowerCase() === 'content-type')?.value;
+  const isGraphql = probe?.url.endsWith('/graphql') || (typeof contentType === 'string' && contentType.includes('application/graphql'));
+  const parsed = isGraphql ? getRequestFromCurlCommand(command, 'graphql-request') : probe;
+
+  const template = getNewRequestTemplate(isGraphql ? 'graphql' : 'http', name, seq);
+
+  if (!parsed) {
+    return template;
+  }
+
+  return {
+    ...template,
+    // A curl URL is already encoded; encoding it again would double-encode it.
+    settings: { encodeUrl: false },
+    request: {
+      ...template.request,
+      url: parsed.url,
+      method: parsed.method.toUpperCase(),
+      headers: (parsed.headers ?? []).map((header) => ({ uid: uuid(), ...header })),
+      // The parser's body is the webview's shape, which the filestore writes as is.
+      body: parsed.body as unknown as HttpRequestBody,
+      auth: parsed.auth ?? template.request.auth
+    }
+  };
+}
+
+/** The curl command to turn into a request: the clipboard's when it holds one, else typed in. */
+async function promptCurlCommand(): Promise<string | undefined> {
+  const clipboard = normalizeCurlCommand(await vscode.env.clipboard.readText());
+
+  const command = await vscode.window.showInputBox({
+    prompt: 'cURL command',
+    placeHolder: "curl -X POST https://api.example.com/users -H 'Content-Type: application/json' -d '{}'",
+    value: isCurlCommand(clipboard) ? clipboard : undefined,
+    ignoreFocusOut: true,
+    validateInput: (value) => getRequestFromCurlCommand(normalizeCurlCommand(value)) ? undefined : 'Not a cURL command with a URL Bruno can read'
+  });
+
+  return command === undefined ? undefined : normalizeCurlCommand(command);
 }
 
 type SidebarCommands =
@@ -903,11 +957,17 @@ async function handleNewRequest(item: Entity | undefined, getTarget: GetTargetFn
     { label: 'HTTP', value: 'http' },
     { label: 'GraphQL', value: 'graphql' },
     { label: 'gRPC', value: 'grpc' },
-    { label: 'WebSocket', value: 'ws' }
+    { label: 'WebSocket', value: 'ws' },
+    { label: 'From cURL', description: 'An HTTP or GraphQL request filled from a curl command', value: 'curl' }
   ];
 
   const requestType = await vscode.window.showQuickPick(requestTypes, { placeHolder: 'Request type' });
   if (!requestType) {
+    return;
+  }
+
+  const curlCommand = requestType.value === 'curl' ? await promptCurlCommand() : undefined;
+  if (requestType.value === 'curl' && !curlCommand) {
     return;
   }
 
@@ -923,7 +983,11 @@ async function handleNewRequest(item: Entity | undefined, getTarget: GetTargetFn
     throw new Error(`A request file named "${basename(uri)}" already exists here`);
   }
 
-  const template = getNewRequestTemplate(requestType.value, name.trim(), await getNextSequenceNumber(parent.uri, format));
+  const seq = await getNextSequenceNumber(parent.uri, format);
+  const template = requestType.value === 'curl'
+    ? getRequestTemplateFromCurl(curlCommand, name.trim(), seq)
+    : getNewRequestTemplate(requestType.value, name.trim(), seq);
+
   await writeText(uri, await stringifyRequest(template, { format }));
 
   await vscode.commands.executeCommand('vscode.openWith', uri, BrunoEditorProvider.viewType);

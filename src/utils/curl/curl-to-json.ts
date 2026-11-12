@@ -1,4 +1,3 @@
-import React from 'react';
 /**
  * Copyright (c) 2014-2016 Nick Carneiro
  * https://github.com/curlconverter/curlconverter

@@ -28,6 +28,8 @@ export interface NewRequestOptions {
   method?: string;
   /** Folder to create the request in; left out, it goes in the collection root. */
   folder?: string;
+  /** A curl command to fill the request from, through the picker's "From cURL" entry; `type` is then ignored. */
+  curl?: string;
 }
 
 /**
@@ -472,14 +474,20 @@ export class NativeSidebar {
    * The URL and method are then set in the editor and saved, so the result
    * matches a request created with its details up front.
    */
-  async newRequest(collectionName: string, { name, type = 'HTTP', folder }: Omit<NewRequestOptions, 'url' | 'method'>): Promise<void> {
+  async newRequest(collectionName: string, { name, type = 'HTTP', folder, curl }: Omit<NewRequestOptions, 'url' | 'method'>): Promise<void> {
     if (folder) {
       await this.itemAction(folder, 'new-request');
     } else {
       await this.collectionAction(collectionName, 'new-request');
     }
 
-    await this.pickQuickItem(type);
+    if (curl) {
+      await this.pickQuickItem('From cURL');
+      // The box may come prefilled from the clipboard; the fill replaces it.
+      await this.answerInputBox(curl);
+    } else {
+      await this.pickQuickItem(type);
+    }
     await this.answerInputBox(name);
 
     await this.expandCollection(collectionName);

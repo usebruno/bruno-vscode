@@ -1,4 +1,3 @@
-import React from 'react';
 const normalizeContentType = (contentType: any) => {
   if (!contentType || typeof contentType !== 'string') {
     return '';

@@ -1,6 +1,4 @@
-import React from 'react';
 import cookie from 'cookie';
-import URL from 'url';
 import { parse } from 'shell-quote';
 import { isEmpty } from 'lodash';
 import { parseQueryParams } from '@usebruno/common/utils';
@@ -272,7 +270,8 @@ const isURL = (arg: any) => {
     return false;
   }
 
-  if (URL.parse(arg || '').host) {
+  // A scheme followed by a host, e.g. "https://example.com/path".
+  if (/^[a-z][a-z0-9+.-]*:\/\/[^/\s]+/i.test(arg)) {
     return true;
   }
 
@@ -334,18 +333,17 @@ const getUrlString = (url: any) => {
  * Parse URL
  * Returns formatted URL, URL without query, and queries
  */
-const parseUrl = (url: any) => {
-  const parsedUrl = URL.parse(url);
+const parseUrl = (url: string) => {
+  // The URL is kept as typed (it may hold {{variables}} no URL parser accepts); only its query is read.
+  const withoutHash = url.split('#')[0];
+  const queryIndex = withoutHash.indexOf('?');
+  const query = queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : null;
 
   // @ts-expect-error - @usebruno/common/utils parseQueryParams may accept options parameter
-  const queries = parseQueryParams(parsedUrl.query, { decode: false });
+  const queries = parseQueryParams(query, { decode: false });
 
-  let formattedUrl = URL.format(parsedUrl);
-  if (!url.endsWith('/') && formattedUrl.endsWith('/')) {
-    formattedUrl = formattedUrl.slice(0, -1);
-  }
-
-  const urlWithoutQuery = formattedUrl.split('?')[0];
+  const formattedUrl = url;
+  const urlWithoutQuery = withoutHash.split('?')[0];
 
   return {
     url: formattedUrl,
