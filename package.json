@@ -204,7 +204,8 @@
       {
         "command": "bruno.openGlobalEnvironments",
         "title": "Open Global Environments",
-        "category": "Bruno"
+        "category": "Bruno",
+        "icon": "$(globe)"
       },
       {
         "command": "bruno.openPreferences",
@@ -390,6 +391,11 @@
           "command": "bruno.refreshWorkspaceCollections",
           "when": "view == bruno.workspaceCollections",
           "group": "navigation"
+        },
+        {
+          "command": "bruno.openGlobalEnvironments",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@0"
         },
         {
           "command": "bruno.sidebar.search",
