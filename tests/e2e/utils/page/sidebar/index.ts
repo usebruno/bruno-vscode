@@ -362,6 +362,7 @@ export class NativeSidebar {
 
     await this.titleAction('Import Collection');
     await this.answerFileDialog(first, 'file');
+    // The review shows for a single file too, because the fixture enables the simple dialog.
     await expect(title).toHaveText('Collections to import');
 
     for (const filePath of rest) {

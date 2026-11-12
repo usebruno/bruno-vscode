@@ -532,7 +532,11 @@ async function handleImportCollection(
     }
   }
 
-  const selected = await reviewImportCandidates(candidates);
+  // One file from a dialog that enables multi-select needs no review. Where the dialog can take
+  // only one file at a time, the review is the only way to add the rest, so it shows even for one.
+  const selected = candidates.length > 1 || usesSingleFileDialog()
+    ? await reviewImportCandidates(candidates)
+    : candidates;
   if (!selected?.length) {
     return;
   }
@@ -687,6 +691,16 @@ async function readImportCandidates(files: vscode.Uri[]): Promise<ImportCandidat
   }
 
   return candidates;
+}
+
+/**
+ * True where showOpenDialog picks a single file: VS Code's simple dialog, which
+ * the workbench uses in a browser, for a remote workspace, or when enabled.
+ */
+function usesSingleFileDialog(): boolean {
+  return vscode.env.uiKind === vscode.UIKind.Web
+    || vscode.env.remoteName !== undefined
+    || vscode.workspace.getConfiguration('files').get<boolean>('simpleDialog.enable') === true;
 }
 
 /**
