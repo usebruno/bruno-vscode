@@ -2,10 +2,12 @@ import * as vscode from 'vscode';
 import type { RequestMethod } from '@bruno-types';
 import { generateUidBasedOnHash, sortByNameThenSequence } from '../utils/common';
 import { validateSchema } from '../app/collections';
-import { parseCollection, parseFolder, parseRequest } from '../utils/parse';
+import { parseCollection, parseFolder } from '../utils/parse';
+import { parseFileMeta } from '../utils/collection';
+import { stripDirtyMarker } from '../utils/dirty-marker';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import logsStore from '../store/logs';
-import { basename, dirname, doesItExist, isInside, isSameDir, readText, META_FILES } from '../utils/file';
+import { basename, dirname, doesItExist, isInside, isSameDir, normalizeDir, readText, META_FILES } from '../utils/file';
 import type { CollectionFormat } from '../../utils/collection';
 import type { OpenedCollections } from '../store/opened-collections';
 import { startCase } from 'lodash';
@@ -28,6 +30,13 @@ export interface CollectionRoot {
   source: 'workspace' | 'opened';
   /** False when an opened collection's folder cannot be read right now. */
   available: boolean;
+}
+
+/** A request as the search sees it: its name, and the URIs of the directories that hold it. */
+interface IndexedRequest {
+  uri: string;
+  name: string;
+  dirs: string[];
 }
 
 /** A folder or request found inside a collection, before it becomes a tree item. */
@@ -85,6 +94,32 @@ function isCollectionConfig(uri: vscode.Uri): boolean {
   return (COLLECTION_CONFIG_FILES as readonly string[]).includes(basename(uri));
 }
 
+/**
+ * The seq written in a request's meta block (bru) or info block (yml), or undefined when it has
+ * none. parseFileMeta reports a missing seq as 1, which would pin the request to the top instead
+ * of sorting it by name, as the full parser's result does.
+ */
+function readSeq(content: string, format: CollectionFormat): number | undefined {
+  const block = format === 'yml'
+    ? /^info:\s*\n((?:[ \t]+[^\n]*\n?)+)/m.exec(content)?.[1]
+    : /meta\s*{\s*([\s\S]*?)\s*}/.exec(content)?.[1];
+  const seq = block ? /^\s*seq\s*:\s*["']?(\d+)["']?\s*$/m.exec(block)?.[1] : undefined;
+
+  return seq === undefined ? undefined : Number(seq);
+}
+
+/** False for a path readChildren never lists: under a dot entry, an always-ignored directory or the collection's ignore list. */
+function isListed(uri: vscode.Uri, collection: CollectionRoot): boolean {
+  if (!isInside(uri, collection.uri)) {
+    return true;
+  }
+
+  const ignored = new Set([...ALWAYS_IGNORED_DIRS, ...collection.ignore]);
+  const segments = uri.path.slice(normalizeDir(collection.uri).path.length + 1).split('/');
+
+  return !segments.some((segment) => segment.startsWith('.') || ignored.has(segment));
+}
+
 
 export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity>, vscode.Disposable {
   static readonly viewType = 'bruno.nativeSidebarView';
@@ -96,6 +131,8 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
   private _filter = '';
   /** URIs of every item the filter keeps: matching requests and the directories that hold them. */
   private matchesPromise?: Promise<Set<string>>;
+  /** Every request in the shown collections, read once per tree change and shared by every filter text. */
+  private requestIndexPromise?: Promise<IndexedRequest[]>;
   private refreshTimer?: ReturnType<typeof setTimeout>;
   private treeUpdateTimer?: ReturnType<typeof setTimeout>;
   private disposables: vscode.Disposable[] = [];
@@ -191,6 +228,7 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
   /** Forget the discovered collections and rebuild the whole tree. */
   refresh(): void {
     this.collectionsPromise = undefined;
+    this.requestIndexPromise = undefined;
     this.matchesPromise = undefined;
     this._onDidChangeTreeData.fire();
   }
@@ -259,6 +297,7 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     }
     this.treeUpdateTimer = setTimeout(() => {
       this.treeUpdateTimer = undefined;
+      this.requestIndexPromise = undefined;
       this.matchesPromise = undefined;
       this._onDidChangeTreeData.fire();
     }, REFRESH_DEBOUNCE_MS);
@@ -397,49 +436,57 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       const filter = this._filter;
       this.matchesPromise = Promise.resolve(vscode.window.withProgress(
         { location: { viewId: NativeSidebarViewProvider.viewType } },
-        () => this.findMatches(filter)
-      ));
+        () => this.getRequestIndex()
+      )).then((index) => {
+        const matches = new Set<string>();
+        for (const request of index) {
+          if (this.doesItMatch(request.name, filter)) {
+            matches.add(request.uri);
+            request.dirs.forEach((dir) => matches.add(dir));
+          }
+        }
+
+        return matches;
+      });
     }
     return this.matchesPromise;
   }
 
-  private async findMatches(filter: string): Promise<Set<string>> {
-    const matches = new Set<string>();
+  /** Walks the collections only when the tree changed since the last walk, not on every keystroke. */
+  private getRequestIndex(): Promise<IndexedRequest[]> {
+    if (!this.requestIndexPromise) {
+      this.requestIndexPromise = this.indexRequests();
+    }
+
+    return this.requestIndexPromise;
+  }
+
+  private async indexRequests(): Promise<IndexedRequest[]> {
+    const index: IndexedRequest[] = [];
     const collections = await this.getCollections();
 
     await Promise.all(
       collections
         .filter((collection) => collection.available)
-        .map((collection) => this.findMatchesIn(collection.uri, collection, filter, matches))
+        .map((collection) => this.indexRequestsIn(collection.uri, collection, [], index))
     );
 
-    return matches;
+    return index;
   }
 
-  /**
-   * Adds every matching request beneath `dir` to `matches`, along with each
-   * directory on the way down to one, `dir` included. Returns whether `dir` was added.
-   */
-  private async findMatchesIn(dir: vscode.Uri, collection: CollectionRoot, filter: string, matches: Set<string>): Promise<boolean> {
+  /** Adds every request beneath `dir` to `index`, with the directories from the collection root down to it. */
+  private async indexRequestsIn(dir: vscode.Uri, collection: CollectionRoot, parents: string[], index: IndexedRequest[]): Promise<void> {
+    const dirs = [...parents, dir.toString()];
     const entries = await this.readChildren(dir, collection);
-    const results = await Promise.all(entries.map((entry) => {
+
+    await Promise.all(entries.map(async (entry) => {
       if (entry.params[0] !== 'request') {
-        return this.findMatchesIn(entry.uri, collection, filter, matches);
+        await this.indexRequestsIn(entry.uri, collection, dirs, index);
+        return;
       }
 
-      const matched = this.doesItMatch(entry.name, filter);
-      if (matched) {
-        matches.add(entry.uri.toString());
-      }
-      return matched;
+      index.push({ uri: entry.uri.toString(), name: entry.name, dirs });
     }));
-
-    const holdsMatch = results.includes(true);
-    if (holdsMatch) {
-      matches.add(dir.toString());
-    }
-
-    return holdsMatch;
   }
 
   private configPriority(uri: vscode.Uri): number {
@@ -555,8 +602,9 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
 
   private async readRequest(uri: vscode.Uri, fileStem: string, format: CollectionFormat): Promise<ChildEntry | undefined> {
     try {
-      const content = await readText(uri);
-      const parsed = parseRequest(content, { format });
+      // Metadata only: the tree needs the type, name, seq and method, not the whole request.
+      const content = stripDirtyMarker(await readText(uri));
+      const parsed = parseFileMeta(content, format) as { type?: string; name?: unknown; request?: { method?: string } } | null;
       const requestType = REQUEST_TYPES[parsed?.type];
 
       if (!requestType) {
@@ -564,12 +612,12 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
         return undefined;
       }
 
-      const method = String(parsed?.request?.method ?? (requestType === 'GRAPHQL' ? 'POST' : 'GET')).toUpperCase() as RequestMethod;
+      const method = String(parsed?.request?.method || (requestType === 'GRAPHQL' ? 'POST' : 'GET')).toUpperCase() as RequestMethod;
 
       return {
         uri,
-        name: parsed?.name || fileStem,
-        seq: typeof parsed?.seq === 'number' ? parsed.seq : undefined,
+        name: parsed?.name ? String(parsed.name) : fileStem,
+        seq: readSeq(content, format),
         params: ['request', method, requestType]
       };
     } catch (err) {
@@ -583,7 +631,11 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
    * change means a collection may have appeared, moved or gone, so it rescans.
    */
   private watchCollectionContents(collections: CollectionRoot[]): void {
-    const onContentChange = (uri: vscode.Uri): void => {
+    const onContentChange = (collection: CollectionRoot) => (uri: vscode.Uri): void => {
+      if (!isListed(uri, collection)) {
+        return;
+      }
+
       if (isCollectionConfig(uri)) {
         this.scheduleRefresh();
       } else {
@@ -615,9 +667,9 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       const contents = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(collection.uri, '**/*'));
       this.contentWatchers.push(
         contents,
-        contents.onDidCreate(onContentChange),
-        contents.onDidDelete(onContentChange),
-        contents.onDidChange(onContentChange)
+        contents.onDidCreate(onContentChange(collection)),
+        contents.onDidDelete(onContentChange(collection)),
+        contents.onDidChange(onContentChange(collection))
       );
     }
   }

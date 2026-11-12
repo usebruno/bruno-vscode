@@ -11,9 +11,9 @@ import { openRunnerPanel } from '../panels/runner-panel';
 import type { OpenedCollections } from '../store/opened-collections';
 import logsStore from '../store/logs';
 import { stringifyJson, uuid } from '../utils/common';
-import { closeTabsUnder, moveWithEditors } from '../utils/editor';
+import { closeTabsUnder, moveWithEditors, writeThroughEditor } from '../utils/editor';
 import { isMovable, shiftItem } from '../utils/reorder';
-import { basename, dirname, doesItExist, isInside, readText, writeText, META_FILES } from '../utils/file';
+import { basename, dirname, doesItExist, isInside, isSameDir, readText, writeText, META_FILES } from '../utils/file';
 import type { CollectionFormat } from '../../utils/collection';
 import { sanitizeName, validateName } from '../utils/filesystem';
 import { parseCollection, parseFolder, parseRequest } from '../utils/parse';
@@ -68,7 +68,10 @@ function validateItemName(value: string): string | undefined {
   return undefined;
 }
 
-/** Update the display name inside a request or folder file without changing anything else. */
+/**
+ * Update the display name inside a request or folder file without changing anything else.
+ * Writes go through an open Bruno editor, and are refused while it has unsaved changes.
+ */
 async function updateNameInFile(uri: vscode.Uri, kind: 'request' | 'folder' | 'collection', name: string, format: CollectionFormat): Promise<void> {
   const content = await readText(uri);
 
@@ -77,11 +80,11 @@ async function updateNameInFile(uri: vscode.Uri, kind: 'request' | 'folder' | 'c
     if (format === 'bru') {
       const config = JSON.parse(content) as Record<string, unknown>;
       config.name = name;
-      await writeText(uri, await stringifyJson(config));
+      await writeThroughEditor(uri, await stringifyJson(config));
     } else {
       const { collectionRoot, brunoConfig } = parseCollection(content, { format });
       brunoConfig.name = name;
-      await writeText(uri, await stringifyCollection(collectionRoot, brunoConfig, { format }));
+      await writeThroughEditor(uri, await stringifyCollection(collectionRoot, brunoConfig, { format }));
     }
     return;
   }
@@ -89,11 +92,11 @@ async function updateNameInFile(uri: vscode.Uri, kind: 'request' | 'folder' | 'c
   if (kind === 'request') {
     const parsed = parseRequest(content, { format });
     parsed.name = name;
-    await writeText(uri, await stringifyRequest(parsed, { format }));
+    await writeThroughEditor(uri, await stringifyRequest(parsed, { format }));
   } else {
     const parsed = parseFolder(content, { format }) ?? {};
     parsed.meta = { ...(parsed.meta ?? {}), name };
-    await writeText(uri, await stringifyFolder(parsed, { format }));
+    await writeThroughEditor(uri, await stringifyFolder(parsed, { format }));
   }
 }
 
@@ -918,7 +921,11 @@ async function handleOpenCollection(
     }
 
     const shown = await provider.findRootEntity(uri);
-    if (shown?.collection.source === 'workspace') {
+
+    if (shown && !isSameDir(shown.uri, uri)) {
+      // The tree hides collections nested in another, so this one would be stored but never shown.
+      vscode.window.showInformationMessage(`"${basename(uri)}" is inside the collection "${shown.label}", which is already shown`);
+    } else if (shown?.collection.source === 'workspace') {
       vscode.window.showInformationMessage(`"${shown.label}" is already shown from the workspace`);
     } else {
       await openedCollections.add(uri);
@@ -1219,7 +1226,9 @@ async function handlePaste(item: Entity | undefined, getTarget: GetTargetFn, set
 
   // Re-serialise so the content always matches the destination's extension.
   const parsed = parseRequest(await readText(copied.uri), { format: sourceFormat });
-  parsed.name = basename(dest).slice(0, -(`.${format}`.length));
+  // Keep the request's own name, with the " copy" suffix the file name may have picked up.
+  const suffix = basename(dest).slice(stem.length, -(`.${format}`.length));
+  parsed.name = `${parsed.name || stem}${suffix}`;
   parsed.seq = await getNextSequenceNumber(parent.uri, format);
 
   await writeText(dest, await stringifyRequest(parsed, { format }));
@@ -1259,7 +1268,9 @@ async function handleRename(item: Entity | undefined, getTarget: GetTargetFn) {
     : vscode.Uri.joinPath(parent, sanitizeName(name.trim()));
 
   const moving = newUri.toString() !== entity.uri.toString();
-  if (moving && await doesItExist(newUri)) {
+  // On a case-insensitive file system a case-only rename finds the item itself at newUri.
+  const caseOnly = newUri.toString().toLowerCase() === entity.uri.toString().toLowerCase();
+  if (moving && !caseOnly && await doesItExist(newUri)) {
     throw new Error(`"${basename(newUri)}" already exists here`);
   }
 

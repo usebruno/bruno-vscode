@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { isDocumentRegistered, writeFileViaVSCode } from '../editors/dirty-state-manager';
 
-import { isInside, writeText } from './file';
+import { basename, isInside, writeText } from './file';
 
 /**
  * Keeps open Bruno editors consistent with file operations made from the
@@ -93,11 +93,24 @@ export async function moveWithEditors(oldUri: vscode.Uri, newUri: vscode.Uri): P
 }
 
 /**
+ * Throws when `uri` is open with unsaved changes. Writing it from the sidebar
+ * would replace and save the open document, losing those changes.
+ */
+export function assertNoUnsavedChanges(uri: vscode.Uri): void {
+  const document = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString());
+  if (document?.isDirty) {
+    throw new Error(`"${basename(uri)}" has unsaved changes. Save or revert it first.`);
+  }
+}
+
+/**
  * Write a request, folder or collection file that may be open in a Bruno editor.
- * An open document is updated through VS Code's document model, so its unsaved
- * state is handled rather than overwritten on disk underneath it.
+ * An open document is updated through VS Code's document model rather than on
+ * disk underneath it; one with unsaved changes is refused, not overwritten.
  */
 export async function writeThroughEditor(uri: vscode.Uri, content: string): Promise<void> {
+  assertNoUnsavedChanges(uri);
+
   // The editor registers documents by fsPath, whatever the scheme; this is a lookup, not a disk access.
   if (isDocumentRegistered(uri.fsPath)) {
     await writeFileViaVSCode(uri.fsPath, content);

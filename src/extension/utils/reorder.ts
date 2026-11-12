@@ -4,7 +4,7 @@ import { stringifyFolder, stringifyRequest } from '@usebruno/filestore';
 import type { CollectionFormat } from '../../utils/collection';
 import type { ChildEntry, CollectionRoot, Entity, NativeSidebarViewProvider } from '../views/NativeSidebarViewProvider';
 
-import { closeTabsUnder, moveWithEditors, writeThroughEditor } from './editor';
+import { assertNoUnsavedChanges, closeTabsUnder, moveWithEditors, writeThroughEditor } from './editor';
 import { basename, dirname, doesItExist, isInside, isSameDir, readText, writeText } from './file';
 import { parseFolder, parseRequest } from './parse';
 
@@ -18,8 +18,8 @@ import { parseFolder, parseRequest } from './parse';
  * the two groups separately too, so it shows the same order.
  *
  * Every file goes through vscode.workspace.fs, and files open in a Bruno
- * editor are written through that editor, so this works on any scheme and
- * never overwrites unsaved work.
+ * editor are written through that editor, so this works on any scheme. A
+ * file with unsaved changes stops the move before anything is written.
  */
 
 type ItemKind = ChildEntry['params'][0];
@@ -137,8 +137,10 @@ async function moveFile(item: MovableEntity, dir: vscode.Uri, targetFormat: Coll
   }
 
   // A different extension means a different serialiser, so a plain rename will not do.
-  const request = parseRequest(await readText(item.uri), { format: sourceFormat });
+  // Close first: edits saved from the close prompt must be in the content that is read.
   await closeTabsUnder(item.uri);
+  assertNoUnsavedChanges(item.uri);
+  const request = parseRequest(await readText(item.uri), { format: sourceFormat });
   await writeText(newUri, await stringifyRequest(request, { format: targetFormat }));
   await vscode.workspace.fs.delete(item.uri);
 
@@ -147,13 +149,16 @@ async function moveFile(item: MovableEntity, dir: vscode.Uri, targetFormat: Coll
 
 /** Number `items` 1..n in the order given, writing only the ones whose seq changes. */
 async function writeSequences(items: ChildEntry[], format: CollectionFormat): Promise<void> {
-  for (const [index, item] of items.entries()) {
-    const seq = index + 1;
+  const changedEntries = items
+    .map((item, index) => ({ item, seq: index + 1 }))
+    .filter(({ item, seq }) => item.seq !== seq);
 
-    if (item.seq === seq) {
-      continue;
-    }
+  // Check every file before writing any, so a refusal leaves no half-renumbered group.
+  for (const { item } of changedEntries) {
+    assertNoUnsavedChanges(item.params[0] === 'folder' ? vscode.Uri.joinPath(item.uri, `folder.${format}`) : item.uri);
+  }
 
+  for (const { item, seq } of changedEntries) {
     if (item.params[0] === 'folder') {
       await writeFolderSequence(item.uri, seq, format);
     } else {

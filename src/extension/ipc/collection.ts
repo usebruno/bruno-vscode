@@ -1199,7 +1199,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
 
   /**
    * @deprecated Local-disk only (Node fs/path). The native sidebar uses `writeCollection` in
-   * src/extension/app/import-collection.ts, which lays out the same files through workspace.fs and so works on remotes.
+   * src/extension/utils/import.ts, which lays out the same files through workspace.fs and so works on remotes.
    */
   const importCollection = async (
     collection: any,

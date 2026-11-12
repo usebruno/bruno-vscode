@@ -696,35 +696,35 @@
       {
         "command": "bruno.sidebar.rename",
         "key": "f2",
-        "when": "focusedView == bruno.nativeSidebarView"
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
       },
       {
         "command": "bruno.sidebar.delete",
         "key": "delete",
         "mac": "cmd+backspace",
-        "when": "focusedView == bruno.nativeSidebarView"
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
       },
       {
         "command": "bruno.sidebar.copy",
         "key": "ctrl+c",
         "mac": "cmd+c",
-        "when": "focusedView == bruno.nativeSidebarView"
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
       },
       {
         "command": "bruno.sidebar.paste",
         "key": "ctrl+v",
         "mac": "cmd+v",
-        "when": "focusedView == bruno.nativeSidebarView"
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
       },
       {
         "command": "bruno.sidebar.moveUp",
         "key": "alt+up",
-        "when": "focusedView == bruno.nativeSidebarView"
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
       },
       {
         "command": "bruno.sidebar.moveDown",
         "key": "alt+down",
-        "when": "focusedView == bruno.nativeSidebarView"
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
       }
     ]
   },

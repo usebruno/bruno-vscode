@@ -84,7 +84,6 @@ export async function openTransientRequestPanel(
   panel.onDidChangeViewState((e) => {
     if (e.webviewPanel.active) {
       stateManager.setActiveEditorWebview(panel.webview);
-    } else {
     }
   });
 
