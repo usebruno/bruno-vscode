@@ -299,8 +299,11 @@ export async function exportCollection(page: Page, sidebar: Sidebar, ctx: Contex
   // The dialog fills in its suggested "<collection>.zip" a moment after opening; a path typed before that is overwritten.
   await expect(saveInput).toHaveValue(/\.zip$/);
   await saveInput.fill(exportPath);
-  await page.keyboard.press('Enter');
-  await saveInput.waitFor({ state: 'hidden', timeout: 10_000 });
+  // The suggested file sits in another folder, so the first Enter can only move the dialog to the typed one.
+  await expect(async () => {
+    await page.keyboard.press('Enter');
+    await expect(saveInput).toBeHidden();
+  }).toPass();
 
   // The panel closes itself once the file is written, so its success toast can't be waited on.
   // On failure it stays open with "Failed to export collection".

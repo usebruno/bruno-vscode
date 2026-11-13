@@ -567,8 +567,8 @@ export class NativeSidebar {
   async cloneItem(name: string, cloneName: string): Promise<void> {
     await this.itemAction(name, 'clone');
     // The name box comes prefilled with "<name> copy".
-    await this.answerInputBox(cloneName);
-    await expect(this.itemRow(cloneName)).toBeVisible({ timeout: 15_000 });
+    await this.answerInputBox('Name for the cloned request', cloneName);
+    await this.itemRow(cloneName).waitFor({ state: 'visible', timeout: 15_000 });
   }
 
   /** Copy leaves nothing to see, so it goes through the keybinding, which a repaint cannot swallow. */
