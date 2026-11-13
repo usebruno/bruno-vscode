@@ -1,4 +1,8 @@
 name: nightly vsix build
+# Shown in the Actions run list, e.g. "Nightly VSIX · feature/foo · manual by octocat"
+run-name: >-
+  Nightly VSIX · ${{ inputs.branch || 'main' }} ·
+  ${{ github.event_name == 'schedule' && 'scheduled' || format('manual by {0}', github.actor) }}${{ inputs.tag_name && format(' · {0}', inputs.tag_name) || '' }}
 
 on:
   workflow_dispatch:
@@ -21,12 +25,26 @@ jobs:
 
     outputs:
       tag_name: ${{ steps.set_tag_name.outputs.TAG_NAME }}
+      sha: ${{ steps.build_info.outputs.sha }}
+      branch: ${{ steps.build_info.outputs.branch }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || 'main' }}
+          ref: ${{ inputs.branch || 'main' }}
+
+      - name: Record build info
+        id: build_info
+        shell: bash
+        env:
+          BUILD_BRANCH: ${{ inputs.branch || 'main' }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "branch=$BUILD_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "BUILD_BRANCH=$BUILD_BRANCH" >> "$GITHUB_ENV"
+          echo "Building branch '$BUILD_BRANCH' at $SHA (trigger: $GITHUB_EVENT_NAME)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,18 +56,24 @@ jobs:
       - name: Validate version and create TAG_NAME var
         id: set_tag_name
         shell: bash
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
         run: |
           VERSION=$(jq -r '.version' package.json)
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
             echo "Invalid version: $VERSION"
             exit 1
           fi
-          INPUT_TAG_NAME="${{ github.event.inputs.TAG_NAME }}"
+          INPUT_TAG_NAME=$(echo "$INPUT_TAG_NAME" | xargs)
           TODAY=$(date '+%Y.%m.%d')
           if [ -z "$INPUT_TAG_NAME" ]; then
             TAG_NAME="v${VERSION}-${TODAY}"
           else
             TAG_NAME="$INPUT_TAG_NAME"
+          fi
+          if ! git check-ref-format "refs/tags/$TAG_NAME"; then
+            echo "::error title=Invalid tag name::'$TAG_NAME' is not a valid git tag name"
+            exit 1
           fi
           echo "TAG_NAME=$TAG_NAME"
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
@@ -70,6 +94,23 @@ jobs:
           VSIX_FILE=$(ls *.vsix)
           EXTENSION_NAME=$(jq -r '.name' package.json)
           mv "$VSIX_FILE" "${EXTENSION_NAME}-${TAG_NAME}.vsix"
+          echo "VSIX_NAME=${EXTENSION_NAME}-${TAG_NAME}.vsix" >> "$GITHUB_ENV"
+
+      - name: Write build summary
+        shell: bash
+        run: |
+          SHA="${{ steps.build_info.outputs.sha }}"
+          {
+            echo "## Nightly VSIX build"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Branch** | \`$BUILD_BRANCH\` |"
+            echo "| **Commit** | [\`${SHA:0:7}\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$SHA) |"
+            echo "| **Tag** | \`$TAG_NAME\` |"
+            echo "| **Trigger** | $GITHUB_EVENT_NAME by @$GITHUB_ACTOR |"
+            echo "| **VSIX** | \`$VSIX_NAME\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -85,6 +126,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      BUILD_BRANCH: ${{ needs.build.outputs.branch }}
 
     steps:
       - name: Check if tag_name is present
@@ -125,10 +167,12 @@ jobs:
         shell: bash
         run: |
           TAG_NAME="${{ needs.build.outputs.tag_name }}"
+          SHA="${{ needs.build.outputs.sha }}"
           gh release create "$TAG_NAME" \
             ./builds/vsix/*.vsix \
+            --target "$SHA" \
             --title "$TAG_NAME" \
-            --notes "Nightly VSIX build for $TAG_NAME" \
+            --notes "Nightly VSIX build for $TAG_NAME from branch \`$BUILD_BRANCH\` (commit $SHA)" \
             --prerelease
 
       - name: Replace Artifacts if Release Exists
@@ -139,3 +183,10 @@ jobs:
           gh release upload "$TAG_NAME" \
             ./builds/vsix/*.vsix \
             --clobber
+
+      - name: Write release summary
+        shell: bash
+        run: |
+          TAG_NAME="${{ needs.build.outputs.tag_name }}"
+          ACTION=$([ "${{ env.release_exists }}" = "true" ] && echo "updated (VSIX replaced)" || echo "created")
+          echo "Release [\`$TAG_NAME\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG_NAME) $ACTION from branch \`$BUILD_BRANCH\`." >> "$GITHUB_STEP_SUMMARY"
