@@ -77,3 +77,6 @@ node_modules/**
 
 # Exclude source maps from dist
 dist/**/*.map
+
+# The fdk-aac decoder is bundled into dist; its license must travel with the binary
+!src/webview/vendor/fdk-aac/NOTICE
