@@ -180,6 +180,11 @@ export async function pasteIntoCollection(sidebar: Sidebar, collectionName: stri
   await sidebar.pasteIntoCollection(collectionName);
 }
 
+/** Paste the in-app clipboard item from a request or folder row's menu. */
+export async function pasteOntoItem(sidebar: Sidebar, itemName: string): Promise<void> {
+  await sidebar.pasteOntoItem(itemName);
+}
+
 /** Open the collection runner from the collection menu ("Run"); resolves once Run Collection is visible. */
 export async function openCollectionRunner(sidebar: Sidebar, collectionName: string): Promise<Frame> {
   return sidebar.openCollectionRunner(collectionName);

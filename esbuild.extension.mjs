@@ -131,6 +131,13 @@ const bypassPnPPlugin = {
         return null;
       }
 
+      // jsonc-parser's main entry is a UMD build that hands `require` to a factory, so
+      // esbuild cannot follow its relative requires and the bundle fails to load. Its ESM
+      // build bundles cleanly.
+      if (cleanPath === 'jsonc-parser') {
+        return { path: path.join(nodeModulesPath, 'jsonc-parser', 'lib', 'esm', 'main.js') };
+      }
+
       // Try to resolve from local node_modules
       try {
         const resolved = localRequire.resolve(args.path);

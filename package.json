@@ -521,7 +521,7 @@
         },
         {
           "command": "bruno.sidebar.paste",
-          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/ && bruno.sidebar.hasCopiedItem",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?$|folder$|request:)/ && bruno.sidebar.hasCopiedItem",
           "group": "3_edit@4"
         },
         {

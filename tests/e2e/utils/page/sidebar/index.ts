@@ -104,7 +104,7 @@ export class NativeSidebar {
     this.locators = {
       collectionName: (name) => this.collectionRow(name),
       collectionItem: (name) => this.itemRow(name),
-      collectionItems: () => this.row(/^(Folder|.* request) /),
+      collectionItems: () => this.row(/^(Folder|App|.* request) /),
       folder: (name) => this.itemRow(name),
       preferencesButton: () => this.titleActionButton('Open Preferences')
     };
@@ -134,7 +134,7 @@ export class NativeSidebar {
 
   /** A request row ("… request <name>") or a folder row ("Folder <name>"). */
   private itemRow(name: string): Locator {
-    return this.row(new RegExp(`^(Folder|.* request) ${escapeRegExp(name)}$`));
+    return this.row(new RegExp(`^(Folder|App|.* request) ${escapeRegExp(name)}$`));
   }
 
   // ---- workbench pieces -------------------------------------------------
@@ -173,10 +173,9 @@ export class NativeSidebar {
    * screen for a moment; waiting for the prompt text keeps the answer out of it.
    */
   private async answerInputBox(prompt: string, text: string): Promise<void> {
-    const box = this.quickInputBox();
-    await box.filter({ hasText: prompt }).waitFor({ state: 'visible' });
-    await box.fill(text);
-
+    // The prompt is the widget's message line; the input itself carries no text to match.
+    await this.page.locator('.quick-input-widget .quick-input-message').filter({ hasText: prompt }).waitFor();
+    await this.quickInputBox().fill(text);
     await this.page.keyboard.press('Enter');
   }
 
@@ -273,7 +272,7 @@ export class NativeSidebar {
   private async rowIndex(name: string): Promise<number> {
     const labels = await this.locators.collectionItems().evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label') ?? ''));
 
-    return labels.findIndex((label) => new RegExp(`^(Folder|.* request) ${escapeRegExp(name)}$`).test(label));
+    return labels.findIndex((label) => new RegExp(`^(Folder|App|.* request) ${escapeRegExp(name)}$`).test(label));
   }
 
   private async expectQuickInput(): Promise<void> {
@@ -580,6 +579,11 @@ export class NativeSidebar {
 
   async pasteIntoCollection(collectionName: string): Promise<void> {
     await this.collectionAction(collectionName, 'paste');
+  }
+
+  /** Paste from a request or folder row's menu: into the folder, or beside the request. */
+  async pasteOntoItem(name: string): Promise<void> {
+    await this.itemAction(name, 'paste');
   }
 
   /**

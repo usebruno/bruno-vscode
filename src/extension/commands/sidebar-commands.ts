@@ -8,6 +8,9 @@ import { getRequestFromCurlCommand, isCurlCommand, normalizeCurlCommand } from '
 import { writeCollectionConfig } from '../utils/collection-v2';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { openRunnerPanel } from '../panels/runner-panel';
+import collectionWatcher from '../app/collection-watcher';
+import { broadcastToAllWebviews } from '../ipc/handlers';
+import LastOpenedCollections from '../store/last-opened-collections';
 import type { OpenedCollections } from '../store/opened-collections';
 import logsStore from '../store/logs';
 import { stringifyJson, uuid } from '../utils/common';
@@ -15,7 +18,7 @@ import { closeTabsUnder, moveWithEditors, writeThroughEditor } from '../utils/ed
 import { isMovable, shiftItem } from '../utils/reorder';
 import { basename, dirname, doesItExist, isInside, isSameDir, readText, writeText, META_FILES } from '../utils/file';
 import type { CollectionFormat } from '../../utils/collection';
-import { sanitizeName, validateName } from '../utils/filesystem';
+import { posixifyPath, sanitizeName, validateName } from '../utils/filesystem';
 import { parseCollection, parseFolder, parseRequest } from '../utils/parse';
 import { Entity, NativeSidebarViewProvider, CollectionRoot, findCollectionConfig } from '../views/NativeSidebarViewProvider';
 
@@ -952,6 +955,12 @@ async function handleCloseCollection(item: Entity | undefined, getTarget: GetTar
   }
 
   await openedCollections.remove(entity.uri);
+
+  // The editor side tracks the collection by path on its own: stop watching it
+  // and drop it from the list the next session reopens, as the webview sidebar did.
+  await closeTabsUnder(entity.uri);
+  collectionWatcher.removeWatcher(entity.uri.fsPath);
+  new LastOpenedCollections().remove(entity.uri.fsPath);
 }
 
 async function handleNewRequest(item: Entity | undefined, getTarget: GetTargetFn) {
@@ -1190,7 +1199,9 @@ async function handleCopy(item: Entity | undefined, getTarget: GetTargetFn, setC
 }
 
 async function handlePaste(item: Entity | undefined, getTarget: GetTargetFn, setCopy: SetCopyFn, getCopy: GetCopyFn) {
-  const parent = getTarget(item, 'collection', 'folder');
+  const target = getTarget(item, 'collection', 'folder', 'request');
+  // A request holds nothing, so pasting on one puts the copy beside it.
+  const parent = target?.type === 'request' ? { uri: dirname(target.uri), collection: target.collection } : target;
   const copied = getCopy();
 
   if (!parent || !copied) {
@@ -1259,6 +1270,8 @@ async function handleRename(item: Entity | undefined, getTarget: GetTargetFn) {
       throw new Error(`"${entity.label}" has no bruno.json or opencollection.yml`);
     }
     await updateNameInFile(config, 'collection', name.trim(), format);
+    // Open editors show the collection's name and update it on this event.
+    broadcastToAllWebviews('main:collection-renamed', { collectionPathname: posixifyPath(entity.uri.fsPath), newName: name.trim() });
     return;
   }
 

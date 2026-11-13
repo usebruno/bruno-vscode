@@ -1,5 +1,6 @@
 import curlToJson from './curl-to-json';
 import { isJsonLikeContentType, isPlainTextContentType, isXmlLikeContentType } from './content-type';
+import { prettifyJsonString } from '../json';
 
 /** True for text that is a curl invocation, whatever follows. */
 export const isCurlCommand = (text: string): boolean => /^\s*curl\s/i.test(text);
@@ -7,15 +8,6 @@ export const isCurlCommand = (text: string): boolean => /^\s*curl\s/i.test(text)
 /** One line: continuation backslashes and line breaks, as a command pasted from docs has them, become spaces. */
 export const normalizeCurlCommand = (text: string): string =>
   text.trim().replace(/\\\r?\n\s*/g, ' ').replace(/\s*\r?\n\s*/g, ' ');
-
-/** Indented JSON when the text parses as JSON, else the text as it is (it may hold {{variables}}). */
-const prettifyJsonString = (text: string): string => {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
-};
 
 export const getRequestFromCurlCommand = (curlCommand: any, requestType = 'http-request') => {
   const parseFormData = (parsedBody: any) => {

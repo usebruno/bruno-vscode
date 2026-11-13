@@ -13,7 +13,7 @@ import type { OpenedCollections } from '../store/opened-collections';
 import { startCase } from 'lodash';
 
 export type Type = 'request' | 'folder' | 'collection';
-export type RequestType = 'HTTP' | 'GRAPHQL' | 'GRPC' | 'WS';
+export type RequestType = 'HTTP' | 'GRAPHQL' | 'GRPC' | 'WS' | 'APP';
 type EntityParams =
   | [type: 'request', requestMethod: RequestMethod, requestType: RequestType]
   | [type: 'folder' | 'collection'];
@@ -70,7 +70,8 @@ const REQUEST_TYPES: Record<string, RequestType> = {
   'http-request': 'HTTP',
   'graphql-request': 'GRAPHQL',
   'grpc-request': 'GRPC',
-  'ws-request': 'WS'
+  'ws-request': 'WS',
+  'app': 'APP'
 };
 
 function uidFor(uri: vscode.Uri): string {
@@ -775,12 +776,13 @@ export class Entity extends vscode.TreeItem {
         return `Folder ${this.label}`;
       case 'request': {
         const kind: Record<RequestType, string> = {
-          HTTP: `HTTP ${requestMethod}`,
-          GRAPHQL: 'GraphQL',
-          GRPC: 'gRPC',
-          WS: 'WebSocket'
+          HTTP: `HTTP ${requestMethod} request`,
+          GRAPHQL: 'GraphQL request',
+          GRPC: 'gRPC request',
+          WS: 'WebSocket request',
+          APP: 'App'
         };
-        return `${kind[requestType]} request ${this.label}`;
+        return `${kind[requestType]} ${this.label}`;
       }
     }
   }
@@ -792,6 +794,8 @@ export class Entity extends vscode.TreeItem {
       return new vscode.ThemeIcon('symbol-method', new vscode.ThemeColor('charts.blue'));
     } else if (type === 'WS') {
       return new vscode.ThemeIcon('plug', new vscode.ThemeColor('charts.green'));
+    } else if (type === 'APP') {
+      return new vscode.ThemeIcon('window');
     } else {
       return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor(methodColors[method] ?? 'charts.green'));
     }

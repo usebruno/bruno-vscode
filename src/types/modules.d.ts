@@ -169,6 +169,7 @@ declare module '@usebruno/common/utils' {
   export function valueToString(value: unknown, indent?: number): string;
   export function validateDataTypeValue(value: any, dataType?: BrunoVariableDataType): string | null;
   export function jsonToDotenv(variables: Array<{ name: string; value?: string }>): string;
+  export function patternHasher(input: string, pattern?: string | RegExp): { hashed: string; restore: (text: string) => string };
 }
 
 declare module '@usebruno/schema' {
