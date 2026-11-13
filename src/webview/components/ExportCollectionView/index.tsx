@@ -277,14 +277,7 @@ const ExportCollectionView: React.FC<ExportCollectionViewProps> = ({ collection 
 
     setIsExporting(true);
     try {
-      const exportData = prepareCollectionForExport(collection);
-      const content = JSON.stringify(exportData, null, 2);
-
-      const result = await ipcRenderer.invoke('sidebar:save-file', {
-        defaultFileName: `${collection.name}.json`,
-        content,
-        filters: [{ name: 'JSON Files', extensions: ['json'] }]
-      });
+      const result = await ipcRenderer.invoke('renderer:export-collection-zip', collection.pathname, collection.name);
 
       if (result) {
         toast.success('Collection exported successfully');
@@ -352,9 +345,9 @@ const ExportCollectionView: React.FC<ExportCollectionViewProps> = ({ collection 
               {isExporting ? <IconLoader2 size={24} className="animate-spin" /> : <Bruno width={24} />}
             </div>
             <div className="option-content">
-              <div className="option-title">Bruno Collection</div>
+              <div className="option-title">Bruno Collection (ZIP)</div>
               <div className="option-description">
-                {isCollectionLoading ? 'Loading collection...' : 'Export in Bruno JSON format for backup or sharing'}
+                {isCollectionLoading ? 'Loading collection...' : 'OpenCollection format organized as folders and files'}
               </div>
             </div>
           </div>
