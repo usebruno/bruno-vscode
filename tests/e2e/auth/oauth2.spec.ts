@@ -4,8 +4,7 @@ import type { Frame } from '@playwright/test';
 import {
   openBrunoSidebar,
   createCollection,
-  openNewRequestPanel,
-  createRequest,
+  createRequestByType,
   openRequest,
   sendRequest,
   importCollection,
@@ -15,6 +14,7 @@ import {
   selectDropdownItem,
   getActiveEditorFrame,
 } from '../utils/page/oauth2-actions';
+import type { Sidebar } from '../utils/page/sidebar';
 
 const TEST_SERVER = 'http://127.0.0.1:8081';
 
@@ -24,14 +24,13 @@ const TEST_SERVER = 'http://127.0.0.1:8081';
  */
 async function setupOAuth2Request(
   page: import('@playwright/test').Page,
-  sidebar: Frame,
+  sidebar: Sidebar,
   tmpDir: string,
   collectionName: string,
   grantType: 'Client Credentials' | 'Password Credentials' | 'Authorization Code' | 'Implicit'
 ): Promise<Frame> {
-  await createCollection(page, sidebar, collectionName, tmpDir);
-  const newReqPanel = await openNewRequestPanel(page, sidebar, collectionName);
-  await createRequest(page, newReqPanel, sidebar, collectionName, 'Get Resource', `${TEST_SERVER}/api/auth/oauth2/resource`);
+  await createCollection(sidebar, collectionName, tmpDir);
+  await createRequestByType(sidebar, collectionName, { name: 'Get Resource', url: `${TEST_SERVER}/api/auth/oauth2/resource` });
   const editor = await openRequest(page, sidebar, collectionName, 'Get Resource');
 
   const authTab = editor.locator('[role="tab"]').filter({ hasText: 'Auth' });
@@ -277,7 +276,7 @@ test.describe('OAuth2 Authentication', () => {
 
     // Import the collection that has {{tokenUrl}}, {{myClientId}}, {{myClientSecret}} in OAuth2 config
     // with request vars providing the actual values
-    await importCollection(page, sidebar, fixturePath, tmpDir, 'OAuth2 Interpolation');
+    await importCollection(sidebar, fixturePath, tmpDir, 'OAuth2 Interpolation');
 
     // Open the request
     const editor = await openRequest(page, sidebar, 'OAuth2 Interpolation', 'Get Resource With Vars');
@@ -309,7 +308,7 @@ test.describe('OAuth2 Authentication', () => {
 
     // Import the collection that has {{myAudience}} in additionalParameters.token
     // The server endpoint requires audience=my-api in the body to succeed
-    await importCollection(page, sidebar, fixturePath, tmpDir, 'OAuth2 Additional Params');
+    await importCollection(sidebar, fixturePath, tmpDir, 'OAuth2 Additional Params');
 
     // Open the request
     const editor = await openRequest(page, sidebar, 'OAuth2 Additional Params', 'Get Resource With Additional Params');

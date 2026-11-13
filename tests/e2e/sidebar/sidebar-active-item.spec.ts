@@ -7,26 +7,23 @@ import {
 } from '../utils/page/actions';
 import { buildCommonLocators } from '../utils/page/locators';
 
-// The active request's sidebar row carries this class when highlighted.
-const ACTIVE_CLASS = /item-focused-in-tab/;
-
 test.describe('Sidebar active item highlight', () => {
   test('highlights the request open in the active editor and moves with it', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const fixturePath = path.resolve(__dirname, 'fixtures/two-requests-collection.json');
     const collectionName = 'Highlight Collection';
 
-    await importCollection(page, sidebar, fixturePath, tmpDir, collectionName);
+    await importCollection(sidebar, fixturePath, tmpDir, collectionName);
 
+    // The tree marks the row of the request shown in the active editor as selected.
     const row = (name: string) => buildCommonLocators(sidebar).sidebar.collectionItem(name);
 
-    // Opening a request highlights its sidebar row.
     await openRequest(page, sidebar, collectionName, 'Alpha Request');
-    await expect(row('Alpha Request')).toHaveClass(ACTIVE_CLASS, { timeout: 2_000 });
+    await expect(row('Alpha Request')).toHaveAttribute('aria-selected', 'true');
 
-    // Opening another moves the highlight; the previous row is no longer active.
+    // Opening another moves the selection; the previous row loses it.
     await openRequest(page, sidebar, collectionName, 'Beta Request');
-    await expect(row('Beta Request')).toHaveClass(ACTIVE_CLASS, { timeout: 2_000 });
-    await expect(row('Alpha Request')).not.toHaveClass(ACTIVE_CLASS, { timeout: 2_000 });
+    await expect(row('Beta Request')).toHaveAttribute('aria-selected', 'true');
+    await expect(row('Alpha Request')).not.toHaveAttribute('aria-selected', 'true');
   });
 });

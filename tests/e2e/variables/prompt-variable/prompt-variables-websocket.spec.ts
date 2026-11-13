@@ -32,7 +32,7 @@ async function newWsRequest(
   url: string
 ): Promise<Frame> {
   const sidebar = await setupCollection(page, tmpDir, collectionName);
-  await createRequestByType(page, sidebar, collectionName, { name, url, type: 'WebSocket' });
+  await createRequestByType(sidebar, collectionName, { name, url, type: 'WebSocket' });
   return openWsRequest(page, sidebar, collectionName, name);
 }
 

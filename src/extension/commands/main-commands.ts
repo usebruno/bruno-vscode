@@ -2,19 +2,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { BrunoEditorProvider, setPendingVariablesMode, ensureBrunoEditorIntent } from '../editors/bruno-editor-provider';
-import { SidebarViewProvider } from '../views/SidebarViewProvider';
 import { resolveCollectionRoot } from '../utils/path';
 import { openRunnerPanel } from '../panels/runner-panel';
 import { openGlobalEnvironmentsPanel } from '../panels/global-environments-panel';
 import { openPreferencesPanel } from '../panels/preferences-panel';
 import { openEnvironmentSettingsPanel } from '../panels/environment-settings-panel';
-import { openCreateCollectionPanel } from '../panels/create-collection-panel';
-import { openImportCollectionPanel } from '../panels/import-collection-panel';
-import { openNewRequestPanel } from '../panels/new-request-panel';
 import { openExportCollectionPanel } from '../panels/export-collection-panel';
-import { openCloneCollectionPanel } from '../panels/clone-collection-panel';
 import { handleInvoke } from '../ipc/handlers';
-import { openCollectionDialog } from '../app/collections';
 import collectionWatcher from '../app/collection-watcher';
 import { getCollectionFormat } from '../utils/filesystem';
 import { stateManager } from '../webview/state-manager';
@@ -60,10 +54,7 @@ const ensureCollectionRootFile = async (collectionRoot: string): Promise<string>
   }
 };
 
-export function registerMainCommands(
-  context: vscode.ExtensionContext,
-  sidebarProvider: SidebarViewProvider
-): void {
+export function registerMainCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('bruno.switchFileEditor', async () => {
       const activeEditor = vscode.window.activeTextEditor;
@@ -161,38 +152,6 @@ export function registerMainCommands(
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.createCollection', async () => {
-      await openCreateCollectionPanel(context);
-    })
-  );
-
-  // Alias command for sidebar
-  context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.openCreateCollection', async () => {
-      await openCreateCollectionPanel(context);
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.openCollection', async () => {
-      await openCollectionDialog(collectionWatcher);
-      sidebarProvider.refresh();
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.importCollection', async () => {
-      await openImportCollectionPanel(context);
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.refreshSidebar', () => {
-      sidebarProvider.refresh();
-    })
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand('bruno.newRequest', async () => {
       await vscode.window.showQuickPick([
         { label: 'HTTP Request', value: 'http' },
@@ -239,31 +198,11 @@ export function registerMainCommands(
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.openNewRequest', async (
-      collectionUid: string,
-      collectionPath: string,
-      itemUid?: string | null,
-      itemPath?: string | null
-    ) => {
-      await openNewRequestPanel(context, collectionUid, collectionPath, itemUid, itemPath);
-    })
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openExportCollection', async (
       collectionUid: string,
       collectionPath: string
     ) => {
       await openExportCollectionPanel(context, collectionUid, collectionPath);
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.openCloneCollection', async (
-      collectionUid: string,
-      collectionPath: string
-    ) => {
-      await openCloneCollectionPanel(context, collectionUid, collectionPath);
     })
   );
 

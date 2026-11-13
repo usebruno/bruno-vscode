@@ -27,9 +27,9 @@ test.describe('Reorder requests by drag and drop', () => {
     };
 
     await test.step('Create a collection with three requests', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
+      await createCollection(sidebar, collectionName, tmpDir);
       for (const requestName of requestNames) {
-        await createRequestByType(page, sidebar, collectionName, { name: requestName, url: 'https://example.com' });
+        await createRequestByType(sidebar, collectionName, { name: requestName, url: 'https://example.com' });
         await closeEditorTabIfOpen(page, requestName);
       }
       await expandCollection(sidebar, collectionName);
@@ -61,7 +61,7 @@ test.describe('Reorder requests by drag and drop', () => {
     };
 
     await test.step('Create a collection with three folders', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
+      await createCollection(sidebar, collectionName, tmpDir);
       for (const folderName of folderNames) {
         await createFolder(sidebar, collectionName, folderName);
       }

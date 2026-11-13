@@ -1,4 +1,5 @@
 import type { Frame, Page, Locator, FrameLocator } from '@playwright/test';
+import type { Sidebar, SidebarLocators } from './sidebar';
 
 /**
  * Centralised Playwright locators for the e2e suite.
@@ -9,58 +10,25 @@ import type { Frame, Page, Locator, FrameLocator } from '@playwright/test';
  */
 export type FrameLike = Frame | Page | Locator | FrameLocator;
 
-export const buildCommonLocators = (frame: FrameLike) => ({
+type PageLocators = ReturnType<typeof buildLocators>;
+
+/**
+ * Given the sidebar driver, the groups look in the whole window and a `sidebar`
+ * group comes from the driver, which knows the tree's rows. Given a frame,
+ * there is no sidebar to look in, so there is no `sidebar` group.
+ */
+export function buildCommonLocators(sidebar: Sidebar): PageLocators & { sidebar: SidebarLocators };
+export function buildCommonLocators(frame: FrameLike): PageLocators;
+export function buildCommonLocators(frame: FrameLike | Sidebar): PageLocators & { sidebar?: SidebarLocators } {
+  // The driver is told apart by shape: a value import of its class here would be a cycle, as it imports this file.
+  if ('locators' in frame && 'collectionAction' in frame) {
+    return { ...buildLocators(frame.page), sidebar: frame.locators };
+  }
+  return buildLocators(frame);
+}
+
+const buildLocators = (frame: FrameLike) => ({
   saveButton: () => frame.getByRole('button', { name: 'Save' }),
-  sidebar: {
-    collectionName: (name: string) => frame.getByTestId(`sidebar-collection-row-${name}`),
-    collectionById: (name: string) =>
-      frame
-        .locator(`#collection-${name.replace(/\s+/g, '-').toLowerCase()}`)
-        .getByTestId(`sidebar-collection-row-${name}`),
-    collectionItem: (name: string) => frame.getByTestId(`sidebar-collection-item-row-${name}`),
-    collectionItems: () => frame.getByTestId(/^sidebar-collection-item-row-/),
-    collectionItemLabel: (name: string) => frame.getByTestId(`collection-item-label-${name}`),
-    folder: (name: string) => frame.getByTestId(`sidebar-collection-item-row-${name}`),
-    folderChevron: (name: string) => frame.getByTestId(`folder-chevron-${name}`),
-    // The single item named `name` anywhere inside folder `folderName` (item names are unique per test).
-    folderChild: (folderName: string, name: string) =>
-      frame.getByTestId(`sidebar-collection-item-row-${folderName}`).locator('..').getByTestId(`sidebar-collection-item-row-${name}`),
-    addMenu: () => frame.getByTestId('collections-header-add-menu'),
-    addMenuCreate: () => frame.getByTestId('collections-header-add-menu-create'),
-    openCollectionButton: () => frame.getByTestId('collections-header-add-menu-open'),
-    addMenuImport: () => frame.getByTestId('collections-header-add-menu-import'),
-    preferencesButton: () => frame.getByRole('button', { name: 'Preferences' }),
-    actionsMenu: (collectionName: string) => frame.getByTestId(`collection-actions-${collectionName}`),
-    collectionMenuOptions: (name: string) => frame.getByTestId(`collection-actions-${name}`),
-    actionMenuButton: (collectionName: string, id: string) => frame.getByTestId(`collection-actions-${collectionName}-${id}`),
-    runCollectionButton: (collectionName: string) => frame.getByTestId(`collection-actions-${collectionName}-run`),
-    actionsItem: (collectionName: string, id: string) => frame.getByTestId(`collection-actions-${collectionName}-${id}`),
-    itemMenu: (name: string) => frame.getByTestId(`collection-item-menu-${name}`),
-    itemMenuAction: (name: string, id: string) => frame.getByTestId(`collection-item-menu-${name}-${id}`),
-    toast: (text: string) => frame.locator('[data-rht-toaster]').getByText(text)
-  },
-  importCollection: {
-    container: () => frame.getByTestId('import-collection-container'),
-    fileInput: () => frame.getByTestId('import-file-input'),
-    search: () => frame.getByTestId('import-search'),
-    selectAll: () => frame.getByTestId('import-select-all'),
-    selectedCount: () => frame.getByTestId('import-selected-count'),
-    rows: () => frame.getByTestId(/^import-collection-row-/),
-    row: (name: string) => frame.getByTestId(`import-collection-row-${name}`),
-    rowCheckbox: (name: string) => frame.getByTestId(`import-collection-checkbox-${name}`),
-    location: () => frame.getByTestId('import-collection-location'),
-    browse: () => frame.getByTestId('import-browse-button'),
-    submit: () => frame.getByTestId('import-submit'),
-    progressSummary: () => frame.getByTestId('import-progress-summary'),
-    close: () => frame.getByTestId('import-close')
-  },
-  cloneCollection: {
-    container: () => frame.locator('.clone-container'),
-    nameInput: () => frame.locator('#name'),
-    locationInput: () => frame.locator('#location'),
-    browseButton: () => frame.locator('.browse-btn'),
-    submit: () => frame.locator('button[type="submit"]').filter({ hasText: 'Clone Collection' })
-  },
   collectionSettings: {
     container: () => frame.getByTestId('collection-settings'),
     // Overview → Requests line, e.g. "2 requests in collection".

@@ -21,6 +21,7 @@ import {
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 import { GRPC_HANDSHAKE_FAILURE, addCertificate, storedCertPaths, openClientCertsTab } from './helpers';
+import type { Sidebar } from '../../utils/page/sidebar';
 
 const GRPC_REQUEST = 'grpc-request';
 
@@ -28,14 +29,14 @@ async function setupGrpcCollection(
   page: Page,
   tmpDir: string,
   collectionName: string
-): Promise<{ sidebar: Frame; protoPath: string }> {
+): Promise<{ sidebar: Sidebar; protoPath: string }> {
   const sidebar = await openBrunoSidebar(page);
-  await createCollection(page, sidebar, collectionName, tmpDir);
+  await createCollection(sidebar, collectionName, tmpDir);
 
   const protoPath = path.join(findCollectionDir(tmpDir, 'opencollection.yml'), 'echo.proto');
   fs.copyFileSync(path.resolve(__dirname, '../../utils/fixtures/echo.proto'), protoPath);
 
-  await createRequestByType(page, sidebar, collectionName, {
+  await createRequestByType(sidebar, collectionName, {
     name: GRPC_REQUEST,
     url: MTLS_GRPC_URL,
     type: 'gRPC'
@@ -71,7 +72,7 @@ test.describe('Collection client certificates - grpcs', () => {
     });
 
     await test.step('adding the certificate records it in the collection config', async () => {
-      const settings = await openClientCertsTab(page, sidebar, collectionName);
+      const settings = await openClientCertsTab(sidebar, collectionName);
       const locators = buildCommonLocators(settings);
       await expect(locators.clientCerts.emptyMessage()).toBeVisible();
       await addCertificate(page, settings, { certPath: CLIENT_CERT, keyPath: CLIENT_KEY });
@@ -90,7 +91,7 @@ test.describe('Collection client certificates - grpcs', () => {
     const collectionName = 'Certs Grpc Pfx';
     const { sidebar, protoPath } = await setupGrpcCollection(page, tmpDir, collectionName);
 
-    const settings = await openClientCertsTab(page, sidebar, collectionName);
+    const settings = await openClientCertsTab(sidebar, collectionName);
     await addCertificate(page, settings, { pfxPath: CLIENT_PFX, passphrase: PFX_PASSPHRASE });
     await expect.poll(() => storedCertPaths(tmpDir)).toHaveLength(1);
 

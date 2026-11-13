@@ -24,11 +24,11 @@ test.describe('Collection client certificates - untrusted', () => {
   test('an untrusted PEM cert/key is rejected at the handshake', async ({ page, tmpDir }) => {
     const collectionName = 'Certs Untrusted';
     const sidebar = await openBrunoSidebar(page);
-    await createCollection(page, sidebar, collectionName, tmpDir);
-    await createRequestByType(page, sidebar, collectionName, { name: HTTPS_REQUEST, url: MTLS_URL });
+    await createCollection(sidebar, collectionName, tmpDir);
+    await createRequestByType(sidebar, collectionName, { name: HTTPS_REQUEST, url: MTLS_URL });
 
     await test.step('adding the untrusted certificate records it in the collection config', async () => {
-      const settings = await openClientCertsTab(page, sidebar, collectionName);
+      const settings = await openClientCertsTab(sidebar, collectionName);
       const locators = buildCommonLocators(settings);
       await expect(locators.clientCerts.emptyMessage()).toBeVisible();
       await addCertificate(page, settings, { certPath: UNTRUSTED_CLIENT_CERT, keyPath: UNTRUSTED_CLIENT_KEY });

@@ -23,8 +23,8 @@ test.describe('Collection client certificates - https', () => {
   test('a PEM cert/key is attached on https', async ({ page, tmpDir }) => {
     const collectionName = 'Certs Pem';
     const sidebar = await openBrunoSidebar(page);
-    await createCollection(page, sidebar, collectionName, tmpDir);
-    await createRequestByType(page, sidebar, collectionName, { name: HTTPS_REQUEST, url: MTLS_URL });
+    await createCollection(sidebar, collectionName, tmpDir);
+    await createRequestByType(sidebar, collectionName, { name: HTTPS_REQUEST, url: MTLS_URL });
 
     await test.step('without a certificate the server rejects the request', async () => {
       const editor = await openRequest(page, sidebar, collectionName, HTTPS_REQUEST);
@@ -37,7 +37,7 @@ test.describe('Collection client certificates - https', () => {
     });
 
     await test.step('adding the certificate records it in the collection config', async () => {
-      const settings = await openClientCertsTab(page, sidebar, collectionName);
+      const settings = await openClientCertsTab(sidebar, collectionName);
       const locators = buildCommonLocators(settings);
       await expect(locators.clientCerts.emptyMessage()).toBeVisible();
       await addCertificate(page, settings, { certPath: CLIENT_CERT, keyPath: CLIENT_KEY });
@@ -55,9 +55,9 @@ test.describe('Collection client certificates - https', () => {
   test('a PFX bundle is attached on https', async ({ page, tmpDir }) => {
     const collectionName = 'Certs Pfx';
     const sidebar = await openBrunoSidebar(page);
-    await createCollection(page, sidebar, collectionName, tmpDir);
-    await createRequestByType(page, sidebar, collectionName, { name: HTTPS_REQUEST, url: MTLS_URL });
-    const settings = await openClientCertsTab(page, sidebar, collectionName);
+    await createCollection(sidebar, collectionName, tmpDir);
+    await createRequestByType(sidebar, collectionName, { name: HTTPS_REQUEST, url: MTLS_URL });
+    const settings = await openClientCertsTab(sidebar, collectionName);
     await addCertificate(page, settings, { pfxPath: CLIENT_PFX, passphrase: PFX_PASSPHRASE });
     await expect.poll(() => storedCertPaths(tmpDir)).toHaveLength(1);
     const editor = await openRequest(page, sidebar, collectionName, HTTPS_REQUEST);

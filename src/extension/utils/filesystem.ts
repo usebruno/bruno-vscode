@@ -5,6 +5,8 @@ import isValidPathname from 'is-valid-path';
 import os from 'os';
 import * as vscode from 'vscode';
 
+import { doesItExist } from './file';
+
 type CollectionFormat = 'bru' | 'yml';
 
 export const exists = async (p: string): Promise<boolean> => {
@@ -61,7 +63,7 @@ export function isWSLPath(pathname: string): boolean {
   if (process.platform !== 'win32') return false;
 
   return pathname.startsWith('\\\\') || pathname.startsWith('//') ||
-         pathname.startsWith('/wsl.localhost/') || pathname.startsWith('\\wsl.localhost');
+    pathname.startsWith('/wsl.localhost/') || pathname.startsWith('\\wsl.localhost');
 }
 
 export function normalizeWSLPath(pathname: string): string {
@@ -254,6 +256,15 @@ export const sanitizeName = (name: string): string => {
   return name;
 };
 
+/** "Name", then "Name - 1", "Name - 2", ... until nothing exists at that path, as the Bruno app does. */
+export async function uniqueFolderName(baseName: string, location: vscode.Uri): Promise<string> {
+  let name = baseName;
+  for (let n = 1; await doesItExist(vscode.Uri.joinPath(location, sanitizeName(name))); n++) {
+    name = `${baseName} - ${n}`;
+  }
+  return name;
+}
+
 export const isWindowsOS = (): boolean => {
   return os.platform() === 'win32';
 };
@@ -273,6 +284,7 @@ export const generateUniqueName = (baseName: string, checkExists: (name: string)
   return uniqueName;
 };
 
+/** @deprecated Local-disk only (Node fs). The native sidebar uses `uniqueFolderName` above, which goes through workspace.fs and so works on remotes. */
 export const makeFolderNameUnique = (baseName: string, parentDir: string): string => {
   const isTaken = (folderName: string): boolean => {
     const dirPath = path.join(parentDir, folderName);

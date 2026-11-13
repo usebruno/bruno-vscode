@@ -3,8 +3,7 @@ import { test, expect } from '../../utils/fixtures';
 import {
   openBrunoSidebar,
   createCollection,
-  openNewRequestPanel,
-  createRequest,
+  createRequestByType,
   openRequest,
   openRequestPaneTab,
   runCommand
@@ -73,9 +72,8 @@ test.describe('Path parameters', () => {
     const requestUrl = 'https://echo.usebruno.com/:userId';
     const paramValue = '42';
 
-    await createCollection(page, sidebar, collectionName, tmpDir);
-    const newReqPanel = await openNewRequestPanel(page, sidebar, collectionName);
-    await createRequest(page, newReqPanel, sidebar, collectionName, requestName, requestUrl, 'GET');
+    await createCollection(sidebar, collectionName, tmpDir);
+    await createRequestByType(sidebar, collectionName, { name: requestName, url: requestUrl, method: 'GET' });
 
     const editor = await openRequest(page, sidebar, collectionName, requestName);
 

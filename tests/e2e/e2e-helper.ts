@@ -1,11 +1,13 @@
-import { expect, type Frame, type Page } from "@playwright/test";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { expect, type Page } from "@playwright/test";
 import { test } from "./utils/fixtures";
 import { Context } from "./context";
-import { buildCommonLocators } from "./utils/page/locators";
 import {
-  createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2,
-  deleteRequest, exportCollection, fillRequestDetails, openBrunoSidebar, removeCollection, runCommand, saveRequestV2,
-  sendRequest, setAuth, setHeaders, setPresets, setVars, takeScreenshot, toRows,
+  activeEditor, createCollectionV2, createFolder, expandCollection, createRequestInFolder, createRequestV2,
+  deleteRequest, exportCollection, fillRequestDetails, closeAllEditors, openBrunoSidebar, removeCollection, saveRequestV2,
+  sendRequest, setAuth, setHeaders, setPresets, setVars, takeScreenshot, toRows, type Sidebar,
 } from "./utils/page/actions";
 
 export type KeyValue<T = string | number | boolean> = {
@@ -89,22 +91,22 @@ function flattenFolders(folders: FolderConfig[] = [], parent?: string): FolderEn
 }
 
 
-async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: string, { request, folder }: RequestEntry) {
+async function addRequest(page: Page, sidebar: Sidebar, collection: string, { request, folder }: RequestEntry) {
   if (folder) {
-    await createRequestInFolder(page, sidebar, { collection, folder, name: request.name, type: request.type, method: request.method, url: request.url })
+    await createRequestInFolder(sidebar, { collection, folder, name: request.name, type: request.type, method: request.method, url: request.url })
 
-    const rows = buildCommonLocators(sidebar).sidebar
-    const folderDepth = await rows.collectionItem(folder).locator('.indent-block').count()
-    await expect(rows.collectionItem(request.name).locator('.indent-block')).toHaveCount(folderDepth + 1)
+    // The tree nests the request one level below its folder.
+    const rows = sidebar.locators
+    const folderLevel = Number(await rows.collectionItem(folder).getAttribute('aria-level'))
+    await expect(rows.collectionItem(request.name)).toHaveAttribute('aria-level', String(folderLevel + 1))
   } else {
-    const requestWebview = await createRequestV2(page, sidebar, ctx, collection, request.type, request.method)
-    await fillRequestDetails(requestWebview, ctx, request.type, request.url, request.payload, request.params, request.headers)
+    const editor = await createRequestV2(page, sidebar, collection, request.name, request.type, request.method)
+    await fillRequestDetails(editor, request.type, request.url, request.payload)
+    await saveRequestV2(page, editor)
+  }
 
-    if (request.run) {
-      await sendRequest(requestWebview, 200)
-    }
-
-    await saveRequestV2(page, requestWebview, ctx, request.name, true)
+  if (request.run) {
+    await sendRequest(activeEditor(page), 200)
   }
 
   if (request.auth) {
@@ -113,20 +115,25 @@ async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: 
 }
 
 export type Setup = {
-  sidebar: Frame,
+  sidebar: Sidebar,
   // Every collection created, by name
   ctx: Context,
   // Names of the collections it created
   collections: string[],
 }
 
-// Builds the workspace
-export async function createSetup<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<Setup> {
+// Builds the workspace. Collections go in `location`, by default a fresh temp folder outside the
+// workspace, so the sidebar lists them as opened collections and they can be removed from it afterwards.
+export async function createSetup<const EnvName extends string = never>(
+  config: Config<EnvName>,
+  page: Page,
+  location: string = fs.mkdtempSync(path.join(os.tmpdir(), 'bruno-e2e-collections-'))
+): Promise<Setup> {
   const sidebar = await openBrunoSidebar(page);
   const ctx = new Context();
   const collections: string[] = [];
 
-  for (const [index, collection] of config.collections.entries()) {
+  for (const collection of config.collections) {
     if (typeof collection === 'string') {
       // import collection
     } else {
@@ -136,7 +143,7 @@ export async function createSetup<const EnvName extends string = never>(config: 
         ...folders.flatMap(({ folder }) => (folder.requests ?? []).map((request) => ({ request, folder: folder.name }))),
       ]
 
-      await createCollectionV2(page, sidebar, ctx, collection.name, index !== 0, collection.format)
+      await createCollectionV2(sidebar, ctx, collection.name, location, collection.format)
       collections.push(collection.name)
 
       if (collection.vars) {
@@ -158,7 +165,7 @@ export async function createSetup<const EnvName extends string = never>(config: 
       }
 
       for (const entry of requests) {
-        await addRequest(page, sidebar, ctx, collection.name, entry)
+        await addRequest(page, sidebar, collection.name, entry)
       }
 
       for (const { folder } of folders) {
@@ -171,17 +178,17 @@ export async function createSetup<const EnvName extends string = never>(config: 
         await setAuth(page, collection.name, collection.auth)
       }
 
-      // Delete only after every request is saved, so deletes don't shift the "Untitled N" titles.
+      // Requests marked for deletion go once everything is created, so the export below shows what remains.
       const toDelete = requests.filter(({ request }) => request.delete)
       for (const { request } of toDelete) {
-        await deleteRequest(page, sidebar, collection.name, request.name)
+        await deleteRequest(sidebar, collection.name, request.name)
       }
 
       if (collection.export) {
         const exported = await exportCollection(page, sidebar, ctx, collection.name)
 
         // verify the export reflects the deletes
-        for (const request of collection.requests) {
+        for (const request of collection.requests ?? []) {
           expect(`${request.name}.${collection.format}` in exported).toBe(!request.delete);
         }
       }
@@ -215,10 +222,10 @@ export function runSuites<const S extends LifecycleSuite[]>(title: string, suite
 
         test.afterEach(async ({ workbench }) => {
           await takeScreenshot(workbench, test);
-          await runCommand(workbench, 'View: Close All Editors');
+          await closeAllEditors(workbench);
           const sidebar = await openBrunoSidebar(workbench);
           for (const collection of collections) {
-            await removeCollection(workbench, sidebar, collection);
+            await removeCollection(sidebar, collection);
           }
         });
 

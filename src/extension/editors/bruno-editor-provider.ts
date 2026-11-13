@@ -28,7 +28,6 @@ import { getCollectionFormat } from '../utils/filesystem';
 import { defaultWorkspaceManager } from '../store/default-workspace';
 import { getRuntimeVariables } from '../store/runtime-variables';
 import { registerDocument, unregisterDocument } from './dirty-state-manager';
-import { notifyActiveItemToSidebar, clearActiveItemFromSidebar } from '../ipc/collection';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -194,19 +193,14 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     stateManager.setActiveEditorWebview(webviewPanel.webview);
-    notifyActiveItemToSidebar(activeItemUid);
     webviewPanel.onDidChangeViewState((e) => {
       if (e.webviewPanel.active) {
         stateManager.setActiveEditorWebview(webviewPanel.webview);
-        notifyActiveItemToSidebar(activeItemUid);
-      } else {
-        clearActiveItemFromSidebar(activeItemUid);
       }
     });
 
     webviewPanel.onDidDispose(() => {
       titleSubscription?.dispose();
-      clearActiveItemFromSidebar(activeItemUid);
       stateManager.removeWebview(webviewPanel.webview);
       unregisterDocument(document.uri.fsPath);
       viewDataByWebview.delete(webviewPanel.webview);

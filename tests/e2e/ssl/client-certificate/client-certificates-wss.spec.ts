@@ -16,13 +16,14 @@ import {
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 import { TLS_HANDSHAKE_FAILURE, addCertificate, storedCertPaths, openClientCertsTab } from './helpers';
+import type { Sidebar } from '../../utils/page/sidebar';
 
 const WSS_REQUEST = 'wss-request';
 
-async function createWssCollection(page: Page, tmpDir: string, collectionName: string): Promise<Frame> {
+async function createWssCollection(page: Page, tmpDir: string, collectionName: string): Promise<Sidebar> {
   const sidebar = await openBrunoSidebar(page);
-  await createCollection(page, sidebar, collectionName, tmpDir);
-  await createRequestByType(page, sidebar, collectionName, {
+  await createCollection(sidebar, collectionName, tmpDir);
+  await createRequestByType(sidebar, collectionName, {
     name: WSS_REQUEST,
     url: MTLS_WS_URL,
     type: 'WebSocket'
@@ -46,7 +47,7 @@ test.describe('Collection client certificates - wss', () => {
     });
 
     await test.step('adding the certificate records it in the collection config', async () => {
-      const settings = await openClientCertsTab(page, sidebar, collectionName);
+      const settings = await openClientCertsTab(sidebar, collectionName);
       const locators = buildCommonLocators(settings);
       await expect(locators.clientCerts.emptyMessage()).toBeVisible();
       await addCertificate(page, settings, { certPath: CLIENT_CERT, keyPath: CLIENT_KEY });
@@ -65,7 +66,7 @@ test.describe('Collection client certificates - wss', () => {
     const collectionName = 'Certs Wss Pfx';
     const sidebar = await createWssCollection(page, tmpDir, collectionName);
 
-    const settings = await openClientCertsTab(page, sidebar, collectionName);
+    const settings = await openClientCertsTab(sidebar, collectionName);
     await addCertificate(page, settings, { pfxPath: CLIENT_PFX, passphrase: PFX_PASSPHRASE });
     await expect.poll(() => storedCertPaths(tmpDir)).toHaveLength(1);
 

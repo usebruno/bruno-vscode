@@ -5,8 +5,7 @@ import { test, expect } from '../../utils/fixtures';
 import {
   openBrunoSidebar,
   createCollection,
-  openNewRequestPanel,
-  createRequest,
+  createRequestByType,
   openRequest,
   openRequestPaneTab,
   sendRequest
@@ -56,10 +55,9 @@ test.describe('Request body: File / Binary', () => {
     const payloadPath = path.join(tmpDir, 'payload.txt');
     fs.writeFileSync(payloadPath, fileContent, 'utf8');
 
-    await createCollection(page, sidebar, collectionName, tmpDir);
+    await createCollection(sidebar, collectionName, tmpDir);
 
-    const newReqPanel = await openNewRequestPanel(page, sidebar, collectionName);
-    await createRequest(page, newReqPanel, sidebar, collectionName, requestName, `${TEST_SERVER}/raw-body`, 'POST');
+    await createRequestByType(sidebar, collectionName, { name: requestName, url: `${TEST_SERVER}/raw-body`, method: 'POST' });
 
     const editor = await openRequest(page, sidebar, collectionName, requestName);
     await attachFileBody(editor, payloadPath);

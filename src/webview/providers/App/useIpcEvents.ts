@@ -49,7 +49,7 @@ import {
   postResponseTestResultsReceived
 } from 'providers/ReduxStore/slices/collections/index';
 import { addLog } from 'providers/ReduxStore/slices/logs';
-import { addTab, focusTab } from 'providers/ReduxStore/slices/tabs';
+import { addTab } from 'providers/ReduxStore/slices/tabs';
 import { findItemInCollectionByPathname, findCollectionByUid, getDefaultRequestPaneTab } from 'utils/collections';
 import { uuid } from 'utils/common';
 import type { Preferences } from '@bruno-types';
@@ -438,12 +438,6 @@ const useIpcEvents = () => {
       }
     });
 
-    // Highlight the sidebar item whose request/folder/collection is open in the
-    // active editor. The extension sends the item's uid (or null to clear).
-    const removeActiveItemListener = ipcRenderer.on('main:set-active-item', (itemUid: unknown) => {
-      dispatch(focusTab({ uid: (itemUid as string) ?? null }));
-    });
-
 
     const removeGlobalEnvironmentsUpdatesListener = ipcRenderer.on('main:load-global-environments', (val: unknown) => {
       dispatch(updateGlobalEnvironments(val));
@@ -688,7 +682,6 @@ const useIpcEvents = () => {
       removeSystemProxyEnvUpdatesListener();
       removeAddTransientRequestListener();
       removeTransientRequestClosedListener();
-      removeActiveItemListener();
       removeGlobalEnvironmentsUpdatesListener();
       removeSnapshotHydrationListener();
       removeSecurityConfigUpdatedListener();

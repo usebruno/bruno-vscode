@@ -71,8 +71,8 @@
       ],
       "bruno": [
         {
-          "type": "webview",
-          "id": "bruno.sidebarView",
+          "type": "tree",
+          "id": "bruno.nativeSidebarView",
           "name": "Collections",
           "contextualTitle": "Bruno Collections",
           "icon": "$(folder-library)"
@@ -87,6 +87,13 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "bruno.nativeSidebarView",
+        "contents": "No Bruno collections were found in the open folders.\n[Create Collection](command:bruno.sidebar.createCollection)\n[Open Collection](command:bruno.sidebar.openCollection)\n[Import Collection](command:bruno.sidebar.importCollection)",
+        "when": "bruno.sidebar.empty"
+      }
+    ],
     "commands": [
       {
         "command": "bruno.switchFileEditor",
@@ -114,30 +121,6 @@
         "title": "Open Collection Settings",
         "category": "Bruno",
         "icon": "$(settings-gear)"
-      },
-      {
-        "command": "bruno.createCollection",
-        "title": "Create Collection",
-        "category": "Bruno",
-        "icon": "$(file-directory-create)"
-      },
-      {
-        "command": "bruno.openCollection",
-        "title": "Open Collection",
-        "category": "Bruno",
-        "icon": "$(folder-opened)"
-      },
-      {
-        "command": "bruno.importCollection",
-        "title": "Import Collection",
-        "category": "Bruno",
-        "icon": "$(file-symlink-directory)"
-      },
-      {
-        "command": "bruno.refreshSidebar",
-        "title": "Refresh",
-        "category": "Bruno",
-        "icon": "$(refresh)"
       },
       {
         "command": "bruno.newRequest",
@@ -219,14 +202,10 @@
         "category": "Bruno"
       },
       {
-        "command": "bruno.openCreateCollection",
-        "title": "Create Collection",
-        "category": "Bruno"
-      },
-      {
         "command": "bruno.openGlobalEnvironments",
         "title": "Open Global Environments",
-        "category": "Bruno"
+        "category": "Bruno",
+        "icon": "$(globe)"
       },
       {
         "command": "bruno.openPreferences",
@@ -240,19 +219,141 @@
         "category": "Bruno"
       },
       {
-        "command": "bruno.openNewRequest",
-        "title": "New Request",
-        "category": "Bruno"
-      },
-      {
         "command": "bruno.openExportCollection",
         "title": "Export Collection",
         "category": "Bruno"
       },
       {
-        "command": "bruno.openCloneCollection",
-        "title": "Clone Collection",
-        "category": "Bruno"
+        "command": "bruno.sidebar.createCollection",
+        "title": "Create Collection",
+        "category": "Bruno",
+        "icon": "$(file-directory-create)"
+      },
+      {
+        "command": "bruno.sidebar.importCollection",
+        "title": "Import Collection",
+        "category": "Bruno",
+        "icon": "$(file-symlink-directory)"
+      },
+      {
+        "command": "bruno.sidebar.search",
+        "title": "Search Requests",
+        "category": "Bruno",
+        "icon": "$(search)"
+      },
+      {
+        "command": "bruno.sidebar.clearSearch",
+        "title": "Clear Search",
+        "category": "Bruno",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "bruno.sidebar.refresh",
+        "title": "Refresh Collections",
+        "category": "Bruno",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "bruno.sidebar.openCollection",
+        "title": "Open Collection",
+        "category": "Bruno",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "bruno.sidebar.closeCollection",
+        "title": "Remove",
+        "category": "Bruno",
+        "icon": "$(close)"
+      },
+      {
+        "command": "bruno.sidebar.newRequest",
+        "title": "New Request",
+        "category": "Bruno",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "bruno.sidebar.newFolder",
+        "title": "New Folder",
+        "category": "Bruno",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "bruno.sidebar.run",
+        "title": "Run",
+        "category": "Bruno",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bruno.sidebar.settings",
+        "title": "Settings",
+        "category": "Bruno",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "bruno.sidebar.clone",
+        "title": "Clone",
+        "category": "Bruno",
+        "icon": "$(files)"
+      },
+      {
+        "command": "bruno.sidebar.export",
+        "title": "Export",
+        "category": "Bruno",
+        "icon": "$(export)"
+      },
+      {
+        "command": "bruno.sidebar.copy",
+        "title": "Copy",
+        "category": "Bruno",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "bruno.sidebar.paste",
+        "title": "Paste",
+        "category": "Bruno",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "bruno.sidebar.rename",
+        "title": "Rename",
+        "category": "Bruno",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "bruno.sidebar.moveUp",
+        "title": "Move Up",
+        "category": "Bruno",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "bruno.sidebar.moveDown",
+        "title": "Move Down",
+        "category": "Bruno",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "bruno.sidebar.revealInFinder",
+        "title": "Reveal in Finder",
+        "category": "Bruno",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "bruno.sidebar.revealInFileExplorer",
+        "title": "Reveal in File Explorer",
+        "category": "Bruno",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "bruno.sidebar.revealInFileManager",
+        "title": "Reveal in File Manager",
+        "category": "Bruno",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "bruno.sidebar.delete",
+        "title": "Delete",
+        "category": "Bruno",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -287,24 +388,49 @@
           "group": "navigation"
         },
         {
-          "command": "bruno.createCollection",
-          "when": "view == bruno.sidebarView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "bruno.openCollection",
-          "when": "view == bruno.sidebarView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "bruno.importCollection",
-          "when": "view == bruno.sidebarView",
-          "group": "navigation@3"
-        },
-        {
           "command": "bruno.refreshWorkspaceCollections",
           "when": "view == bruno.workspaceCollections",
           "group": "navigation"
+        },
+        {
+          "command": "bruno.openGlobalEnvironments",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@0"
+        },
+        {
+          "command": "bruno.sidebar.search",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bruno.sidebar.clearSearch",
+          "when": "view == bruno.nativeSidebarView && bruno.sidebar.filtered",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bruno.sidebar.createCollection",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "bruno.sidebar.openCollection",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "bruno.sidebar.importCollection",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@5"
+        },
+        {
+          "command": "bruno.sidebar.refresh",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@6"
+        },
+        {
+          "command": "bruno.openPreferences",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
@@ -347,6 +473,178 @@
           "command": "bruno.revealInExplorer",
           "when": "view == bruno.workspaceCollections",
           "group": "4_misc@1"
+        },
+        {
+          "command": "bruno.sidebar.newRequest",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "bruno.sidebar.run",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "bruno.sidebar.newRequest",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
+          "group": "1_new@1"
+        },
+        {
+          "command": "bruno.sidebar.newFolder",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
+          "group": "1_new@2"
+        },
+        {
+          "command": "bruno.sidebar.run",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
+          "group": "2_run@1"
+        },
+        {
+          "command": "bruno.sidebar.settings",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
+          "group": "2_run@2"
+        },
+        {
+          "command": "bruno.sidebar.clone",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?$|folder$|request:)/",
+          "group": "3_edit@1"
+        },
+        {
+          "command": "bruno.sidebar.export",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^collection(:opened)?$/",
+          "group": "3_edit@2"
+        },
+        {
+          "command": "bruno.sidebar.copy",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(folder|request:)/",
+          "group": "3_edit@3"
+        },
+        {
+          "command": "bruno.sidebar.paste",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?$|folder$|request:)/ && bruno.sidebar.hasCopiedItem",
+          "group": "3_edit@4"
+        },
+        {
+          "command": "bruno.sidebar.rename",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?$|folder$|request:)/",
+          "group": "3_edit@5"
+        },
+        {
+          "command": "bruno.sidebar.moveUp",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(folder|request:)/",
+          "group": "4_order@1"
+        },
+        {
+          "command": "bruno.sidebar.moveDown",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(folder|request:)/",
+          "group": "4_order@2"
+        },
+        {
+          "command": "bruno.sidebar.revealInFinder",
+          "when": "view == bruno.nativeSidebarView && viewItem != collection:unavailable && !isWeb && isMac",
+          "group": "5_misc@1"
+        },
+        {
+          "command": "bruno.sidebar.revealInFileExplorer",
+          "when": "view == bruno.nativeSidebarView && viewItem != collection:unavailable && !isWeb && isWindows",
+          "group": "5_misc@1"
+        },
+        {
+          "command": "bruno.sidebar.revealInFileManager",
+          "when": "view == bruno.nativeSidebarView && viewItem != collection:unavailable && !isWeb && isLinux",
+          "group": "5_misc@1"
+        },
+        {
+          "command": "bruno.sidebar.delete",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^(folder|request:)/",
+          "group": "9_danger@1"
+        },
+        {
+          "command": "bruno.sidebar.closeCollection",
+          "when": "view == bruno.nativeSidebarView && viewItem =~ /^collection:(opened|unavailable)$/",
+          "group": "9_danger@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "bruno.sidebar.createCollection"
+        },
+        {
+          "command": "bruno.sidebar.openCollection"
+        },
+        {
+          "command": "bruno.sidebar.importCollection"
+        },
+        {
+          "command": "bruno.sidebar.search"
+        },
+        {
+          "command": "bruno.sidebar.clearSearch",
+          "when": "bruno.sidebar.filtered"
+        },
+        {
+          "command": "bruno.sidebar.closeCollection",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.newRequest",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.newFolder",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.run",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.settings",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.clone",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.export",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.copy",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.paste",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.rename",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.moveDown",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.revealInFinder",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.revealInFileExplorer",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.revealInFileManager",
+          "when": "false"
+        },
+        {
+          "command": "bruno.sidebar.delete",
+          "when": "false"
         }
       ]
     },
@@ -400,6 +698,39 @@
         "key": "ctrl+s",
         "mac": "cmd+s",
         "when": "activeWebviewPanelId == 'bruno.transientRequest'"
+      },
+      {
+        "command": "bruno.sidebar.rename",
+        "key": "f2",
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
+      },
+      {
+        "command": "bruno.sidebar.delete",
+        "key": "delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
+      },
+      {
+        "command": "bruno.sidebar.copy",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
+      },
+      {
+        "command": "bruno.sidebar.paste",
+        "key": "ctrl+v",
+        "mac": "cmd+v",
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
+      },
+      {
+        "command": "bruno.sidebar.moveUp",
+        "key": "alt+up",
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
+      },
+      {
+        "command": "bruno.sidebar.moveDown",
+        "key": "alt+down",
+        "when": "focusedView == bruno.nativeSidebarView && !inputFocus"
       }
     ]
   },
@@ -474,8 +805,8 @@
     "@reduxjs/toolkit": "^1.8.0",
     "@tabler/icons": "^1.46.0",
     "@tippyjs/react": "^4.2.6",
-    "@usebruno/common": "0.26.0",
-    "@usebruno/converters": "0.24.0",
+    "@usebruno/common": "0.27.0",
+    "@usebruno/converters": "0.25.0",
     "@usebruno/filestore": "0.13.0",
     "@usebruno/js": "0.54.0",
     "@usebruno/lang": "0.40.0",

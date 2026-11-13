@@ -23,8 +23,8 @@ test.describe('Collection runner', () => {
     const locators = buildCommonLocators(sidebar);
 
     await test.step('Create a collection with one request', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
-      await createRequestByType(page, sidebar, collectionName, {
+      await createCollection(sidebar, collectionName, tmpDir);
+      await createRequestByType(sidebar, collectionName, {
         name: requestName,
         url: `${TEST_SERVER}/ping`,
       });
@@ -33,7 +33,7 @@ test.describe('Collection runner', () => {
     });
 
     const runner = await test.step('Open the runner from the collection ellipse menu', async () => {
-      const runnerFrame = await openCollectionRunner(page, sidebar, collectionName);
+      const runnerFrame = await openCollectionRunner(sidebar, collectionName);
       await expect(buildCommonLocators(runnerFrame).runner.runCollectionButton()).toBeEnabled();
       await expect(buildCommonLocators(runnerFrame).runner.requestCountText()).toContainText('1');
       return runnerFrame;
@@ -60,13 +60,13 @@ test.describe('Collection runner', () => {
     const locators = buildCommonLocators(sidebar);
 
     await test.step('Create a collection with two requests', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
-      await createRequestByType(page, sidebar, collectionName, {
+      await createCollection(sidebar, collectionName, tmpDir);
+      await createRequestByType(sidebar, collectionName, {
         name: firstRequest,
         url: `${TEST_SERVER}/ping`,
       });
       await closeEditorTabIfOpen(page, firstRequest);
-      await createRequestByType(page, sidebar, collectionName, {
+      await createRequestByType(sidebar, collectionName, {
         name: secondRequest,
         url: `${TEST_SERVER}/ping`,
       });
@@ -75,7 +75,7 @@ test.describe('Collection runner', () => {
     });
 
     const runner = await test.step('Open the runner and set the delay', async () => {
-      const runnerFrame = await openCollectionRunner(page, sidebar, collectionName);
+      const runnerFrame = await openCollectionRunner(sidebar, collectionName);
       const runnerLocators = buildCommonLocators(runnerFrame).runner;
       await expect(runnerLocators.runCollectionButton()).toBeEnabled();
       await expect(runnerLocators.requestCountText()).toContainText('2');
@@ -109,13 +109,13 @@ test.describe('Collection runner', () => {
     const locators = buildCommonLocators(sidebar);
 
     await test.step('Create a collection with two requests and tag one of them', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
-      await createRequestByType(page, sidebar, collectionName, {
+      await createCollection(sidebar, collectionName, tmpDir);
+      await createRequestByType(sidebar, collectionName, {
         name: taggedRequest,
         url: `${TEST_SERVER}/ping`,
       });
       await closeEditorTabIfOpen(page, taggedRequest);
-      await createRequestByType(page, sidebar, collectionName, {
+      await createRequestByType(sidebar, collectionName, {
         name: plainRequest,
         url: `${TEST_SERVER}/ping`,
       });
@@ -126,7 +126,7 @@ test.describe('Collection runner', () => {
     });
 
     const runner = await test.step('Open the runner and include the tag', async () => {
-      const runnerFrame = await openCollectionRunner(page, sidebar, collectionName);
+      const runnerFrame = await openCollectionRunner(sidebar, collectionName);
       await expect(buildCommonLocators(runnerFrame).runner.runCollectionButton()).toBeEnabled();
       await expect(buildCommonLocators(runnerFrame).runner.requestCountText()).toContainText('2');
       await includeRunnerTag(page, runnerFrame, tag);
@@ -155,13 +155,13 @@ test.describe('Collection runner', () => {
     const locators = buildCommonLocators(sidebar);
 
     await test.step('Create a collection with two requests and tag one of them', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
-      await createRequestByType(page, sidebar, collectionName, {
+      await createCollection(sidebar, collectionName, tmpDir);
+      await createRequestByType(sidebar, collectionName, {
         name: taggedRequest,
         url: `${TEST_SERVER}/ping`,
       });
       await closeEditorTabIfOpen(page, taggedRequest);
-      await createRequestByType(page, sidebar, collectionName, {
+      await createRequestByType(sidebar, collectionName, {
         name: plainRequest,
         url: `${TEST_SERVER}/ping`,
       });
@@ -172,7 +172,7 @@ test.describe('Collection runner', () => {
     });
 
     const runner = await test.step('Open the runner and exclude the tag', async () => {
-      const runnerFrame = await openCollectionRunner(page, sidebar, collectionName);
+      const runnerFrame = await openCollectionRunner(sidebar, collectionName);
       await expect(buildCommonLocators(runnerFrame).runner.runCollectionButton()).toBeEnabled();
       await expect(buildCommonLocators(runnerFrame).runner.requestCountText()).toContainText('2');
       await excludeRunnerTag(page, runnerFrame, tag);
