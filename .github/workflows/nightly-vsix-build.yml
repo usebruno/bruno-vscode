@@ -1,8 +1,4 @@
 name: nightly vsix build
-# Shown in the Actions run list, e.g. "Nightly VSIX · feature/foo · manual by octocat"
-run-name: >-
-  Nightly VSIX · ${{ inputs.branch || 'main' }} ·
-  ${{ github.event_name == 'schedule' && 'scheduled' || format('manual by {0}', github.actor) }}${{ inputs.tag_name && format(' · {0}', inputs.tag_name) || '' }}
 
 on:
   workflow_dispatch:
