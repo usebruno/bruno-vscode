@@ -113,9 +113,9 @@ export class NativeSidebar {
   /** Wait for the view to show after the activity bar icon was clicked. */
   static async open(page: Page): Promise<NativeSidebar> {
     const sidebar = new NativeSidebar(page);
-    // The title actions arrive with the view; with no collection yet the body is the welcome content.
-    await expect(sidebar.titleActionButton('Refresh Collections')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('.part.sidebar .pane-body').first()).toBeVisible({ timeout: 15_000 });
+
+    await sidebar.titleActionButton('Refresh Collections').waitFor({ timeout: 15_000 });
+    await page.locator('.part.sidebar .pane-body').first().waitFor({ timeout: 15_000 });
 
     return sidebar;
   }
@@ -154,7 +154,7 @@ export class NativeSidebar {
     await this.page.keyboard.press('F1');
 
     const box = this.quickInputBox();
-    await expect(box).toBeVisible();
+    await box.waitFor({ state: 'visible' });
     await box.fill(`Bruno: ${title}`);
     await this.pickQuickItem(title);
   }
@@ -167,18 +167,23 @@ export class NativeSidebar {
     return this.page.locator('.context-view .monaco-menu');
   }
 
-  /** Type into the open input box and accept it. */
-  private async answerInputBox(text: string): Promise<void> {
+  /**
+   * Type into the input box asking `prompt` and accept it. VS Code reuses one
+   * widget for every quick input, so the previous prompt's box is still on
+   * screen for a moment; waiting for the prompt text keeps the answer out of it.
+   */
+  private async answerInputBox(prompt: string, text: string): Promise<void> {
     const box = this.quickInputBox();
-    await expect(box).toBeVisible();
+    await box.filter({ hasText: prompt }).waitFor({ state: 'visible' });
     await box.fill(text);
+
     await this.page.keyboard.press('Enter');
   }
 
   /** Click the quick pick entry whose text contains `label`. */
   private async pickQuickItem(label: string): Promise<void> {
     const item = this.page.locator('.quick-input-list .monaco-list-row').filter({ hasText: label }).first();
-    await expect(item).toBeVisible();
+    await item.waitFor({ state: 'visible' });
     await item.click();
   }
 
@@ -189,7 +194,7 @@ export class NativeSidebar {
    */
   private async answerFileDialog(target: string | undefined, kind: 'file' | 'directory'): Promise<void> {
     const box = this.quickInputBox();
-    await expect(box).toBeVisible();
+    await box.waitFor({ state: 'visible' });
     // The widget is reused from the previous prompt, and the dialog fills in its
     // starting folder (which ends in a separator) a moment after opening. Text typed
     // before that is taken as relative to that folder, so wait for it.
@@ -233,7 +238,7 @@ export class NativeSidebar {
 
     await expect(async () => {
       await row.click({ button: 'right' });
-      await expect(menu).toBeVisible({ timeout: 3_000 });
+      await menu.waitFor({ timeout: 3_000 });
       const item = menu.getByRole('menuitem', { name: new RegExp(`^${escapeRegExp(title)}`) }).first();
 
       if (!(await item.isVisible())) {
@@ -246,7 +251,7 @@ export class NativeSidebar {
       await this.page.waitForTimeout(300);
       await item.hover();
       await item.click();
-      await expect(menu).toBeHidden({ timeout: 2_000 });
+      await menu.waitFor({ state: 'hidden', timeout: 2_000 });
       await confirmed?.();
     }).toPass({ timeout: 20_000 });
   }
@@ -256,12 +261,12 @@ export class NativeSidebar {
     await this.settle();
     await row.click({ button: 'right' });
 
-    await expect(this.contextMenu).toBeVisible();
+    await this.contextMenu.waitFor({ state: 'visible' });
 
     await this.page.waitForTimeout(300);
     await this.page.keyboard.press('Escape');
 
-    await expect(this.contextMenu).toBeHidden();
+    await this.contextMenu.waitFor({ state: 'hidden' });
   }
 
   /** Position of a request or folder row among the item rows, in display order. */
@@ -272,13 +277,13 @@ export class NativeSidebar {
   }
 
   private async expectQuickInput(): Promise<void> {
-    await expect(this.quickInputBox()).toBeVisible({ timeout: 3_000 });
+    await this.quickInputBox().waitFor({ state: 'visible', timeout: 3_000 });
   }
 
   // ---- tree state -------------------------------------------------------
 
   private async setExpanded(row: Locator, expanded: boolean): Promise<void> {
-    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.waitFor({ state: 'visible', timeout: 10_000 });
     // The tree can be mid-change (a new collection is revealed expanded a moment after its row
     // appears), so the state is re-read before every click rather than clicking once and waiting.
     await expect(async () => {
@@ -330,11 +335,11 @@ export class NativeSidebar {
   /** Create `<location>/<name>` and wait for its row. Without a location, the folder dialog's default (the workspace) is accepted. */
   async createCollection(name: string, location: string | undefined, format: FileFormat): Promise<void> {
     await this.titleAction('Create Collection');
-    await this.answerInputBox(name);
+    await this.answerInputBox('Collection name', name);
     await this.answerFileDialog(location, 'directory');
     await this.pickQuickItem(FORMAT_LABELS[format]);
 
-    await expect(this.collectionRow(name)).toBeVisible({ timeout: 15_000 });
+    await this.collectionRow(name).waitFor({ state: 'visible', timeout: 15_000 });
   }
 
   /** Import one file into `location` and wait for its row. */
@@ -342,7 +347,7 @@ export class NativeSidebar {
     const review = await this.openImportReview([filePath]);
     await review.submit(location, format);
 
-    await expect(this.collectionRow(expectedName)).toBeVisible({ timeout: 20_000 });
+    await this.collectionRow(expectedName).waitFor({ state: 'visible', timeout: 20_000 });
   }
 
   /** Start an import with these files and stop at the review step. */
@@ -405,7 +410,7 @@ export class NativeSidebar {
     await this.titleAction('Open Collection');
     await this.answerFileDialog(collectionPath, 'directory');
 
-    await expect(this.quickInputBox()).toBeHidden();
+    await this.quickInputBox().waitFor({ state: 'hidden' });
   }
 
   /** Clone through the collection menu; resolves to the clone's name. */
@@ -414,9 +419,9 @@ export class NativeSidebar {
 
     await this.collectionAction(sourceName, 'clone');
     // The name box comes prefilled with "<source> copy".
-    await this.answerInputBox(cloneName);
+    await this.answerInputBox('Name for the cloned collection', cloneName);
     await this.answerFileDialog(location, 'directory');
-    await expect(this.collectionRow(cloneName)).toBeVisible({ timeout: 15_000 });
+    await this.collectionRow(cloneName).waitFor({ state: 'visible', timeout: 15_000 });
 
     return cloneName;
   }
@@ -428,12 +433,12 @@ export class NativeSidebar {
   async openCollectionSettings(name: string): Promise<Frame> {
     const row = this.collectionRow(name);
 
-    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.waitFor({ timeout: 10_000 });
     // A click on the label runs the row's command, which opens the settings.
     await row.locator('.monaco-icon-label').click();
 
     const settings = await getWebviewFrame(this.page, (frame) => buildCommonLocators(frame).collectionSettings.container());
-    await expect(buildCommonLocators(settings).collectionSettings.container()).toBeVisible({ timeout: 10_000 });
+    await buildCommonLocators(settings).collectionSettings.container().waitFor({ state: 'visible', timeout: 10_000 });
 
     return settings;
   }
@@ -441,7 +446,7 @@ export class NativeSidebar {
   async openCollectionRunner(name: string): Promise<Frame> {
     await this.collectionAction(name, 'run');
     const runner = await getWebviewFrame(this.page, (frame) => buildCommonLocators(frame).runner.runCollectionButton());
-    await expect(buildCommonLocators(runner).runner.runCollectionButton()).toBeVisible({ timeout: 20_000 });
+    await buildCommonLocators(runner).runner.runCollectionButton().waitFor({ state: 'visible', timeout: 20_000 });
 
     return runner;
   }
@@ -460,13 +465,13 @@ export class NativeSidebar {
       await this.itemAction(parentName, 'new-folder');
     }
 
-    await this.answerInputBox(folderName);
+    await this.answerInputBox('Folder name', folderName);
 
     if (!isCollection) {
       await this.expandFolder(parentName);
     }
 
-    await expect(this.itemRow(folderName)).toBeVisible({ timeout: 15_000 });
+    await this.itemRow(folderName).waitFor({ state: 'visible', timeout: 15_000 });
   }
 
   /**
@@ -484,11 +489,11 @@ export class NativeSidebar {
     if (curl) {
       await this.pickQuickItem('From cURL');
       // The box may come prefilled from the clipboard; the fill replaces it.
-      await this.answerInputBox(curl);
+      await this.answerInputBox('cURL command', curl);
     } else {
       await this.pickQuickItem(type);
     }
-    await this.answerInputBox(name);
+    await this.answerInputBox('Request name', name);
 
     await this.expandCollection(collectionName);
 
@@ -496,8 +501,8 @@ export class NativeSidebar {
       await this.expandFolder(folder);
     }
 
-    await expect(this.itemRow(name)).toBeVisible({ timeout: 15_000 });
-    await expect(this.urlEditor()).toBeVisible({ timeout: 15_000 });
+    await this.itemRow(name).waitFor({ state: 'visible', timeout: 15_000 });
+    await this.urlEditor().waitFor({ state: 'visible', timeout: 15_000 });
   }
 
   /** The URL bar of the open request pane: the first editor in it, whatever the request's kind. */
@@ -521,13 +526,13 @@ export class NativeSidebar {
     await this.page.keyboard.type(url, { delay: 10 });
     await this.page.keyboard.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s');
 
-    await expect(editor.getByText('Request saved successfully').last()).toBeVisible({ timeout: 5_000 });
+    await editor.getByText('Request saved successfully').last().waitFor({ state: 'visible', timeout: 5_000 });
 
     if (type === 'gRPC') {
       // A typed URL makes the gRPC pane try server reflection a second later, and that attempt
       // switches the pane to reflection mode when it lands. Let it land (it reports either way)
       // before a spec changes the pane's mode itself.
-      await expect(editor.getByText(/gRPC methods/).last()).toBeVisible({ timeout: 10_000 }).catch((): void => undefined);
+      await editor.getByText(/gRPC methods/).last().waitFor({ state: 'visible', timeout: 10_000 }).catch((): void => undefined);
     }
   }
 
@@ -535,14 +540,14 @@ export class NativeSidebar {
   async clickRequest(collectionName: string, requestName: string): Promise<void> {
     await this.expandCollection(collectionName);
     const row = this.itemRow(requestName);
-    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.waitFor({ state: 'visible', timeout: 10_000 });
     await row.locator('.monaco-icon-label').click();
   }
 
   /** Click a visible request or folder row's label. */
   async clickItem(name: string): Promise<void> {
     const row = this.itemRow(name);
-    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.waitFor({ state: 'visible', timeout: 10_000 });
     await row.locator('.monaco-icon-label').click();
   }
 
@@ -554,7 +559,7 @@ export class NativeSidebar {
     const dialog = this.page.locator('.monaco-dialog-box');
     await expect(dialog).toContainText(`Delete "${name}"?`);
     await dialog.getByRole('button', { name: 'Delete' }).click();
-    await expect(dialog).toBeHidden();
+    await dialog.waitFor({ state: 'hidden' });
 
     await expect(row).not.toBeVisible({ timeout: 15_000 });
   }
@@ -585,8 +590,8 @@ export class NativeSidebar {
   async dragItemIntoFolder(itemName: string, folderName: string): Promise<void> {
     const itemRow = this.itemRow(itemName);
     const folderRow = this.itemRow(folderName);
-    await expect(itemRow).toBeVisible();
-    await expect(folderRow).toBeVisible();
+    await itemRow.waitFor({ state: 'visible', timeout: 15_000 });
+    await folderRow.waitFor({ state: 'visible', timeout: 15_000 });
     const folderLevel = Number(await folderRow.getAttribute('aria-level'));
 
     await itemRow.dragTo(folderRow, { steps: 15 });
@@ -633,7 +638,7 @@ export class NativeSidebar {
 /** Open the Bruno sidebar from the activity bar and return its driver. */
 export async function openBrunoSidebar(page: Page): Promise<Sidebar> {
   const brunoIcon = page.locator('.activitybar a.action-label[aria-label="Bruno"]');
-  await expect(brunoIcon).toBeVisible({ timeout: 15_000 });
+  await brunoIcon.waitFor({ state: 'visible', timeout: 15_000 });
 
   // Clicking the active icon would collapse the sidebar, so only click when Bruno isn't shown yet.
   const sidebarTitle = buildCommonLocators(page).workbench.sidebarTitle();
