@@ -112,7 +112,7 @@ async function addRequest(page: Page, sidebar: Frame, ctx: Context, collection: 
   }
 }
 
-export type SetupResult = {
+export type Setup = {
   sidebar: Frame,
   // Every collection created, by name
   ctx: Context,
@@ -121,7 +121,7 @@ export type SetupResult = {
 }
 
 // Builds the workspace
-export async function createSetup<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<SetupResult> {
+export async function createSetup<const EnvName extends string = never>(config: Config<EnvName>, page: Page): Promise<Setup> {
   const sidebar = await openBrunoSidebar(page);
   const ctx = new Context();
   const collections: string[] = [];
@@ -140,11 +140,11 @@ export async function createSetup<const EnvName extends string = never>(config: 
       collections.push(collection.name)
 
       if (collection.vars) {
-        await setVars(page, collection.name, toRows(collection.vars));
+        await setVars(page, collection.name, toRows(collection.vars, ['name', 'value']));
       }
 
       if (collection.headers) {
-        await setHeaders(page, collection.name, toRows(collection.headers));
+        await setHeaders(page, collection.name, toRows(collection.headers, ['name', 'value']));
       }
 
       if (collection.presets) {

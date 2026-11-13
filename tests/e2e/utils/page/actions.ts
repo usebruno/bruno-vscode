@@ -1583,13 +1583,14 @@ export async function createRequestV2(page: Page, _sidebar: Frame, ctx: Context,
 export async function fillRequestDetails(webview: FrameLocator, ctx: Context, type: RequestType, url: string, payload?: string, params?: KeyValue[], headers?: KeyValue[]) {
   // Ideally target it via a test-id. Classes are usually flaky
   const urlInput = webview.locator('.CodeMirror-lines').first();
+  // Not empty when the collection has a request-URL preset: new requests start with that URL.
   await clearField(urlInput);
   await urlInput.pressSequentially(url);
 
   if (type === 'GraphQL' && payload) {
-    // A new GraphQL request opens on the Query tab. Not setCodeMirrorValue: its trailing Tab lands in the query.
+    // A new GraphQL request opens on the Query tab with an empty query. Not setCodeMirrorValue: its trailing Tab lands in the query.
     const queryEditor = buildCommonLocators(webview).graphql.queryEditor();
-    await clearField(queryEditor);
+    await queryEditor.click();
     await queryEditor.page().keyboard.insertText(payload);
   }
 }
@@ -1902,13 +1903,8 @@ export async function setBody(page: Page, request: string, json: string): Promis
 }
 
 type TableRow = { name: string; value: string };
-type ItemType = 'collection' | 'folder' | 'request';
-type VarsHook = 'preRequest' | 'postResponse';
-
-// Key/value tables in the open tab, shared by the set/update helpers.
-const varsTable = (page: Page, itemType: ItemType, hook: VarsHook) =>
-  activeEditor(page).getByTestId(`${itemType}-vars-${hook === 'preRequest' ? 'req' : 'res'}`);
-const headersTable = (page: Page, itemType: ItemType) => activeEditor(page).getByTestId(`${itemType}-headers`);
+// Which Vars table to target: the Pre Request or the Post Response one.
+type VarsPhase = 'preRequest' | 'postResponse';
 
 // Types each row into the table's trailing empty row. Var names are plain inputs, header names are CodeMirror editors.
 async function addTableRows(page: Page, table: Locator, rows: TableRow[], nameField: 'input' | 'editor') {
@@ -1929,16 +1925,18 @@ async function addTableRows(page: Page, table: Locator, rows: TableRow[], nameFi
 }
 
 // e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
-export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], hook: VarsHook = 'preRequest'): Promise<void> {
+export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], phase: VarsPhase = 'preRequest'): Promise<void> {
   const itemType = await openTab(page, target, 'Vars');
-  await addTableRows(page, varsTable(page, itemType, hook), rows, 'input');
+  const { varsTable } = buildCommonLocators(activeEditor(page));
+  await addTableRows(page, varsTable.table(itemType, phase === 'preRequest' ? 'req' : 'res'), rows, 'input');
   await saveItem(page, itemType);
 }
 
 // e.g. setHeaders('folder-1', [{ name: 'x-api-key', value: 'abc' }])
 export async function setHeaders(page: Page, target: string, rows: TableRow[]): Promise<void> {
   const itemType = await openTab(page, target, 'Headers');
-  await addTableRows(page, headersTable(page, itemType), rows, 'editor');
+  const { headersTable } = buildCommonLocators(activeEditor(page));
+  await addTableRows(page, headersTable(itemType), rows, 'editor');
   await saveItem(page, itemType);
 }
 
@@ -1988,15 +1986,17 @@ async function updateTableRows(page: Page, table: Locator, rows: TableRow[]) {
   }
 }
 
-export async function updateVars(page: Page, target: string, rows: TableRow[], hook: VarsHook = 'preRequest'): Promise<void> {
+export async function updateVars(page: Page, target: string, rows: TableRow[], phase: VarsPhase = 'preRequest'): Promise<void> {
   const itemType = await openTab(page, target, 'Vars');
-  await updateTableRows(page, varsTable(page, itemType, hook), rows);
+  const { varsTable } = buildCommonLocators(activeEditor(page));
+  await updateTableRows(page, varsTable.table(itemType, phase === 'preRequest' ? 'req' : 'res'), rows);
   await saveItem(page, itemType);
 }
 
 export async function updateHeaders(page: Page, target: string, rows: TableRow[]): Promise<void> {
   const itemType = await openTab(page, target, 'Headers');
-  await updateTableRows(page, headersTable(page, itemType), rows);
+  const { headersTable } = buildCommonLocators(activeEditor(page));
+  await updateTableRows(page, headersTable(itemType), rows);
   await saveItem(page, itemType);
 }
 
@@ -2019,11 +2019,12 @@ export function exportedRequestPaths(entries: string[], format: 'yml' | 'bru'): 
     .map((entry) => entry.slice(0, -`.${format}`.length));
 }
 
-export function toKeyValue(entries: { name: string, value: string }[] = []): KeyValue<string> {
-  return Object.fromEntries(entries.map(({ name, value }) => [name, value]));
+/** toKeyValue([{ name: 'a', value: '1' }], ['name', 'value']) → { a: '1' } */
+export function toKeyValue(entries: Record<string, string>[] = [], [key, value]: [string, string]): KeyValue<string> {
+  return Object.fromEntries(entries.map((entry) => [entry[key], entry[value]]));
 }
 
-/** Inverse of toKeyValue: { a: 1 } → [{ name: 'a', value: '1' }]. */
-export function toRows(entries: KeyValue = {}): TableRow[] {
-  return Object.entries(entries).map(([name, value]) => ({ name, value: value.toString() }));
+/** toRows({ a: 1 }, ['name', 'value']) → [{ name: 'a', value: '1' }] */
+export function toRows<K extends string>(entries: KeyValue = {}, [key, value]: [K, K]): Record<K, string>[] {
+  return Object.entries(entries).map(([k, v]) => ({ [key]: k, [value]: v.toString() }) as Record<K, string>);
 }

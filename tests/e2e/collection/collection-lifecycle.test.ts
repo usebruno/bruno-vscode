@@ -117,8 +117,8 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
     await openRequestPaneTab(settings, 'Overview');
     await expect(buildCommonLocators(settings).collectionSettings.requestsInfo()).toHaveText(`${remainingPaths.length} requests in collection`);
 
-    await updateVars(page, COLLECTION, toRows(updatedSettings.vars));
-    await updateHeaders(page, COLLECTION, toRows(updatedSettings.headers));
+    await updateVars(page, COLLECTION, toRows(updatedSettings.vars, ['name', 'value']));
+    await updateHeaders(page, COLLECTION, toRows(updatedSettings.headers, ['name', 'value']));
   });
 
   await test.step('Run collection', async () => {
@@ -142,8 +142,8 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
 
     // Collection settings live in the exported opencollection.yml
     const { collectionRoot, brunoConfig } = parseCollection(exported['opencollection.yml'], { format: 'yml' });
-    expect(toKeyValue(collectionRoot?.request?.vars?.req)).toEqual({ ...settings.vars, ...updatedSettings.vars });
-    expect(toKeyValue(collectionRoot?.request?.headers)).toEqual({ ...settings.headers, ...updatedSettings.headers });
+    expect(toKeyValue(collectionRoot?.request?.vars?.req, ['name', 'value'])).toEqual({ ...settings.vars, ...updatedSettings.vars });
+    expect(toKeyValue(collectionRoot?.request?.headers, ['name', 'value'])).toEqual({ ...settings.headers, ...updatedSettings.headers });
     expect(brunoConfig?.presets?.requestUrl).toBe(settings.presets!.requestUrl);
   });
 

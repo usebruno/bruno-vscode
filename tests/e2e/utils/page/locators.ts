@@ -184,9 +184,11 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     columnCheckbox: (rowIndex: number) => frame.getByTestId(`column-checkbox-${rowIndex}`)
   },
   varsTable: {
+    table: (scope: 'request' | 'collection' | 'folder', kind: 'req' | 'res' = 'req') => frame.getByTestId(`${scope}-vars-${kind}`),
     rows: (scope: 'request' | 'collection' | 'folder', kind: 'req' | 'res' = 'req') =>
       frame.getByTestId(`${scope}-vars-${kind}`).locator('tbody tr')
   },
+  headersTable: (scope: 'request' | 'collection' | 'folder') => frame.getByTestId(`${scope}-headers`),
   auth: {
     modeSelector: () => frame.locator('[data-testid$="-auth-mode"]'),
     inheritedMode: () => frame.locator('.inherit-mode-text'),
