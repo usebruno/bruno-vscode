@@ -522,7 +522,7 @@ export class NativeSidebar {
     }
 
     await urlEditor.click();
-    await this.page.keyboard.type(url, { delay: 10 });
+    await this.page.keyboard.insertText(url);
     await this.page.keyboard.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s');
 
     await editor.getByText('Request saved successfully').last().waitFor({ state: 'visible', timeout: 5_000 });

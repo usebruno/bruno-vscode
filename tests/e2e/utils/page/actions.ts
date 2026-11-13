@@ -241,7 +241,7 @@ export async function fillRequestDetails(editor: FrameLocator, type: RequestKind
   const urlInput = editor.locator('.CodeMirror-lines').first();
   // Not empty when the collection has a request-URL preset: new requests start with that URL.
   await clearField(urlInput);
-  await urlInput.pressSequentially(url);
+  await urlInput.page().keyboard.insertText(url);
 
   if (type === 'GraphQL' && payload) {
     // A new GraphQL request opens on the Query tab with an empty query. Not setCodeMirrorValue: its trailing Tab lands in the query.
