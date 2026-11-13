@@ -11,12 +11,12 @@ import {
 import { buildCommonLocators } from '../../utils/page/locators';
 import { TEST_SERVER_LOCAL_URL } from '../../utils/urls';
 
-test.use({ vscodeSettings: { 'files.simpleDialog.enable': true } });
+test.use({ vscodeSettings: { 'files.simpleDialog.enable': true, 'window.dialogStyle': 'custom' } });
 
-// Close the panel, click Undo and return the restored frame
+// Close the panel without saving, click Undo and return the restored frame
 async function closeAndUndo(page: Page, sidebar: Frame): Promise<Frame> {
   const workbench = buildCommonLocators(page).workbench;
-  await closeEditorTab(page, 'Untitled');
+  await closeEditorTab(page, 'Untitled', "Don't Save");
   await workbench.getNotificationToastByText('Click Undo to restore').getByRole('button', { name: 'Undo' }).click();
   const panel = await getWebviewFrame(page, (frame) => buildCommonLocators(frame).requestUrl.editor(), sidebar);
   await expect(buildCommonLocators(panel).requestUrl.editor()).toBeVisible();
