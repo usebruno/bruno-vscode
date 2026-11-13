@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import AdmZip from 'adm-zip';
-import { Page, Frame, FrameLocator, Locator, expect, TestType, PlaywrightTestOptions, PlaywrightTestArgs, PlaywrightWorkerArgs, PlaywrightWorkerOptions } from '@playwright/test';
+import { expect, type Page, type Frame, type FrameLocator, type Locator, type TestType, type PlaywrightTestOptions, type PlaywrightTestArgs, type PlaywrightWorkerArgs, type PlaywrightWorkerOptions } from '@playwright/test';
 import { buildCommonLocators } from './locators';
 import { GRPC_SERVER_URL } from '../urls';
-import { Context } from '../../context';
-import { VSCodeFixture, VSCodeOptions } from '../fixtures';
-import type { AuthFields, AuthMode, ResponsePaneTab } from '../../e2e-helper';
+import type { Context } from '../../context';
+import type { VSCodeFixture, VSCodeOptions } from '../fixtures';
+import type { AuthFields, AuthMode, CollectionSettingsConfig, KeyValue, ResponsePaneTab } from '../../e2e-helper';
 
 // The editor pane currently in focus (request, folder settings or collection settings).
 export const activeEditor = (page: Page): FrameLocator =>
@@ -1502,18 +1502,13 @@ export async function addRequestTag(
   await locators.savedToastText().waitFor({ state: 'visible', timeout: 10_000 });
 }
 
-type KeyValue<T = string | number | boolean> = {
-  [k: string]: T,
-}
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 type RequestType = 'HTTP' | 'GraphQL' | 'gRPC' | `WebSocket`;
 
-export async function createCollectionV2(page: Page, _sidebar: Frame, name: string, hasExistingCollections = false, fileFormat: FileFormat = 'yml') {
+export async function createCollectionV2(page: Page, _sidebar: Frame, ctx: Context, name: string, hasExistingCollections = false, fileFormat: FileFormat = 'yml') {
   const sidebar = _sidebar ?? await openBrunoSidebar(page);
   const sidebarElements = buildCommonLocators(sidebar).sidebar
-
-  const ctx = new Context(name);
 
   if (hasExistingCollections) {
     // Open the "+" dropdown and click "Create collection"
@@ -1540,9 +1535,7 @@ export async function createCollectionV2(page: Page, _sidebar: Frame, name: stri
   await expect.poll(async () => {
     return (await locationInput.inputValue()).length > 0;
   }).toBe(true)
-  const location = await locationInput.inputValue()
-
-  ctx.collectionLocation = location;
+  ctx.addCollection(name, await locationInput.inputValue());
 
   if (fileFormat === 'bru') {
     const fileFormatSelect = webview.getByRole('listbox', { name: 'File Format' });
@@ -1558,8 +1551,6 @@ export async function createCollectionV2(page: Page, _sidebar: Frame, name: stri
   await createCollectionButton.click();
 
   await expect(sidebar.getByText(name)).toBeVisible();
-
-  return ctx;
 }
 
 const requestTypeIdMap = {
@@ -1589,12 +1580,26 @@ export async function createRequestV2(page: Page, _sidebar: Frame, ctx: Context,
   return webview;
 }
 
-// Only configuring for json for now
-export async function fillRequestDetails(webview: FrameLocator, ctx: Context, url: string, payload?: string, params?: KeyValue[], headers?: KeyValue[]) {
+export async function fillRequestDetails(webview: FrameLocator, ctx: Context, type: RequestType, url: string, payload?: string, params?: KeyValue[], headers?: KeyValue[]) {
   // Ideally target it via a test-id. Classes are usually flaky
   const urlInput = webview.locator('.CodeMirror-lines').first();
-  await urlInput.click()
+  // Not empty when the collection has a request-URL preset: new requests start with that URL.
+  await clearField(urlInput);
   await urlInput.pressSequentially(url);
+
+  if (type === 'GraphQL' && payload) {
+    // A new GraphQL request opens on the Query tab with an empty query. Not setCodeMirrorValue: its trailing Tab lands in the query.
+    const queryEditor = buildCommonLocators(webview).graphql.queryEditor();
+    await queryEditor.click();
+    await queryEditor.page().keyboard.insertText(payload);
+  }
+}
+
+export async function clearField(field: Locator) {
+  await field.click();
+  await field.press('ControlOrMeta+a');
+
+  await field.press('Backspace');
 }
 
 export async function saveRequestV2(page: Page, webview: FrameLocator, ctx: Context, name: string, newRequest = true) {
@@ -1646,8 +1651,8 @@ export async function takeScreenshot(page: Page, test: Test) {
  * Delete a saved request from the sidebar through the real UI: row "⋯" menu → Delete → modal confirm.
  * Needs `window.dialogStyle: 'custom'` so the modal renders in the workbench DOM instead of as a native OS dialog.
  */
-export async function deleteRequestV2(page: Page, sidebar: Frame, ctx: Context, name: string, fileFormat: FileFormat = 'yml') {
-  await expandCollection(sidebar, ctx.collectionName);
+export async function deleteRequest(page: Page, sidebar: Frame, collectionName: string, name: string) {
+  await expandCollection(sidebar, collectionName);
 
   const requestRow = buildCommonLocators(sidebar).sidebar.collectionItem(name);
   await requestRow.hover();
@@ -1655,50 +1660,47 @@ export async function deleteRequestV2(page: Page, sidebar: Frame, ctx: Context, 
   await sidebar.getByRole('menuitem', { name: 'Delete' }).click();
 
   // Modal confirmation from `vscode.window.showWarningMessage(..., { modal: true }, 'Delete')`
-  const dialog = page.locator('.monaco-dialog-box');
-  await expect(dialog).toContainText(`Delete request "${name}"?`);
+  const dialog = page.locator('.monaco-dialog-box').filter({ hasText: `Delete request "${name}"?` });
   await dialog.getByRole('button', { name: 'Delete' }).click();
-  await expect(dialog).toBeHidden();
 
-  // verify that request is deleted, in the sidebar and on disk
-  await expect(requestRow).toHaveCount(0);
-  const requestFile = path.join(ctx.collectionLocation, ctx.collectionName, `${name}.${fileFormat}`);
-  await expect.poll(() => fs.existsSync(requestFile), { message: `${requestFile} should be deleted` }).toBe(false);
+  await waitForSidebarToast(sidebar, 'Request deleted');
 }
 
 /**
  * Export a collection as a ZIP through the real UI: collection "⋯" menu → Export → Bruno Collection (ZIP) → save dialog.
  * Needs `files.simpleDialog.enable` so the save dialog renders as a quick input. The file is saved next to the collection folder.
- * Returns the paths of the files inside the ZIP.
+ * Returns each file inside the ZIP, keyed by its path in the ZIP.
  */
-export async function exportCollectionV2(page: Page, sidebar: Frame, ctx: Context) {
-  const sidebarElements = buildCommonLocators(sidebar).sidebar;
+export async function exportCollection(page: Page, sidebar: Frame, ctx: Context, collectionName: string) {
+  const { sidebar: sidebarElements } = buildCommonLocators(sidebar);
   // The "⋯" actions button only becomes visible while the collection row is hovered.
-  await sidebarElements.collectionName(ctx.collectionName).hover();
-  await sidebarElements.collectionMenuOptions(ctx.collectionName).click();
+  await sidebarElements.collectionName(collectionName).hover();
+  await sidebarElements.collectionMenuOptions(collectionName).click();
   await sidebar.getByRole('menuitem', { name: 'Export' }).click();
 
   const webview = await getWebviewByTitle(page, 'Export Collection');
-  await expect(webview.getByRole('heading', { name: 'Export Collection' })).toBeVisible();
+  await webview.getByRole('heading', { name: 'Export Collection' }).waitFor({ timeout: 10_000 });
 
   // anti-pattern: the export options are clickable divs, not buttons, so there is no role to target
   await webview.getByText('Bruno Collection (ZIP)', { exact: true }).click();
 
   // Save dialog (simple dialog): replace the prefilled path with one inside the collection's location
-  const exportPath = path.join(ctx.collectionLocation, `${ctx.collectionName}.zip`);
+  const exportPath = path.join(ctx.getCollection(collectionName).location, `${collectionName}.zip`);
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
-  await expect(saveInput).toBeVisible();
   await saveInput.fill(exportPath);
-  await page.keyboard.press('Enter');
-  await expect(saveInput).toBeHidden();
+  await expect(async () => {
+    await page.keyboard.press('Enter');
+    await expect(saveInput).toBeHidden();
+  }).toPass();
 
-  // On success the panel shows a toast and closes itself straight away, so the toast can't be asserted.
-  // Wait for the panel to go instead — on failure it stays open with "Failed to export collection".
-  await expect(webview.owner()).toHaveCount(0);
+  // The panel closes itself once the file is written, so its success toast can't be waited on.
+  // On failure it stays open with "Failed to export collection".
+  await webview.owner().waitFor({ state: 'detached', timeout: 10_000 });
 
   // verify the exported file on disk
   await expect.poll(() => fs.existsSync(exportPath), { message: `${exportPath} should be exported` }).toBe(true);
-  return new AdmZip(exportPath).getEntries().map((entry) => entry.entryName);
+  const entries = new AdmZip(exportPath).getEntries().filter((entry) => !entry.isDirectory);
+  return Object.fromEntries(entries.map((entry) => [entry.entryName, entry.getData().toString('utf8')]));
 }
 
 export const authModeLabels: Record<AuthMode, string> = {
@@ -1900,22 +1902,129 @@ export async function setBody(page: Page, request: string, json: string): Promis
   await saveRequest(page);
 }
 
-// e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
-export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], hook: 'preRequest' | 'postResponse' = 'preRequest'): Promise<void> {
-  const editor = activeEditor(page);
-  const itemType = await openTab(page, target, 'Vars');
-  const suffix = hook === 'preRequest' ? 'req' : 'res';
-  const tableId = `${itemType}-vars-${suffix}`;
+type TableRow = { name: string; value: string };
+// Which Vars table to target: the Pre Request or the Post Response one.
+type VarsPhase = 'preRequest' | 'postResponse';
 
-  const tableRows = buildCommonLocators(editor).varsTable.rows(itemType, suffix);
-  const table = buildCommonLocators(editor.getByTestId(tableId)).editableTable;
+// Types each row into the table's trailing empty row. Var names are plain inputs, header names are CodeMirror editors.
+async function addTableRows(page: Page, table: Locator, rows: TableRow[], nameField: 'input' | 'editor') {
+  const { editableTable } = buildCommonLocators(table);
+  const tableRows = table.locator('tbody tr');
 
   for (const { name, value } of rows) {
     const emptyRow = (await tableRows.count()) - 1;
-    await table.columnNameInput(emptyRow).fill(name);
-    await setCodeMirrorValue(page, table.columnValueEditor(emptyRow), value);
+
+    if (nameField === 'input') {
+      await editableTable.columnNameInput(emptyRow).fill(name);
+    } else {
+      await setCodeMirrorValue(page, editableTable.columnNameEditor(emptyRow), name);
+    }
+
+    await setCodeMirrorValue(page, editableTable.columnValueEditor(emptyRow), value);
+  }
+}
+
+// e.g. setVars('folder-1', [{ name: 'token', value: 'abc' }]), or with 'postResponse' for the Post Response table
+export async function setVars(page: Page, target: string, rows: { name: string; value: string; description?: string }[], phase: VarsPhase = 'preRequest'): Promise<void> {
+  const itemType = await openTab(page, target, 'Vars');
+  const { varsTable } = buildCommonLocators(activeEditor(page));
+  await addTableRows(page, varsTable.table(itemType, phase === 'preRequest' ? 'req' : 'res'), rows, 'input');
+  await saveItem(page, itemType);
+}
+
+// e.g. setHeaders('folder-1', [{ name: 'x-api-key', value: 'abc' }])
+export async function setHeaders(page: Page, target: string, rows: TableRow[]): Promise<void> {
+  const itemType = await openTab(page, target, 'Headers');
+  const { headersTable } = buildCommonLocators(activeEditor(page));
+  await addTableRows(page, headersTable(itemType), rows, 'editor');
+  await saveItem(page, itemType);
+}
+
+async function waitForSidebarToast(sidebar: Frame, text: string) {
+  const toast = buildCommonLocators(sidebar).sidebar.toast(text);
+  await toast.waitFor({ timeout: 10_000 });
+  await toast.waitFor({ state: 'hidden', timeout: 10_000 });
+}
+
+/** Fill the open VS Code input box (showInputBox) and submit it. */
+async function fillAndSubmitQuickInput(page: Page, value: string) {
+  const input = buildCommonLocators(page).workbench.quickInputBox();
+  await input.fill(value);
+  await page.keyboard.press('Enter');
+  await input.waitFor({ state: 'hidden', timeout: 10_000 });
+}
+
+export async function cloneRequest(page: Page, sidebar: Frame, collectionName: string, name: string, cloneName = `${name} copy`) {
+  await expandCollection(sidebar, collectionName);
+
+  const { sidebar: sidebarElements } = buildCommonLocators(sidebar);
+  await sidebarElements.collectionItem(name).hover();
+  await sidebarElements.itemMenu(name).click();
+  await sidebar.getByRole('menuitem', { name: 'Clone' }).click();
+
+  await fillAndSubmitQuickInput(page, cloneName);
+  await waitForSidebarToast(sidebar, 'Request cloned');
+}
+
+// Edits the value of existing rows, matched by name; fails if a name has no row (add those with setVars/setHeaders).
+async function updateTableRows(page: Page, table: Locator, rows: TableRow[]) {
+  const { editableTable } = buildCommonLocators(table);
+  await table.locator('tbody tr').first().waitFor({ timeout: 10_000 });
+
+  // Read every existing name in one round trip.
+  const names = await table.locator('[data-testid^="column-name-"]').evaluateAll((cells) => cells.map((cell) =>
+    (cell.querySelector('input')?.value ?? (cell.querySelector('.CodeMirror') as any)?.CodeMirror?.getValue() ?? '').trim()));
+
+  for (const { name, value } of rows) {
+    const row = names.indexOf(name);
+
+    if (row === -1) {
+      throw new Error(`No row named "${name}" to update`);
+    }
+
+    await setCodeMirrorValue(page, editableTable.columnValueEditor(row), value);
+  }
+}
+
+export async function updateVars(page: Page, target: string, rows: TableRow[], phase: VarsPhase = 'preRequest'): Promise<void> {
+  const itemType = await openTab(page, target, 'Vars');
+  const { varsTable } = buildCommonLocators(activeEditor(page));
+  await updateTableRows(page, varsTable.table(itemType, phase === 'preRequest' ? 'req' : 'res'), rows);
+  await saveItem(page, itemType);
+}
+
+export async function updateHeaders(page: Page, target: string, rows: TableRow[]): Promise<void> {
+  const itemType = await openTab(page, target, 'Headers');
+  const { headersTable } = buildCommonLocators(activeEditor(page));
+  await updateTableRows(page, headersTable(itemType), rows);
+  await saveItem(page, itemType);
+}
+
+export async function setPresets(page: Page, target: string, presets: NonNullable<CollectionSettingsConfig['presets']>): Promise<void> {
+  const itemType = await openTab(page, target, 'Presets');
+
+  if (presets.requestUrl) {
+    await buildCommonLocators(activeEditor(page)).requestUrl.editor().fill(presets.requestUrl);
   }
 
   await saveItem(page, itemType);
 }
 
+/** Request paths ("folder/name") among an exported ZIP's entries; skips collection, folder and environment files. */
+export function exportedRequestPaths(entries: string[], format: 'yml' | 'bru'): string[] {
+  const nonRequestFiles = ['opencollection.yml', 'folder.yml', 'collection.bru', 'folder.bru'];
+
+  return entries
+    .filter((entry) => entry.endsWith(`.${format}`) && !entry.startsWith('environments/') && !nonRequestFiles.includes(path.posix.basename(entry)))
+    .map((entry) => entry.slice(0, -`.${format}`.length));
+}
+
+/** toKeyValue([{ name: 'a', value: '1' }], ['name', 'value']) → { a: '1' } */
+export function toKeyValue(entries: Record<string, string>[] = [], [key, value]: [string, string]): KeyValue<string> {
+  return Object.fromEntries(entries.map((entry) => [entry[key], entry[value]]));
+}
+
+/** toRows({ a: 1 }, ['name', 'value']) → [{ name: 'a', value: '1' }] */
+export function toRows<K extends string>(entries: KeyValue = {}, [key, value]: [K, K]): Record<K, string>[] {
+  return Object.entries(entries).map(([k, v]) => ({ [key]: k, [value]: v.toString() }) as Record<K, string>);
+}

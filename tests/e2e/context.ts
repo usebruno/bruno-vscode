@@ -1,18 +1,23 @@
+type CollectionInfo = {
+  name: string,
+  location: string
+}
+
+// One per test: every collection the test creates, by name.
 export class Context {
-  private _collectionLocation = '';
+  private collections = new Map<string, CollectionInfo>();
 
-  collectionName = '';
-
-
-  constructor(collectionName?: string) {
-    this.collectionName = collectionName;
+  addCollection(name: string, location: string) {
+    this.collections.set(name, { name, location });
   }
 
-  get collectionLocation() {
-    return this._collectionLocation;
-  }
+  getCollection(name: string): CollectionInfo {
+    const collection = this.collections.get(name);
 
-  set collectionLocation(loc) {
-    this._collectionLocation = loc;
+    if (!collection) {
+      throw new Error(`Collection "${name}" was not created in this test`);
+    }
+
+    return collection;
   }
 }

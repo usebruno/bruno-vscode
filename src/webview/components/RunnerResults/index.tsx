@@ -447,7 +447,7 @@ export default function RunnerResults({
             {filteredItems.map((item: any) => {
               return (
                 <div key={item.uid}>
-                  <div className="item-path mt-2">
+                  <div className="item-path mt-2" data-testid={`runner-result-${item.displayName}`}>
                     <div className="flex items-center">
                       <span>
                         {allTestsPassed(item)

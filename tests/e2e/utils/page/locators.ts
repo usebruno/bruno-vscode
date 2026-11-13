@@ -1,4 +1,4 @@
-import { Frame, Page, Locator, FrameLocator } from '@playwright/test';
+import type { Frame, Page, Locator, FrameLocator } from '@playwright/test';
 
 /**
  * Centralised Playwright locators for the e2e suite.
@@ -22,6 +22,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     collectionItemLabel: (name: string) => frame.getByTestId(`collection-item-label-${name}`),
     folder: (name: string) => frame.getByTestId(`sidebar-collection-item-row-${name}`),
     folderChevron: (name: string) => frame.getByTestId(`folder-chevron-${name}`),
+    // The single item named `name` anywhere inside folder `folderName` (item names are unique per test).
+    folderChild: (folderName: string, name: string) =>
+      frame.getByTestId(`sidebar-collection-item-row-${folderName}`).locator('..').getByTestId(`sidebar-collection-item-row-${name}`),
     addMenu: () => frame.getByTestId('collections-header-add-menu'),
     addMenuCreate: () => frame.getByTestId('collections-header-add-menu-create'),
     openCollectionButton: () => frame.getByTestId('collections-header-add-menu-open'),
@@ -33,7 +36,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     runCollectionButton: (collectionName: string) => frame.getByTestId(`collection-actions-${collectionName}-run`),
     actionsItem: (collectionName: string, id: string) => frame.getByTestId(`collection-actions-${collectionName}-${id}`),
     itemMenu: (name: string) => frame.getByTestId(`collection-item-menu-${name}`),
-    itemMenuAction: (name: string, id: string) => frame.getByTestId(`collection-item-menu-${name}-${id}`)
+    itemMenuAction: (name: string, id: string) => frame.getByTestId(`collection-item-menu-${name}-${id}`),
+    toast: (text: string) => frame.locator('[data-rht-toaster]').getByText(text)
   },
   importCollection: {
     container: () => frame.getByTestId('import-collection-container'),
@@ -62,7 +66,9 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     // Overview → Requests line, e.g. "2 requests in collection".
     requestsInfo: () => frame.getByTestId('collection-requests-count'),
     requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded'),
-    saveButton: (tab: string) => frame.getByTestId(`collection-settings-${tab}-save`)
+    saveButton: (tab: string) => frame.getByTestId(`collection-settings-${tab}-save`),
+    preRequestVarsTable: () => frame.getByTestId('collection-vars-req'),
+    headersTable: () => frame.getByTestId('collection-headers')
   },
   environments: {
     // Environment picker in the collection toolbar.
@@ -178,9 +184,11 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     columnCheckbox: (rowIndex: number) => frame.getByTestId(`column-checkbox-${rowIndex}`)
   },
   varsTable: {
+    table: (scope: 'request' | 'collection' | 'folder', kind: 'req' | 'res' = 'req') => frame.getByTestId(`${scope}-vars-${kind}`),
     rows: (scope: 'request' | 'collection' | 'folder', kind: 'req' | 'res' = 'req') =>
       frame.getByTestId(`${scope}-vars-${kind}`).locator('tbody tr')
   },
+  headersTable: (scope: 'request' | 'collection' | 'folder') => frame.getByTestId(`${scope}-headers`),
   auth: {
     modeSelector: () => frame.locator('[data-testid$="-auth-mode"]'),
     inheritedMode: () => frame.locator('.inherit-mode-text'),
@@ -319,6 +327,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     requestCountText: () => frame.getByText(/requests in this collection/),
     // Result block has no test id; the name and status sit together in this display.
     resultDisplay: (name: string) => frame.locator('.item-path').filter({ hasText: name }),
+    resultByPath: (requestPath: string) => frame.getByTestId(`runner-result-${requestPath}`),
     filterButton: (label: 'All' | 'Passed' | 'Failed' | 'Skipped') =>
       frame.getByRole('button', { name: label })
   },
