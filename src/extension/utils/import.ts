@@ -1,16 +1,15 @@
 import * as vscode from 'vscode';
 import yaml from 'js-yaml';
+
 import type { ItemType } from '@bruno-types';
 import { insomniaToBruno, openApiToBruno, openCollectionToBruno, postmanToBruno, wsdlToBruno } from '@usebruno/converters';
 import { transformExampleStatusInCollection } from '@usebruno/common';
 import { stringifyEnvironment, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
-import { sanitizeName, uniqueFolderName } from './filesystem';
-import { writeText } from './file';
+
 import { isObject } from '../../utils/object';
 import type {
   CollectionFormat,
 } from '../../utils/collection';
-import { writeCollectionConfig, type CollectionRootFile } from './collection-v2';
 import {
   isBrunoCollection,
   isInsomniaCollection,
@@ -19,6 +18,10 @@ import {
   isPostmanCollection,
   isWSDLCollection
 } from '../../utils/collection';
+
+import { writeCollectionConfig, type CollectionRootFile } from './collection-v2';
+import { sanitizeName, uniqueFolderName } from './filesystem';
+import { writeText } from './file';
 
 /** File kinds the Bruno app can import, in the order they are tested. */
 export type ImportSource = 'openapi' | 'wsdl' | 'postman' | 'insomnia' | 'opencollection' | 'bruno';
@@ -475,5 +478,6 @@ async function writeItems(
  */
 function requestFileName(item: ImportedItem, format: CollectionFormat): string {
   const filename = (item.filename || item.name).replace(/\.(bru|yml)$/, '');
+
   return `${filename}.${format}`;
 }

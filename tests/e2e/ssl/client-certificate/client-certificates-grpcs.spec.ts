@@ -20,8 +20,8 @@ import {
   findCollectionDir
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
-import { GRPC_HANDSHAKE_FAILURE, addCertificate, storedCertPaths, openClientCertsTab } from './helpers';
 import type { Sidebar } from '../../utils/page/sidebar';
+import { GRPC_HANDSHAKE_FAILURE, addCertificate, storedCertPaths, openClientCertsTab } from './helpers';
 
 const GRPC_REQUEST = 'grpc-request';
 

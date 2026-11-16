@@ -107,7 +107,7 @@ const useIpcEvents = () => {
 
   useEffect(() => {
     if (!hasPlatformSupport()) {
-      return () => {};
+      return () => { };
     }
 
     const { ipcRenderer } = window;
@@ -416,7 +416,7 @@ const useIpcEvents = () => {
       const tryAdd = () => {
         retryCount++;
         if (collectionExists(val.collectionUid)) {
-        dispatch(addTransientRequest({ collectionUid: val.collectionUid, item: val.item }));
+          dispatch(addTransientRequest({ collectionUid: val.collectionUid, item: val.item }));
           // Signal the extension host that the item is in Redux
           ipcRenderer.send('transient:item-ready', {
             itemUid: val.item.uid,
@@ -437,7 +437,6 @@ const useIpcEvents = () => {
         dispatch(removeTransientRequest({ collectionUid: val.collectionUid, itemUid: val.itemUid }));
       }
     });
-
 
     const removeGlobalEnvironmentsUpdatesListener = ipcRenderer.on('main:load-global-environments', (val: unknown) => {
       dispatch(updateGlobalEnvironments(val));

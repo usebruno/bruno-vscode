@@ -13,7 +13,7 @@ export interface CollectionRootFile {
  * Write the config files that make `dir` a collection: opencollection.yml, or
  * bruno.json plus collection.bru. Goes through workspace.fs, so `dir` can be
  * on a remote. Create Collection passes no `root`, so its BRU collection has
- * no collection.bru, matching the Bruno app; imports pass the converted root.
+ * no collection.bru; imports pass the converted root.
  */
 export async function writeCollectionConfig(
   dir: vscode.Uri,

@@ -32,6 +32,7 @@ test.describe('Bulk import', () => {
       const review = await openImportReview(sidebar, fixtures);
 
       await expect(review.rows()).toHaveCount(2);
+
       for (const name of expectedNames) {
         await expect(review.checkbox(name)).toBeChecked();
       }
@@ -43,6 +44,7 @@ test.describe('Bulk import', () => {
 
         await review.filter('');
         await expect(review.rows()).toHaveCount(2);
+
         for (const name of expectedNames) {
           await expect(review.checkbox(name)).toBeChecked();
         }
@@ -51,8 +53,8 @@ test.describe('Bulk import', () => {
       await test.step('unchecking a filtered row drops it from the import', async () => {
         await review.filter('Inventory');
         await review.checkbox('Inventory Service').uncheck();
-
         await review.filter('');
+        
         await expect(review.rows()).toHaveCount(2);
         await expect(review.checkbox('Inventory Service')).not.toBeChecked();
         await expect(review.checkbox('Weather API')).toBeChecked();

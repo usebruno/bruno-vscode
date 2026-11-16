@@ -222,10 +222,12 @@ function carryOverLegacyOpenedCollections(context: vscode.ExtensionContext, open
   if (context.globalState.get<boolean>(CARRIED_OVER_KEY)) {
     return;
   }
+
   void (async () => {
     for (const collectionPath of new LastOpenedCollections().getAll()) {
       await openedCollections.add(vscode.Uri.file(collectionPath));
     }
+
     await context.globalState.update(CARRIED_OVER_KEY, true);
   })();
 }

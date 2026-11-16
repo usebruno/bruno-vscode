@@ -38,13 +38,16 @@ export function brunoEditorTabsUnder(uri: vscode.Uri): OpenBrunoEditor[] {
   for (const group of vscode.window.tabGroups.all) {
     for (const tab of group.tabs) {
       const input = tab.input;
-      if (input instanceof vscode.TabInputCustom
+      if (
+        input instanceof vscode.TabInputCustom
         && input.viewType === BrunoEditorProvider.viewType
-        && (input.uri.toString() === uri.toString() || isInside(input.uri, uri))) {
+        && (input.uri.toString() === uri.toString() || isInside(input.uri, uri))
+      ) {
         found.push({ uri: input.uri, viewColumn: group.viewColumn, isActive: tab.isActive });
       }
     }
   }
+
   return found;
 }
 

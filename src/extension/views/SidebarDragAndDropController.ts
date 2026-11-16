@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
+
 import { isMovable, placeItem, type MovableEntity, type Placement } from '../utils/reorder';
 import { dirname } from '../utils/file';
+
 import { Entity, NativeSidebarViewProvider } from './NativeSidebarViewProvider';
 
 /**
@@ -21,6 +23,7 @@ export class SidebarDragAndDropController implements vscode.TreeDragAndDropContr
    * in this tree; VS Code advertises the type but does not fill it.
    */
   private static readonly TREE_MIME = `application/vnd.code.tree.${NativeSidebarViewProvider.viewType.toLowerCase()}`;
+
   private readonly provider: NativeSidebarViewProvider;
 
   readonly dropMimeTypes = [SidebarDragAndDropController.TREE_MIME];

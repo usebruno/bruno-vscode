@@ -259,9 +259,11 @@ export const sanitizeName = (name: string): string => {
 /** "Name", then "Name - 1", "Name - 2", ... until nothing exists at that path, as the Bruno app does. */
 export async function uniqueFolderName(baseName: string, location: vscode.Uri): Promise<string> {
   let name = baseName;
+
   for (let n = 1; await doesItExist(vscode.Uri.joinPath(location, sanitizeName(name))); n++) {
     name = `${baseName} - ${n}`;
   }
+
   return name;
 }
 

@@ -1,16 +1,20 @@
 import * as vscode from 'vscode';
+import { startCase } from 'lodash';
+
 import type { RequestMethod } from '@bruno-types';
-import { generateUidBasedOnHash, sortByNameThenSequence } from '../utils/common';
+
+import type { CollectionFormat } from '../../utils/collection';
+
 import { validateSchema } from '../app/collections';
-import { parseCollection, parseFolder } from '../utils/parse';
-import { parseFileMeta } from '../utils/collection';
-import { stripDirtyMarker } from '../utils/dirty-marker';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import logsStore from '../store/logs';
-import { basename, dirname, doesItExist, isInside, isSameDir, normalizeDir, readText, META_FILES } from '../utils/file';
-import type { CollectionFormat } from '../../utils/collection';
 import type { OpenedCollections } from '../store/opened-collections';
-import { startCase } from 'lodash';
+import { parseFileMeta } from '../utils/collection';
+import { generateUidBasedOnHash, sortByNameThenSequence } from '../utils/common';
+import { stripDirtyMarker } from '../utils/dirty-marker';
+import { basename, dirname, doesItExist, isInside, isSameDir, normalizeDir, readText, META_FILES } from '../utils/file';
+import { parseCollection, parseFolder } from '../utils/parse';
+
 
 export type Type = 'request' | 'folder' | 'collection';
 export type RequestType = 'HTTP' | 'GRAPHQL' | 'GRPC' | 'WS' | 'APP';
@@ -124,9 +128,12 @@ function isListed(uri: vscode.Uri, collection: CollectionRoot): boolean {
 
 export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity>, vscode.Disposable {
   static readonly viewType = 'bruno.nativeSidebarView';
+
   private readonly openedCollections: OpenedCollections;
+
   private _onDidChangeTreeData: vscode.EventEmitter<Entity | undefined | null | void> = new vscode.EventEmitter<Entity | undefined | null | void>();
   readonly onDidChangeTreeData: vscode.Event<Entity | undefined | null | void> = this._onDidChangeTreeData.event;
+
   private collectionsPromise?: Promise<CollectionRoot[]>;
   /** Lower-cased search text; empty when the tree is unfiltered. */
   private _filter = '';
@@ -155,6 +162,28 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.scheduleRefresh()),
       this.openedCollections.onDidChange(() => this.scheduleRefresh())
     );
+  }
+
+  /** The active search text, as typed by the user minus surrounding whitespace. */
+  get filter(): string {
+    return this._filter;
+  }
+
+  /**
+   * Narrow the tree to requests whose name contains `text` (case-insensitive).
+   * Collections and folders without a match are hidden;
+   * those with one are expanded. Empty text shows the whole tree again.
+   */
+  set filter(text: string) {
+    const inputText = text.trim().toLowerCase();
+    if (inputText === this._filter) {
+      return;
+    }
+
+    this._filter = inputText;
+    this.matchesPromise = undefined;
+    void vscode.commands.executeCommand('setContext', FILTER_CONTEXT_KEY, inputText.length > 0);
+    this._onDidChangeTreeData.fire();
   }
 
   getTreeItem(element: Entity): vscode.TreeItem {
@@ -226,33 +255,56 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     return match && this.createRootEntity(match);
   }
 
+  /**
+ * List the folders and requests directly inside `dir`, in the order the tree
+ * shows them. Folder names and ordering come from folder.bru / folder.yml
+ * when present; request names, types and methods come from the parsed
+ * request file. This is kept public so that reordering can work from the same listing.
+ */
+  async readChildren(dir: vscode.Uri, collection: CollectionRoot): Promise<ChildEntry[]> {
+    let entries: [string, vscode.FileType][];
+    try {
+      entries = await vscode.workspace.fs.readDirectory(dir);
+    } catch (err) {
+      logsStore.addLog('warn', [`Unable to read ${dir.toString()}: ${(err as Error).message}`]);
+      return [];
+    }
+
+    const requestExt = `.${collection.format}`;
+    const metaFiles = META_FILES[collection.format];
+    const ignored = new Set([...ALWAYS_IGNORED_DIRS, ...collection.ignore]);
+
+    const children = await Promise.all(entries.map(async ([name, fileType]): Promise<ChildEntry | undefined> => {
+      if (name.startsWith('.') || ignored.has(name)) {
+        return undefined;
+      }
+
+      const uri = vscode.Uri.joinPath(dir, name);
+      if (fileType & vscode.FileType.Directory) {
+        return this.readFolder(uri, name, collection.format);
+      }
+
+      if ((fileType & vscode.FileType.File) && name.endsWith(requestExt) && !metaFiles.includes(name)) {
+        return this.readRequest(uri, name.slice(0, -requestExt.length), collection.format);
+      }
+
+      return undefined;
+    }));
+
+    // Same order as the Bruno sidebar: all folders first, then all requests,
+    // each group arranged by sortByNameThenSequence.
+    const found = children.filter((child): child is ChildEntry => child !== undefined);
+    return [
+      ...sortByNameThenSequence(found.filter((child) => child.params[0] === 'folder')),
+      ...sortByNameThenSequence(found.filter((child) => child.params[0] === 'request'))
+    ];
+  }
+
   /** Forget the discovered collections and rebuild the whole tree. */
   refresh(): void {
     this.collectionsPromise = undefined;
     this.requestIndexPromise = undefined;
     this.matchesPromise = undefined;
-    this._onDidChangeTreeData.fire();
-  }
-
-  /** The active search text, as typed by the user minus surrounding whitespace. */
-  get filter(): string {
-    return this._filter;
-  }
-
-  /**
-   * Narrow the tree to requests whose name contains `text` (case-insensitive).
-   * Collections and folders without a match are hidden;
-   * those with one are expanded. Empty text shows the whole tree again.
-   */
-  set filter(text: string) {
-    const inputText = text.trim().toLowerCase();
-    if (inputText === this._filter) {
-      return;
-    }
-
-    this._filter = inputText;
-    this.matchesPromise = undefined;
-    void vscode.commands.executeCommand('setContext', FILTER_CONTEXT_KEY, inputText.length > 0);
     this._onDidChangeTreeData.fire();
   }
 
@@ -532,51 +584,6 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
 
     const { brunoConfig } = parseCollection(content, { format: 'yml' });
     return { name: brunoConfig?.name, ignore: brunoConfig?.ignore };
-  }
-
-  /**
-   * List the folders and requests directly inside `dir`, in the order the tree
-   * shows them. Folder names and ordering come from folder.bru / folder.yml
-   * when present; request names, types and methods come from the parsed
-   * request file. This is kept public so that reordering can work from the same listing.
-   */
-  async readChildren(dir: vscode.Uri, collection: CollectionRoot): Promise<ChildEntry[]> {
-    let entries: [string, vscode.FileType][];
-    try {
-      entries = await vscode.workspace.fs.readDirectory(dir);
-    } catch (err) {
-      logsStore.addLog('warn', [`Unable to read ${dir.toString()}: ${(err as Error).message}`]);
-      return [];
-    }
-
-    const requestExt = `.${collection.format}`;
-    const metaFiles = META_FILES[collection.format];
-    const ignored = new Set([...ALWAYS_IGNORED_DIRS, ...collection.ignore]);
-
-    const children = await Promise.all(entries.map(async ([name, fileType]): Promise<ChildEntry | undefined> => {
-      if (name.startsWith('.') || ignored.has(name)) {
-        return undefined;
-      }
-
-      const uri = vscode.Uri.joinPath(dir, name);
-      if (fileType & vscode.FileType.Directory) {
-        return this.readFolder(uri, name, collection.format);
-      }
-
-      if ((fileType & vscode.FileType.File) && name.endsWith(requestExt) && !metaFiles.includes(name)) {
-        return this.readRequest(uri, name.slice(0, -requestExt.length), collection.format);
-      }
-
-      return undefined;
-    }));
-
-    // Same order as the Bruno sidebar: all folders first, then all requests,
-    // each group arranged by sortByNameThenSequence.
-    const found = children.filter((child): child is ChildEntry => child !== undefined);
-    return [
-      ...sortByNameThenSequence(found.filter((child) => child.params[0] === 'folder')),
-      ...sortByNameThenSequence(found.filter((child) => child.params[0] === 'request'))
-    ];
   }
 
   private async readFolder(uri: vscode.Uri, dirName: string, format: CollectionFormat): Promise<ChildEntry> {

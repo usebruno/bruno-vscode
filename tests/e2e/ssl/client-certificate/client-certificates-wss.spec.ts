@@ -15,8 +15,8 @@ import {
   openWsRequest
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
-import { TLS_HANDSHAKE_FAILURE, addCertificate, storedCertPaths, openClientCertsTab } from './helpers';
 import type { Sidebar } from '../../utils/page/sidebar';
+import { TLS_HANDSHAKE_FAILURE, addCertificate, storedCertPaths, openClientCertsTab } from './helpers';
 
 const WSS_REQUEST = 'wss-request';
 

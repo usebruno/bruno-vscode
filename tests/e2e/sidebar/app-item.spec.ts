@@ -1,5 +1,6 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import { test, expect } from '../utils/fixtures';
 import { openBrunoSidebar, createCollection, expandCollection, findCollectionDir } from '../utils/page/actions';
 import { buildCommonLocators } from '../utils/page/locators';

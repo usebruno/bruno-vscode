@@ -20,13 +20,19 @@ export async function getWebviewFrame(
 
   while (Date.now() < deadline) {
     for (const frame of page.frames()) {
-      if (frame === page.mainFrame() || frame === existingFrame) continue;
+      if (frame === page.mainFrame() || frame === existingFrame) {
+        continue
+      };
+
       try {
-        if (await markerSelector(frame).count() > 0) return frame;
+        if (await markerSelector(frame).count() > 0) {
+          return frame
+        }
       } catch {
         // frame may have been detached, skip
       }
     }
+
     await page.waitForTimeout(500);
   }
 
@@ -57,6 +63,7 @@ export async function getWebviewByTitle(page: Page, title: string, timeout = 20_
         return true;
       }
     }
+
     return false;
   }, { timeout, message: `Webview "${title}" not found` }).toBe(true);
 
@@ -83,6 +90,7 @@ export async function mockIpcInvoke(frame: Frame, channelName: string, value: un
         delete ipc.__originalInvoke;
         return value;
       }
+
       return originalInvoke(channel, ...args);
     };
   }, { channelName, value });

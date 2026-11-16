@@ -21,6 +21,7 @@ export const DEFAULT_IGNORE = ['node_modules', '.git'] as const;
 /** The config the Bruno app writes for a new collection of the given format. */
 export function defaultBrunoConfig(name: string, format: CollectionFormat): BrunoConfig {
   const ignore = [...DEFAULT_IGNORE];
+
   return format === 'yml'
     ? { opencollection: '1.0.0', name, type: 'collection', ignore }
     : { version: '1', name, type: 'collection', ignore };

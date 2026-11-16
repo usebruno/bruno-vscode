@@ -14,8 +14,7 @@ import { parseFolder, parseRequest } from './parse';
  * Order lives in the files, as `seq` in each request and in each folder's
  * folder.bru / folder.yml. Folders and requests are shown as two groups, each
  * ordered on its own, so each group is numbered on its own as well: 1..n over
- * the folders of a directory, and 1..n over its requests. The Bruno app sorts
- * the two groups separately too, so it shows the same order.
+ * the folders of a directory, and 1..n over its requests.
  *
  * Every file goes through vscode.workspace.fs, and files open in a Bruno
  * editor are written through that editor, so this works on any scheme. A
@@ -71,6 +70,7 @@ export async function placeItem(provider: NativeSidebarViewProvider, item: Movab
     uri,
     placement.before
   );
+
   await writeSequences(ordered, targetFormat);
 }
 
@@ -82,6 +82,7 @@ export async function shiftItem(provider: NativeSidebarViewProvider, item: Movab
 
   const first = index === 0;
   const last = index === items.length - 1;
+
   if (index === -1 || (direction === 'up' && first) || (direction === 'down' && last)) {
     await vscode.window.showInformationMessage(`"${item.label}" cannot be moved ${direction} any further.`);
     return;
@@ -90,6 +91,7 @@ export async function shiftItem(provider: NativeSidebarViewProvider, item: Movab
   // Up: in front of the previous item. Down: in front of the one after next,
   // which is past the end for the second-to-last item, so it goes last.
   const before = direction === 'up' ? items.at(index - 1) : items.at(index + 2);
+
   await placeItem(provider, item, { dir, collection: item.collection, before: before?.uri });
 }
 
@@ -118,6 +120,7 @@ export function placeInOrder<T extends { uri: vscode.Uri }>(items: T[], uri: vsc
 
 async function getSiblings(provider: NativeSidebarViewProvider, dir: vscode.Uri, collection: CollectionRoot, kind: ItemKind): Promise<ChildEntry[]> {
   const children = await provider.readChildren(dir, collection);
+
   return children.filter((child) => child.params[0] === kind);
 }
 

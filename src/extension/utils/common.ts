@@ -185,8 +185,7 @@ interface SortableItem {
 }
 
 /**
- * Bruno's sidebar ordering, ported from the webview's utils/common so the
- * extension-host tree matches the app: items without a valid seq are sorted
+ * Bruno's sidebar ordering: items without a valid seq are sorted
  * alphabetically, then each item with a seq is inserted at position seq - 1.
  * Items sharing a seq stay grouped at that position.
  */

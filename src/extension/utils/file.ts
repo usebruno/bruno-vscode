@@ -28,15 +28,18 @@ export function dirname(uri: vscode.Uri): vscode.Uri {
 
 /** True when `uri` is strictly inside `root`, matching whole path segments. */
 export function isInside(uri: vscode.Uri, root: vscode.Uri): boolean {
-  return uri.scheme === root.scheme
+  return (
+    uri.scheme === root.scheme
     && uri.authority === root.authority
     // Makes sure `/ws/api` contains something like `/ws/api/v2` but not `/ws/api-tests`.
-    && uri.path.startsWith(root.path.replace(/\/$/, '') + '/');
+    && uri.path.startsWith(root.path.replace(/\/$/, '') + '/')
+  );
 }
 
 /** `uri` without a trailing slash, so two spellings of one directory compare equal. */
 export function normalizeDir(uri: vscode.Uri): vscode.Uri {
   const path = uri.path.replace(/\/+$/, '');
+
   return path === uri.path ? uri : uri.with({ path: path || '/' });
 }
 
@@ -56,6 +59,7 @@ export function writeText(uri: vscode.Uri, content: string): Thenable<void> {
 export async function doesItExist(uri: vscode.Uri): Promise<boolean> {
   try {
     await vscode.workspace.fs.stat(uri);
+
     return true;
   } catch {
     return false;

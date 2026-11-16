@@ -14,6 +14,7 @@ describe('prettifyJsonString', () => {
   it('still formats a very long single line, keeping variables', () => {
     const items = Array.from({ length: 3000 }, (_, i) => `{"i":${i},"v":"{{var${i}}}"}`).join(',');
     const out = prettifyJsonString(`{"items":[${items}]}`);
+
     expect(out.split('\n').length).toBeGreaterThan(3000);
     expect(out).toContain('"v": "{{var2999}}"');
     expect(out).not.toContain('bruno-var-hash');

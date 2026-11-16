@@ -84,9 +84,11 @@ export async function writeCollectionZip(zip: CollectionZip, location: vscode.Ur
   const dir = vscode.Uri.joinPath(location, sanitizeName(await uniqueFolderName(zip.name, location)));
 
   await vscode.workspace.fs.createDirectory(dir);
+
   for (const directory of zip.directories) {
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(dir, directory));
   }
+
   for (const file of zip.files) {
     await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(dir, file.path), file.data());
   }
@@ -113,6 +115,7 @@ function findCollectionRoot(
   // most one folder in it and captures that folder; deeper files don't match.
   const prefixes = new Set(
     [...names]
+      //matches a path with at most one directory level
       .map((name) => /^(?:([^/]+)\/)?[^/]+$/.exec(name))
       .filter(Boolean)
       .map((match) => (match[1] ? `${match[1]}/` : ''))
@@ -163,6 +166,11 @@ function isPathTraversal(relative: string): boolean {
   return relative.startsWith('/') || relative.includes('\\') || segments.some((segment) => segment === '..' || segment === '');
 }
 
+/** Mask selecting the file-type bits of a Unix mode (`S_IFMT`). */
+const UNIX_FILE_TYPE_MASK = 0o170000;
+/** File-type value for a symbolic link (`S_IFLNK`). A regular file is 0o100000, a directory 0o040000. */
+const UNIX_FILE_TYPE_SYMLINK = 0o120000;
+
 /**
  * A zip entry can be a symbolic link rather than a file: its content is then
  * the link target, such as "../../.ssh/id_rsa". Unpacked as a link it would let
@@ -171,11 +179,11 @@ function isPathTraversal(relative: string): boolean {
  *
  * Archives made on Unix store the file's mode in the upper 16 bits of the
  * entry's external attributes, the same bits `stat` reports. `>>> 16` brings
- * them down (unsigned, as the top bit may be set), `& 0o170000` keeps only the
- * file-type bits, and 0o120000 is the type for a symlink (a regular file is
- * 0o100000, a directory 0o040000). Archives made on Windows leave the upper
- * half zero, so nothing in them is taken for a link.
+ * them down (unsigned, as the top bit may be set), the mask keeps only the
+ * file-type bits, and the symlink constant is the type for a link. Archives
+ * made on Windows leave the upper half zero, so nothing in them is taken for
+ * a link.
  */
 function isSymlink(entry: AdmZip.IZipEntry): boolean {
-  return ((entry.attr >>> 16) & 0o170000) === 0o120000;
+  return ((entry.attr >>> 16) & UNIX_FILE_TYPE_MASK) === UNIX_FILE_TYPE_SYMLINK;
 }
