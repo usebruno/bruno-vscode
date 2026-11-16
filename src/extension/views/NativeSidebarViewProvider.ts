@@ -748,8 +748,7 @@ export class Entity extends vscode.TreeItem {
       this.tooltip = `${uri.toString()} cannot be read. Close it, or bring the folder back.`;
     } else if (type === 'collection') {
       this.iconPath = new vscode.ThemeIcon('folder-library');
-      // A click on the name opens the collection's settings.
-      // With a command set, VS Code expands and collapses only from the chevron.
+      // A click on the name expands the collection and opens the collection's settings.
       this.command = {
         command: 'bruno.sidebar.settings',
         title: 'Open Collection Settings',

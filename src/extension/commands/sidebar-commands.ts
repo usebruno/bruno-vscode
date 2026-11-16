@@ -356,7 +356,7 @@ export function registerSidebarCommands(
   });
 
   register('bruno.sidebar.settings', async (item) => {
-    await handleSettings(item, getTarget);
+    await handleSettings(item, getTarget, treeView);
   });
 
   register('bruno.sidebar.clone', async (item) => {
@@ -1051,13 +1051,16 @@ async function handleRequestsRun(item: Entity | undefined, getTarget: GetTargetF
 }
 
 /** Collection settings open in their panel; folder settings are the folder file in the Bruno editor. */
-async function handleSettings(item: Entity | undefined, getTarget: GetTargetFn) {
+async function handleSettings(item: Entity | undefined, getTarget: GetTargetFn, treeView: vscode.TreeView<Entity>) {
   const entity = getTarget(item, 'collection', 'folder');
   if (!entity) {
     return;
   }
 
   if (entity.type === 'collection') {
+    // A click on the name runs this. With a command set, VS Code leaves expanding to the
+    // chevron, so expand here with a command.
+    await treeView.reveal(entity, { expand: true, select: true, focus: false });
     await vscode.commands.executeCommand('bruno.openSettings', entity.uri);
     return;
   }
