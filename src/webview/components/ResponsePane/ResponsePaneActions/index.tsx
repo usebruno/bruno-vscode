@@ -92,7 +92,7 @@ const ResponsePaneActions = ({
     }
   ];
 
-  if (item.type !== 'http-request') {
+  if (item.type !== 'http-request' && item.type !== 'graphql-request') {
     return null;
   }
 

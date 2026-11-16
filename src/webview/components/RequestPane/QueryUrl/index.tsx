@@ -380,6 +380,7 @@ const QueryUrl = ({
         <div className="flex items-center h-full mr-2 cursor-pointer" id="send-request" onClick={handleRun}>
           <div
             title="Save Request"
+            data-testid="save-request"
             className="infotip mr-3"
             onClick={(e) => {
               e.stopPropagation();

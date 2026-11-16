@@ -391,6 +391,7 @@ const GrpcQueryUrl = ({
 
           <div
             className="infotip"
+            data-testid="save-request"
             onClick={(e) => {
               e.stopPropagation();
               if (!item.draft) return;
