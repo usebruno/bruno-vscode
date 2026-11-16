@@ -106,7 +106,7 @@ export class NativeSidebar {
       collectionItem: (name) => this.itemRow(name),
       collectionItems: () => this.row(/^(Folder|App|.* request) /),
       folder: (name) => this.itemRow(name),
-      preferencesButton: () => this.titleActionButton('Open Preferences')
+      preferencesButton: () => this.page.locator('.part.statusbar').getByRole('button', { name: 'Bruno Preferences' })
     };
   }
 
@@ -451,7 +451,7 @@ export class NativeSidebar {
   }
 
   async openPreferences(): Promise<void> {
-    await this.titleAction('Open Preferences');
+    await this.locators.preferencesButton().click();
   }
 
   // ---- items ------------------------------------------------------------

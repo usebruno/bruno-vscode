@@ -393,11 +393,6 @@
           "group": "navigation"
         },
         {
-          "command": "bruno.openGlobalEnvironments",
-          "when": "view == bruno.nativeSidebarView",
-          "group": "navigation@0"
-        },
-        {
           "command": "bruno.sidebar.search",
           "when": "view == bruno.nativeSidebarView",
           "group": "navigation@1"
@@ -426,11 +421,6 @@
           "command": "bruno.sidebar.refresh",
           "when": "view == bruno.nativeSidebarView",
           "group": "navigation@6"
-        },
-        {
-          "command": "bruno.openPreferences",
-          "when": "view == bruno.nativeSidebarView",
-          "group": "navigation@7"
         }
       ],
       "view/item/context": [

@@ -71,8 +71,8 @@ function registerIpcHandlers(): void {
   registerScriptErrorSourceHandler();
 
   registerWorkspaceIpc({
-    addWatcher: (_workspacePath: string) => {},
-    removeWatcher: (_workspacePath: string) => {}
+    addWatcher: (_workspacePath: string) => { },
+    removeWatcher: (_workspacePath: string) => { }
   });
 
   registerSimplePanelIpc();
@@ -159,6 +159,9 @@ export function activate(context: vscode.ExtensionContext): void {
   registerTreeCommands(context, workspaceCollectionsProvider);
   registerMainCommands(context);
 
+  // Preferences and global environments live in the status bar at the bottom
+  context.subscriptions.push(setupPreferences(), setupGlobalEnvironments());
+
   context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openTransientRequest',
       (itemUid: string, itemName: string, collectionUid: string, collectionPath: string, item?: AppItem) => {
@@ -225,6 +228,32 @@ function carryOverLegacyOpenedCollections(context: vscode.ExtensionContext, open
     }
     await context.globalState.update(CARRIED_OVER_KEY, true);
   })();
+}
+
+function setupPreferences() {
+  const preferences = vscode.window.createStatusBarItem('bruno.preferences', vscode.StatusBarAlignment.Left, 100);
+
+  preferences.name = 'Bruno Preferences';
+  preferences.text = '$(settings-gear) Bruno';
+  preferences.tooltip = 'Bruno Preferences';
+  preferences.command = 'bruno.openPreferences';
+  preferences.accessibilityInformation = { label: 'Bruno Preferences', role: 'button' };
+  preferences.show();
+
+  return preferences;
+}
+
+function setupGlobalEnvironments() {
+  const globalEnvironments = vscode.window.createStatusBarItem('bruno.globalEnvironments', vscode.StatusBarAlignment.Left, 99);
+
+  globalEnvironments.name = 'Bruno Global Environments';
+  globalEnvironments.text = '$(globe)';
+  globalEnvironments.tooltip = 'Bruno Global Environments';
+  globalEnvironments.command = 'bruno.openGlobalEnvironments';
+  globalEnvironments.accessibilityInformation = { label: 'Bruno Global Environments', role: 'button' };
+  globalEnvironments.show();
+
+  return globalEnvironments;
 }
 
 export function deactivate(): void {
