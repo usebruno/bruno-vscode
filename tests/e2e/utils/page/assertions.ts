@@ -1,6 +1,9 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { ResponsePaneTab, TextCheck } from '../../e2e-helper';
-import { editorLocators, openResponseTab, openTab, sendRequestByName } from './actions';
+import {
+  editorLocators, getWebviewFrame, loadGrpcProtoFile, openRequestEditor, openResponseTab, openTab, selectGrpcMethod,
+  sendRequestByName, setGrpcMessage,
+} from './actions';
 
 async function expectText(panel: Locator, check: TextCheck): Promise<void> {
   for (const text of check.contains ?? []) {
@@ -36,5 +39,35 @@ export async function sendRequestAndVerify(page: Page, request: string, status?:
   await expect(statusCode).toBeVisible({ timeout: 30_000 });
   if (status) {
     await expect(statusCode).toContainText(String(status), { timeout: 5_000 });
+  }
+}
+
+export async function sendGrpcRequestAndVerify(
+  page: Page,
+  request: string,
+  options: { proto: string, method: string, message?: string },
+  status = 0
+): Promise<void> {
+  await openRequestEditor(page, request);
+  const editor = await getWebviewFrame(page, (frame) => frame.getByTestId('grpc-query-url-container'));
+  await loadGrpcProtoFile(editor, options.proto);
+  await selectGrpcMethod(editor, options.method);
+  if (options.message) {
+    await setGrpcMessage(page, editor, options.message);
+  }
+
+  const { grpc } = editorLocators(page);
+  await grpc.sendRequestButton().click();
+  await expect(grpc.responseStatusCode()).toContainText(String(status));
+}
+
+export async function connectWebSocketAndVerify(page: Page, request: string, message?: string): Promise<void> {
+  await openRequestEditor(page, request);
+
+  const { ws } = editorLocators(page);
+  await ws.connectButton().click();
+  await expect(ws.connectionStatusStrip()).toBeVisible();
+  if (message) {
+    await expect(ws.incomingMessage()).toContainText(message);
   }
 }

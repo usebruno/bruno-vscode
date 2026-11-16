@@ -151,6 +151,7 @@ const WsQueryUrl = ({
           <div className="flex items-center h-full mr-2 cursor-pointer">
             <div
               className="infotip mr-3"
+              data-testid="save-request"
               onClick={(e) => {
                 e.stopPropagation();
                 if (!hasChanges) return;
