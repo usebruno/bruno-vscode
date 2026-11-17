@@ -715,8 +715,13 @@ export const collectionsSlice = createSlice({
         if (item) {
           const draft = ensureDraft(item);
           if (draft.request) {
-            // Reset auth to empty object to clear any null values from YAML parsing
-            draft.request.auth = { mode };
+            const savedAuth = get(item, 'request.auth');
+            const savedMode = get(savedAuth, 'mode');
+            if (mode === savedMode) {
+              draft.request.auth = cloneDeep(savedAuth);
+            } else {
+              draft.request.auth = { mode };
+            }
           }
         }
       }
@@ -1256,8 +1261,13 @@ export const collectionsSlice = createSlice({
       if (collection) {
         const draft = ensureCollectionRootDraft(collection);
         if (!draft.root!.request) draft.root!.request = {};
-        // Reset auth to empty object to clear any null values from YAML parsing
-        draft.root!.request.auth = { mode };
+        const savedAuth = get(collection, 'root.request.auth');
+        const savedMode = get(savedAuth, 'mode');
+        if (mode === savedMode) {
+          draft.root!.request.auth = cloneDeep(savedAuth);
+        } else {
+          draft.root!.request.auth = { mode };
+        }
       }
     },
 
@@ -1423,8 +1433,13 @@ export const collectionsSlice = createSlice({
         if (folder) {
           const draft = ensureFolderRootDraft(folder);
           if (!draft.root!.request) draft.root!.request = {};
-          // Reset auth to empty object to clear any null values from YAML parsing
-          draft.root!.request.auth = { mode };
+          const savedAuth = get(folder, 'root.request.auth');
+          const savedMode = get(savedAuth, 'mode');
+          if (mode === savedMode) {
+            draft.root!.request.auth = cloneDeep(savedAuth);
+          } else {
+            draft.root!.request.auth = { mode };
+          }
         }
       }
     },

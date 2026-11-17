@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import type { Workspace } from '../../e2e-helper';
-import { editorLocators, setAuth } from '../../utils/page/actions';
+import { activeEditor, editorLocators, selectAuthMode, setAuth } from '../../utils/page/actions';
 import { sendRequestAndVerify, verifyResponsePane } from '../../utils/page/assertions';
 import { TEST_SERVER_LOCAL_URL, TEST_SERVER_REMOTE_URL } from '../../utils/urls';
 
@@ -11,6 +11,7 @@ export const workspace: Workspace = {
     {
       name: 'auth-types-collection',
       format: 'yml',
+      folders: [{ name: 'folder-1' }],
       requests: [
         { name: 'basic-request', url: `${TEST_SERVER_REMOTE_URL}/api/auth/basic/protected`, type: 'HTTP', method: 'POST' },
         { name: 'bearer-request', url: `${TEST_SERVER_REMOTE_URL}/api/auth/bearer/protected`, type: 'HTTP', method: 'GET' },
@@ -29,6 +30,7 @@ async function verifyBasicAuth(page: Page) {
   await setAuth(page, 'basic-request', 'basic', { username: 'bruno', password: 'wrong' });
   await sendRequestAndVerify(page, 'basic-request', 401);
   await setAuth(page, 'basic-request', 'basic', { username: 'bruno', password: 'della' });
+
   await sendRequestAndVerify(page, 'basic-request', 200);
   await verifyResponsePane(page, 'basic-request', { tab: 'Timeline', section: 'Request' }, { contains: [/authorization/i] });
 
@@ -77,6 +79,16 @@ async function verifyApiKeyAuth(page: Page) {
   await expect(response(page)).toContainText('query-secret-456');
 }
 
+async function verifySavedAuthRestoredOnModeSwitch(page: Page) {
+  for (const [target, itemType] of [['auth-types-collection', 'collection'], ['folder-1', 'folder'], ['basic-request', 'request']]) {
+    await setAuth(page, target, 'basic', { username: 'bruno', password: 'della' });
+    await selectAuthMode(page, 'Bearer Token');
+    await selectAuthMode(page, 'Basic Auth');
+    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-username`)).toContainText('bruno');
+    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-password`)).toContainText('*****');
+  }
+}
+
 // NTLM is covered in ntlm.ts and OAuth 2.0 in oauth2.ts
 export async function run(page: Page) {
   await verifyAwsV4Auth(page);
@@ -84,5 +96,6 @@ export async function run(page: Page) {
   await verifyBearerAuth(page);
   await verifyDigestAuth(page);
   await verifyApiKeyAuth(page);
+  await verifySavedAuthRestoredOnModeSwitch(page);
 }
 
