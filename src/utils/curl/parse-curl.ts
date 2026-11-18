@@ -275,6 +275,17 @@ const isURL = (arg: any) => {
     return true;
   }
 
+  // A host and port with no scheme, e.g. "localhost:3000/api" or "127.0.0.1:8080".
+  // The digits-only port is what sets it apart from a plain "word:word" argument.
+  if (/^[^\s/:?#]+:\d+(?:[/?#]|$)/.test(arg)) {
+    return true;
+  }
+
+  // localhost on its own
+  if (/^localhost(?:[/?#]|$)/i.test(arg)) {
+    return true;
+  }
+
   // This regex matches domain patterns like:
   // - example.com
   // - sub.example.com

@@ -8,8 +8,21 @@ describe('getRequestFromCurlCommand', () => {
     expect(getRequestFromCurlCommand('curl 127.0.0.1')?.url).toBe('https://127.0.0.1');
   });
 
+  it('takes a host and port without a scheme', () => {
+    expect(getRequestFromCurlCommand('curl localhost:3000/api')?.url).toBe('https://localhost:3000/api');
+    expect(getRequestFromCurlCommand('curl 127.0.0.1:8080/x?a=1')?.url).toBe('https://127.0.0.1:8080/x?a=1');
+    expect(getRequestFromCurlCommand('curl api.example.com:8443')?.url).toBe('https://api.example.com:8443');
+  });
+
+  it('takes localhost without a port', () => {
+    expect(getRequestFromCurlCommand('curl localhost')?.url).toBe('https://localhost');
+    expect(getRequestFromCurlCommand('curl localhost/api?a=1')?.url).toBe('https://localhost/api?a=1');
+  });
+
   it('does not take a bare word for a URL', () => {
     expect(getRequestFromCurlCommand('curl -X POST')).toBeNull();
+    expect(getRequestFromCurlCommand('curl foo:bar')).toBeNull();
+    expect(getRequestFromCurlCommand('curl localhostx')).toBeNull();
   });
 
   it('indents a JSON body without changing its values', () => {
