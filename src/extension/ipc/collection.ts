@@ -75,6 +75,18 @@ const {
   openCollectionToBruno: openCollectionToBrunoConverter
 } = require('@usebruno/converters');
 
+const DEFAULT_GITIGNORE = [
+  '# Secrets',
+  '.env*',
+  '',
+  '# Dependencies',
+  'node_modules',
+  '',
+  '# OS files',
+  '.DS_Store',
+  'Thumbs.db'
+].join('\n');
+
 const environmentSecretsStore = new EnvironmentSecretsStore();
 const collectionSecurityStore = new CollectionSecurityStore();
 const uiStateSnapshotStore = new UiStateSnapshotStore();
@@ -210,6 +222,8 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       } else {
         throw new Error(`Invalid format: ${format}`);
       }
+
+      await writeFile(path.join(dirPath, '.gitignore'), DEFAULT_GITIGNORE);
 
       const lastOpenedStore = new LastOpenedCollections();
       lastOpenedStore.add(dirPath);
