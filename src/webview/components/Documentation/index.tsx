@@ -47,11 +47,11 @@ const Documentation = ({
 
   return (
     <StyledWrapper className="flex flex-col gap-y-1 h-full w-full relative">
-      <div className="editing-mode flex-shrink-0" role="tab" onClick={toggleViewMode}>
+      <div className="editing-mode flex-shrink-0" role="tab" onClick={toggleViewMode} data-testid="docs-edit-toggle">
         {isEditing ? 'Preview' : 'Edit'}
       </div>
 
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0" data-testid="docs-editor">
         {isEditing ? (
           <CodeEditor
             collection={collection}

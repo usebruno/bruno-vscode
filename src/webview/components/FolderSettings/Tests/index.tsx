@@ -39,7 +39,7 @@ const Tests = ({
   return (
     <StyledWrapper className="w-full flex flex-col h-full">
       <div className="text-xs mb-4 text-muted shrink-0">These tests will run any time a request in this collection is sent.</div>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0" data-testid="folder-test-script-editor">
         <CodeEditor
           collection={collection}
           value={tests || ''}

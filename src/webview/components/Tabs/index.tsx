@@ -41,6 +41,7 @@ export const TabsTrigger = ({
     <button
       onClick={() => onValueChange(triggerValue)}
       className={classnames('tab-trigger', className, { active: isActive })}
+      data-testid={`tab-trigger-${triggerValue}`}
     >
       {children}
     </button>
