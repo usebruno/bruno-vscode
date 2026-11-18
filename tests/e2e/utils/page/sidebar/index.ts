@@ -97,6 +97,14 @@ const FORMAT_LABELS: Record<FileFormat, string> = { yml: 'OpenCollection (YAML)'
  * `window.dialogStyle` and `window.menuStyle` custom rendering so all of them
  * live in the workbench DOM.
  */
+export type TransientRequestKind = 'HTTP' | 'GraphQL' | 'gRPC' | 'WebSocket' | 'From cURL';
+
+/** Where to save an unsaved request: a collection when several are open, and a folder path under its root. */
+export interface SaveRequestOptions {
+  collectionName?: string;
+  folderPath?: string[];
+}
+
 export class NativeSidebar {
   readonly locators: SidebarLocators;
 
@@ -114,7 +122,7 @@ export class NativeSidebar {
   static async open(page: Page): Promise<NativeSidebar> {
     const sidebar = new NativeSidebar(page);
 
-    await sidebar.titleActionButton('Refresh Collections').waitFor({ timeout: 15_000 });
+    await sidebar.titleActionButton('Create Collection').waitFor({ timeout: 15_000 });
     await page.locator('.part.sidebar .pane-body').first().waitFor({ timeout: 15_000 });
 
     return sidebar;
@@ -410,6 +418,56 @@ export class NativeSidebar {
     await this.answerFileDialog(collectionPath, 'directory');
 
     await this.quickInputBox().waitFor({ state: 'hidden', timeout: 15_000 });
+  }
+
+  async newTransientRequest(type: TransientRequestKind, curl?: string): Promise<Frame> {
+    const before = this.page.frames();
+
+    await this.titleAction('New Request');
+    await this.pickQuickItem(type);
+
+    if (curl) {
+      await this.answerInputBox('cURL command', curl);
+    }
+
+    // Panes already open carry the same marker; the new request's is a frame that was not there before.
+    const pane = await getWebviewFrame(
+      this.page,
+      (frame) => before.includes(frame)
+        ? frame.locator('#none')
+        : buildCommonLocators(frame).requestPane()
+    );
+    await buildCommonLocators(pane).requestPane().waitFor({ state: 'visible', timeout: 10_000 });
+
+    return pane;
+  }
+
+  /**
+   * Answer the picks that save an unsaved request: the collection when several are open,
+   * the folder when the collection has any (walking down `folderPath` from the root), then the name.
+   */
+  async answerSaveRequest(name: string, { collectionName, folderPath = [] }: SaveRequestOptions = {}): Promise<void> {
+    if (collectionName) {
+      await this.pickQuickItem(collectionName);
+    }
+
+    // The folder step is skipped when there is no folder to choose, so wait for whichever shows.
+    const rows = this.page.locator('.quick-input-list .monaco-list-row');
+    const folderEntry = rows.filter({ hasText: 'Select this folder' }).first();
+    const namePrompt = this.page.locator('.quick-input-widget .quick-input-message').filter({ hasText: 'Enter a name for the request' });
+
+    await folderEntry.or(namePrompt).first().waitFor({ state: 'visible' });
+
+    if (await folderEntry.isVisible()) {
+      for (const folder of folderPath) {
+        await rows.filter({ hasText: folder }).first().click();
+        // The entry's description names the folder once the list has moved into it.
+        await expect(folderEntry).toContainText(folder);
+      }
+      await folderEntry.click();
+    }
+
+    await this.answerInputBox('Enter a name for the request', name);
   }
 
   /** Clone through the collection menu; resolves to the clone's name. */

@@ -65,3 +65,12 @@ export async function doesItExist(uri: vscode.Uri): Promise<boolean> {
     return false;
   }
 }
+
+/** Next seq for a new item in `dir`: one past the number of requests already there. */
+export async function getNextSequenceNumber(dir: vscode.Uri, format: CollectionFormat): Promise<number> {
+  const entries = await vscode.workspace.fs.readDirectory(dir);
+  const requests = entries.filter(([name, type]) =>
+    (type & vscode.FileType.File) && name.endsWith(`.${format}`) && !META_FILES[format].includes(name));
+
+  return requests.length + 1;
+}

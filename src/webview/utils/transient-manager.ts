@@ -1,16 +1,19 @@
 /**
- * TransientManager — creates in-memory request items that are not persisted to disk.
+ * Builds the in-memory item behind an unsaved request.
  *
- * Transient requests live only in Redux state and are excluded from the sidebar.
- * They can be edited, executed, and later saved to a collection folder.
+ * The extension host opens a request panel before any item exists and asks this
+ * webview to build one (`main:new-transient-request`), passing the uid and name it
+ * chose and, for a request filled from a curl command, the fields it parsed. The
+ * item lives only in this panel's Redux store until the user saves it, when the
+ * extension writes it into a collection the user picks and this panel closes.
  *
- * Each transient item gets a virtual pathname under:
+ * The collection it is built in is normally the hidden Scratch collection, which
+ * exists so that the request runtime has a root to resolve against. The item's
+ * pathname is a string, not a file: no folder is created and nothing is written.
  *   {collectionPath}/.bruno/transient/{name}.{bru|yml}
- * This allows scripts to resolve relative paths against the collection root.
+ * The collection prefix makes the item count as belonging to that collection, so
+ * folder inheritance and relative paths behave as for a saved request.
  */
-
-import { uuid } from 'utils/common/index';
-import { flattenItems, isItemTransientRequest } from 'utils/collections/index';
 
 interface TransientItem {
   uid: string;
@@ -30,23 +33,27 @@ interface CollectionPresets {
   requestUrl?: string;
 }
 
+/**
+ * Set by the extension host when it opens the panel before the item exists: the uid both
+ * sides will know the item by, the name it chose (it numbers "Untitled N" across all panels,
+ * which no single store can see), and for a request filled from a curl command, the fields
+ * that command gave.
+ */
+interface TransientOverrides {
+  uid: string;
+  name: string;
+  request?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+}
+
+type RequestKind = 'http' | 'graphql' | 'grpc' | 'ws';
+
 interface CollectionInfo {
   uid: string;
   pathname: string;
   format?: string; // 'bru' or 'yml'
   brunoConfig?: { presets?: CollectionPresets };
   draft?: { brunoConfig?: { presets?: CollectionPresets } } | null;
-  items?: any[]; // saved requests + open transients
-}
-
-function getNextName(collection: CollectionInfo): string {
-  const items = flattenItems((collection?.items ?? []) as any);
-  const maxNumber = items.reduce((max: number, item: any) => {
-    if (!isItemTransientRequest(item)) return max;
-    const n = Number(item.name?.match(/^Untitled (\d+)$/)?.[1]);
-    return n > max ? n : max;
-  }, 0);
-  return `Untitled ${maxNumber + 1}`;
 }
 
 function getFileExtension(format?: string): string {
@@ -58,15 +65,13 @@ function buildTransientPath(collectionPathname: string, filename: string): strin
   return `${collectionPathname}${separator}.bruno${separator}transient${separator}${filename}`;
 }
 
-function generateItemMeta(collection: CollectionInfo): { name: string; filename: string; pathname: string } {
-  const name = getNextName(collection);
+function generateItemMeta(collection: CollectionInfo, name: string): { name: string; filename: string; pathname: string } {
   const ext = getFileExtension(collection.format);
   const filename = `${name}.${ext}`;
   const pathname = buildTransientPath(collection.pathname, filename);
   return { name, filename, pathname };
 }
 
-// Collection presets. 
 function getPresets(collection: CollectionInfo): CollectionPresets {
   return collection?.draft?.brunoConfig?.presets || collection?.brunoConfig?.presets || {};
 }
@@ -91,108 +96,139 @@ function createBaseRequest(url = ''): Record<string, unknown> {
   };
 }
 
+function createHttpRequest(collection: CollectionInfo, overrides: TransientOverrides): TransientItem {
+  const { name, filename, pathname } = generateItemMeta(collection, overrides.name);
+
+  return {
+    uid: overrides.uid,
+    name,
+    type: 'http-request',
+    isTransient: true,
+    seq: 0,
+    draft: null,
+    filename,
+    pathname,
+    request: createBaseRequest(getPresetUrl(collection)),
+    settings: { encodeUrl: true }
+  };
+}
+
+function createGraphQLRequest(collection: CollectionInfo, overrides: TransientOverrides): TransientItem {
+  const { name, filename, pathname } = generateItemMeta(collection, overrides.name);
+
+  return {
+    uid: overrides.uid,
+    name,
+    type: 'graphql-request',
+    isTransient: true,
+    seq: 0,
+    draft: null,
+    filename,
+    pathname,
+    request: {
+      ...createBaseRequest(getPresetUrl(collection)),
+      method: 'POST',
+      body: {
+        mode: 'graphql',
+        graphql: { query: '', variables: '' }
+      }
+    },
+    settings: { encodeUrl: true }
+  };
+}
+
+function createGrpcRequest(collection: CollectionInfo, overrides: TransientOverrides): TransientItem {
+  const { name, filename, pathname } = generateItemMeta(collection, overrides.name);
+
+  return {
+    uid: overrides.uid,
+    name,
+    type: 'grpc-request',
+    isTransient: true,
+    seq: 0,
+    draft: null,
+    filename,
+    pathname,
+    request: {
+      url: getPresetUrl(collection),
+      method: '',
+      methodType: '',
+      headers: [],
+      body: {
+        mode: 'grpc',
+        grpc: [{ name: 'message 1', content: '{}' }]
+      },
+      auth: { mode: 'inherit' },
+      vars: { req: [], res: [] },
+      script: { req: null, res: null },
+      assertions: [],
+      tests: null,
+      docs: null
+    },
+    settings: {}
+  };
+}
+
+function createWebSocketRequest(collection: CollectionInfo, overrides: TransientOverrides): TransientItem {
+  const { name, filename, pathname } = generateItemMeta(collection, overrides.name);
+
+  return {
+    uid: overrides.uid,
+    name,
+    type: 'ws-request',
+    isTransient: true,
+    seq: 0,
+    draft: null,
+    filename,
+    pathname,
+    request: {
+      url: getPresetUrl(collection),
+      method: 'GET',
+      headers: [],
+      params: [],
+      body: {
+        mode: 'ws',
+        ws: [{ name: 'message 1', type: 'json', content: '{}' }]
+      },
+      auth: { mode: 'inherit' },
+      vars: { req: [], res: [] },
+      script: { req: null, res: null },
+      assertions: [],
+      tests: null,
+      docs: null
+    },
+    settings: { timeout: 0, keepAliveInterval: 0 }
+  };
+}
+
+function createByKind(type: RequestKind, collection: CollectionInfo, overrides: TransientOverrides): TransientItem {
+  if (type === 'graphql') {
+    return createGraphQLRequest(collection, overrides);
+  }
+
+  if (type === 'grpc') {
+    return createGrpcRequest(collection, overrides);
+  }
+
+  if (type === 'ws') {
+    return createWebSocketRequest(collection, overrides);
+  }
+
+  return createHttpRequest(collection, overrides);
+}
+
+/** The one way in: the kind's base request, with the extension host's overrides laid over it. */
 const transientManager = {
-  createHttpRequest(collection: CollectionInfo): TransientItem {
-    const { name, filename, pathname } = generateItemMeta(collection);
-    return {
-      uid: uuid(),
-      name,
-      type: 'http-request',
-      isTransient: true,
-      seq: 0,
-      draft: null,
-      filename,
-      pathname,
-      request: createBaseRequest(getPresetUrl(collection)),
-      settings: { encodeUrl: true }
-    };
-  },
+  create(type: RequestKind, collection: CollectionInfo, overrides: TransientOverrides): TransientItem {
+    const item = createByKind(type, collection, overrides);
 
-  createGraphQLRequest(collection: CollectionInfo): TransientItem {
-    const { name, filename, pathname } = generateItemMeta(collection);
     return {
-      uid: uuid(),
-      name,
-      type: 'graphql-request',
-      isTransient: true,
-      seq: 0,
-      draft: null,
-      filename,
-      pathname,
-      request: {
-        ...createBaseRequest(getPresetUrl(collection)),
-        method: 'POST',
-        body: {
-          mode: 'graphql',
-          graphql: { query: '', variables: '' }
-        }
-      },
-      settings: { encodeUrl: true }
-    };
-  },
-
-  createGrpcRequest(collection: CollectionInfo): TransientItem {
-    const { name, filename, pathname } = generateItemMeta(collection);
-    return {
-      uid: uuid(),
-      name,
-      type: 'grpc-request',
-      isTransient: true,
-      seq: 0,
-      draft: null,
-      filename,
-      pathname,
-      request: {
-        url: getPresetUrl(collection),
-        method: '',
-        methodType: '',
-        headers: [],
-        body: {
-          mode: 'grpc',
-          grpc: [{ name: 'message 1', content: '{}' }]
-        },
-        auth: { mode: 'inherit' },
-        vars: { req: [], res: [] },
-        script: { req: null, res: null },
-        assertions: [],
-        tests: null,
-        docs: null
-      },
-      settings: {}
-    };
-  },
-
-  createWebSocketRequest(collection: CollectionInfo): TransientItem {
-    const { name, filename, pathname } = generateItemMeta(collection);
-    return {
-      uid: uuid(),
-      name,
-      type: 'ws-request',
-      isTransient: true,
-      seq: 0,
-      draft: null,
-      filename,
-      pathname,
-      request: {
-        url: getPresetUrl(collection),
-        method: 'GET',
-        headers: [],
-        params: [],
-        body: {
-          mode: 'ws',
-          ws: [{ name: 'message 1', type: 'json', content: '{}' }]
-        },
-        auth: { mode: 'inherit' },
-        vars: { req: [], res: [] },
-        script: { req: null, res: null },
-        assertions: [],
-        tests: null,
-        docs: null
-      },
-      settings: { timeout: 0, keepAliveInterval: 0 }
+      ...item,
+      request: { ...item.request, ...overrides.request },
+      settings: { ...item.settings, ...overrides.settings }
     };
   }
 };
 
 export default transientManager;
-export { transientManager, TransientItem, CollectionInfo };
+export { transientManager, TransientItem, CollectionInfo, TransientOverrides, RequestKind };

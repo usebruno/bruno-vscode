@@ -2,25 +2,32 @@ import * as vscode from 'vscode';
 import type { GrpcRequest, HttpItemSettings, HttpRequest, HttpRequestBody, ItemType, WebSocketRequest } from '@bruno-types';
 import { stringifyCollection, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
 
-import { convertToBruno, getImportedCollectionName, isUnbundledCollectionRoot, readImportFile, writeCollection, IMPORT_SOURCE_LABELS, type ImportFile } from '../utils/import';
-import { readCollectionZip, writeCollectionZip, type CollectionZip } from '../utils/import-zip';
 import { getRequestFromCurlCommand, isCurlCommand, normalizeCurlCommand } from '../../utils/curl';
-import { writeCollectionConfig } from '../utils/collection-v2';
 import { DEFAULT_GITIGNORE } from '../utils/constants';
-import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
-import { openRunnerPanel } from '../panels/runner-panel';
+import type { CollectionFormat } from '../../utils/collection';
+
 import collectionWatcher from '../app/collection-watcher';
+import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { broadcastToAllWebviews } from '../ipc/handlers';
+
+import { openRunnerPanel } from '../panels/runner-panel';
+import { openScratchRequest, type NewTransientRequest, type RequestKind } from '../panels/transient-request-panel';
+
 import LastOpenedCollections from '../store/last-opened-collections';
-import type { OpenedCollections } from '../store/opened-collections';
 import logsStore from '../store/logs';
+import type { OpenedCollections } from '../store/opened-collections';
+
+import { writeCollectionConfig } from '../utils/collection-v2';
 import { stringifyJson, uuid } from '../utils/common';
 import { closeBrunoEditorsUnder, closeTabsUnder, moveWithEditors, writeThroughEditor } from '../utils/editor';
-import { isMovable, shiftItem } from '../utils/reorder';
-import { basename, dirname, doesItExist, isInside, isSameDir, readText, writeText, META_FILES } from '../utils/file';
-import type { CollectionFormat } from '../../utils/collection';
+import { basename, dirname, doesItExist, getNextSequenceNumber, isInside, isSameDir, readText, writeText, META_FILES } from '../utils/file';
 import { posixifyPath, sanitizeName, validateName } from '../utils/filesystem';
+import type { ImportFile } from '../utils/import';
+import { convertToBruno, getImportedCollectionName, isUnbundledCollectionRoot, readImportFile, writeCollection, IMPORT_SOURCE_LABELS } from '../utils/import';
+import { readCollectionZip, writeCollectionZip, type CollectionZip } from '../utils/import-zip';
 import { parseCollection, parseFolder, parseRequest } from '../utils/parse';
+import { isMovable, shiftItem } from '../utils/reorder';
+
 import { Entity, NativeSidebarViewProvider, CollectionRoot, findCollectionConfig } from '../views/NativeSidebarViewProvider';
 
 /**
@@ -42,14 +49,6 @@ const HAS_COPIED_ITEM_KEY = 'bruno.sidebar.hasCopiedItem';
  */
 function getRequestFileUri(dir: vscode.Uri, name: string, format: CollectionFormat): vscode.Uri {
   return vscode.Uri.joinPath(dir, `${sanitizeName(name.trim())}.${format}`);
-}
-
-/** Next seq for a new item in `dir`: one past the number of requests already there. */
-async function getNextSequenceNumber(dir: vscode.Uri, format: CollectionFormat): Promise<number> {
-  const entries = await vscode.workspace.fs.readDirectory(dir);
-  const requests = entries.filter(([name, type]) =>
-    (type & vscode.FileType.File) && name.endsWith(`.${format}`) && !META_FILES[format].includes(name));
-  return requests.length + 1;
 }
 
 /** "name", "name copy", "name copy 2", ... until the path is free. */
@@ -105,7 +104,15 @@ async function updateNameInFile(uri: vscode.Uri, kind: 'request' | 'folder' | 'c
 }
 
 /** The New Request picker's entries: a kind of empty request, or one filled from a curl command. */
-type NewRequestType = 'http' | 'graphql' | 'grpc' | 'ws' | 'curl';
+type NewRequestType = RequestKind | 'curl';
+
+const REQUEST_TYPES: (vscode.QuickPickItem & { value: NewRequestType })[] = [
+  { label: 'HTTP', value: 'http' },
+  { label: 'GraphQL', value: 'graphql' },
+  { label: 'gRPC', value: 'grpc' },
+  { label: 'WebSocket', value: 'ws' },
+  { label: 'From cURL', description: 'An HTTP or GraphQL request filled from a curl command', value: 'curl' }
+];
 
 interface NewRequestFile<Type extends ItemType, Request> {
   type: Type;
@@ -210,35 +217,68 @@ function getNewRequestTemplate(type: Exclude<NewRequestType, 'curl'>, name: stri
   }
 }
 
+type CurlRequest = NewTransientRequest & {
+  type: 'http' | 'graphql';
+  request: {
+    url: string;
+    method: string;
+    headers: {
+      uid: string;
+      name: string;
+      value: string;
+      enabled: boolean
+    }[];
+    body: unknown;
+    auth?: unknown
+  };
+};
+
 /**
  * An HTTP or GraphQL request carrying what the curl command says: URL, method,
  * headers, body and basic auth. It is GraphQL when the URL ends in /graphql or
  * the content type says so, the rule the webview's New Request form applies.
  */
-function getRequestTemplateFromCurl(command: string, name: string, seq: number): HttpRequestTemplate {
+function getRequestFromCurl(command: string): CurlRequest | undefined {
   const probe = getRequestFromCurlCommand(command);
   const contentType = probe?.headers?.find((header) => header.name.toLowerCase() === 'content-type')?.value;
   const isGraphql = probe?.url.endsWith('/graphql') || (typeof contentType === 'string' && contentType.includes('application/graphql'));
   const parsed = isGraphql ? getRequestFromCurlCommand(command, 'graphql-request') : probe;
 
-  const template = getNewRequestTemplate(isGraphql ? 'graphql' : 'http', name, seq);
-
   if (!parsed) {
+    return undefined;
+  }
+
+  return {
+    type: isGraphql ? 'graphql' : 'http',
+    // A curl URL is already encoded; encoding it again would double-encode it.
+    settings: { encodeUrl: false },
+    request: {
+      url: parsed.url,
+      method: parsed.method.toUpperCase(),
+      headers: (parsed.headers ?? []).map((header) => ({ uid: uuid(), ...header })),
+      body: parsed.body,
+      ...(parsed.auth ? { auth: parsed.auth } : {})
+    }
+  };
+}
+
+function getRequestTemplateFromCurl(command: string, name: string, seq: number): HttpRequestTemplate {
+  const curl = getRequestFromCurl(command);
+  const template = getNewRequestTemplate(curl?.type ?? 'http', name, seq);
+
+  if (!curl) {
     return template;
   }
 
   return {
     ...template,
-    // A curl URL is already encoded; encoding it again would double-encode it.
-    settings: { encodeUrl: false },
+    settings: curl.settings as HttpItemSettings,
     request: {
       ...template.request,
-      url: parsed.url,
-      method: parsed.method.toUpperCase(),
-      headers: (parsed.headers ?? []).map((header) => ({ uid: uuid(), ...header })),
+      ...curl.request,
       // The parser's body is the webview's shape, which the filestore writes as is.
-      body: parsed.body as unknown as HttpRequestBody,
-      auth: parsed.auth ?? template.request.auth
+      body: curl.request.body as HttpRequestBody,
+      auth: (curl.request.auth as HttpRequest['auth']) ?? template.request.auth
     }
   };
 }
@@ -260,6 +300,8 @@ async function promptCurlCommand(): Promise<string | undefined> {
 
 type SidebarCommands =
   | 'bruno.sidebar.refresh'
+  | 'bruno.sidebar.collapseAll'
+  | 'bruno.newRequest'
   | 'bruno.sidebar.createCollection'
   | 'bruno.sidebar.importCollection'
   | 'bruno.sidebar.search'
@@ -320,6 +362,18 @@ export function registerSidebarCommands(
   };
 
   register('bruno.sidebar.refresh', () => provider.refresh());
+
+  // VS Code registers this for every tree view; only its title button is tied to showCollapseAll.
+  register('bruno.sidebar.collapseAll', async () => {
+    await vscode.commands.executeCommand(`workbench.actions.treeView.${NativeSidebarViewProvider.viewType}.collapseAll`);
+  });
+
+  register('bruno.newRequest', async () => {
+    await handleNewTransientRequest(context);
+  });
+
+  // Answers the save flow of a scratch request with a collection to put it in; not user-facing.
+  context.subscriptions.push(vscode.commands.registerCommand('bruno.sidebar.pickCollection', (placeHolder: string) => pickCollection(provider, placeHolder)));
 
   register('bruno.sidebar.search', () => {
     handleSearch(provider, treeView);
@@ -974,21 +1028,59 @@ async function handleCloseCollection(item: Entity | undefined, getTarget: GetTar
   new LastOpenedCollections().remove(entity.uri.fsPath);
 }
 
+/** Open an unsaved request in the Scratch collection; it goes into a real one when saved. */
+async function handleNewTransientRequest(context: vscode.ExtensionContext): Promise<void> {
+  const requestType = await vscode.window.showQuickPick(REQUEST_TYPES, { placeHolder: 'Request type' });
+
+  if (!requestType) {
+    return;
+  }
+
+  if (requestType.value === 'curl') {
+    const command = await promptCurlCommand();
+    const curl = command ? getRequestFromCurl(command) : undefined;
+
+    if (curl) {
+      await openScratchRequest(context, curl);
+    }
+
+    return;
+  }
+
+  await openScratchRequest(context, { type: requestType.value });
+}
+
+/**
+ * Pick an opened collection to save the request in. Local ones only for now: the request
+ * panel loads its collection through the Node-fs runtime, which cannot follow a remote URI yet.
+ */
+async function pickCollection(provider: NativeSidebarViewProvider, placeHolder: string): Promise<{ uid: string; uri: vscode.Uri } | undefined> {
+  const collections = (await provider.listCollections()).filter((collection) => collection.uri.scheme === 'file');
+
+  if (collections.length === 0) {
+    vscode.window.showInformationMessage('Open or create a collection to save the request in.');
+    return undefined;
+  }
+
+  const picked = collections.length === 1
+    ? collections[0]
+    : (await vscode.window.showQuickPick(
+      collections.map(
+        (collection) => ({ label: collection.name, description: collection.uri.fsPath, collection })
+      ),
+      { placeHolder }
+    ))?.collection;
+
+  return picked && { uid: picked.uid, uri: picked.uri };
+}
+
 async function handleNewRequest(item: Entity | undefined, getTarget: GetTargetFn) {
   const parent = getTarget(item, 'collection', 'folder');
   if (!parent) {
     return;
   }
 
-  const requestTypes: (vscode.QuickPickItem & { value: NewRequestType })[] = [
-    { label: 'HTTP', value: 'http' },
-    { label: 'GraphQL', value: 'graphql' },
-    { label: 'gRPC', value: 'grpc' },
-    { label: 'WebSocket', value: 'ws' },
-    { label: 'From cURL', description: 'An HTTP or GraphQL request filled from a curl command', value: 'curl' }
-  ];
-
-  const requestType = await vscode.window.showQuickPick(requestTypes, { placeHolder: 'Request type' });
+  const requestType = await vscode.window.showQuickPick(REQUEST_TYPES, { placeHolder: 'Request type' });
   if (!requestType) {
     return;
   }

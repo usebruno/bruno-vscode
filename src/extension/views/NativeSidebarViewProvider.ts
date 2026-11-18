@@ -356,6 +356,11 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
     }, REFRESH_DEBOUNCE_MS);
   }
 
+  /** The collections the tree can show right now, search filter aside. */
+  async listCollections(): Promise<CollectionRoot[]> {
+    return (await this.getCollections()).filter((collection) => collection.available);
+  }
+
   /** Scan lazily on first use and cache the result until the next refresh. */
   private getCollections(): Promise<CollectionRoot[]> {
     if (!this.collectionsPromise) {

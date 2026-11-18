@@ -254,6 +254,12 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "bruno.sidebar.collapseAll",
+        "title": "Collapse All Collections",
+        "category": "Bruno",
+        "icon": "$(collapse-all)"
+      },
+      {
         "command": "bruno.sidebar.openCollection",
         "title": "Open Collection",
         "category": "Bruno",
@@ -418,9 +424,19 @@
           "group": "navigation@5"
         },
         {
-          "command": "bruno.sidebar.refresh",
+          "command": "bruno.newRequest",
           "when": "view == bruno.nativeSidebarView",
           "group": "navigation@6"
+        },
+        {
+          "command": "bruno.sidebar.refresh",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "tree@1"
+        },
+        {
+          "command": "bruno.sidebar.collapseAll",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "tree@2"
         }
       ],
       "view/item/context": [
@@ -578,6 +594,10 @@
         },
         {
           "command": "bruno.sidebar.newRequest",
+          "when": "false"
+        },
+        {
+          "command": "bruno.newRequestInCollection",
           "when": "false"
         },
         {

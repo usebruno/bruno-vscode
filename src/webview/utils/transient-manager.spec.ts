@@ -28,135 +28,80 @@ const windowsCollection: CollectionInfo = {
   format: 'bru'
 };
 
-// An open transient request as it appears in collection.items.
-const transientUntitled = (n: number) => ({
-  name: `Untitled ${n}`,
-  type: 'http-request',
-  request: {},
-  isTransient: true
-});
-// A saved (persisted) request — has no isTransient flag.
-const savedRequest = (name: string) => ({ name, type: 'http-request', request: {} });
+// The uid and name are the extension host's choice; the manager only uses them.
+const metaDetails = { uid: 'item-1', name: 'Untitled 1' };
 
 // ─── Common fields shared by all request types ──────────────────────────────
 
 describe('common transient item fields', () => {
   test('every item has isTransient: true, seq: 0, draft: null', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect(item.isTransient).toBe(true);
     expect(item.seq).toBe(0);
     expect(item.draft).toBeNull();
   });
 
-  test('every item gets a unique uid', () => {
-    const a = transientManager.createHttpRequest(bruCollection);
-    const b = transientManager.createHttpRequest(bruCollection);
-    expect(a.uid).not.toBe(b.uid);
+  test('the item carries the uid and name it was given', () => {
+    const item = transientManager.create('http', bruCollection, metaDetails);
+    expect(item.uid).toBe('item-1');
+    expect(item.name).toBe('Untitled 1');
   });
 });
 
 // ─── Auto-incrementing names ────────────────────────────────────────────────
 
-describe('transient request names', () => {
-  test('first item is named "Untitled 1" when the collection is empty', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
-    expect(item.name).toBe('Untitled 1');
-  });
-
-  test('increments above the highest existing open transient', () => {
-    const item = transientManager.createGraphQLRequest({ ...bruCollection, items: [transientUntitled(1)] });
-    expect(item.name).toBe('Untitled 2');
-
-    const item2 = transientManager.createGrpcRequest({
-      ...bruCollection,
-      items: [transientUntitled(1), transientUntitled(2)]
-    });
-    expect(item2.name).toBe('Untitled 3');
-  });
-
-  test('resets to "Untitled 1" once transients are saved/closed', () => {
-    const item = transientManager.createHttpRequest({ ...bruCollection, items: [] });
-    expect(item.name).toBe('Untitled 1');
-  });
-
-  test('ignores saved (non-transient) requests when numbering', () => {
-    const item = transientManager.createHttpRequest({
-      ...bruCollection,
-      items: [savedRequest('Untitled 3'), transientUntitled(1)]
-    });
-    expect(item.name).toBe('Untitled 2');
-  });
-
-  test('counts transients nested inside folders (flattenItems)', () => {
-    const items = [
-      { name: 'My Folder', type: 'folder', items: [transientUntitled(1), transientUntitled(2)] }
-    ];
-    const item = transientManager.createHttpRequest({ ...bruCollection, items });
-    expect(item.name).toBe('Untitled 3');
-  });
-
-  test('different collections are numbered independently', () => {
-    const a = transientManager.createHttpRequest({ ...bruCollection, items: [] });
-    const b = transientManager.createHttpRequest({ ...ymlCollection, items: [transientUntitled(1)] });
-    expect(a.name).toBe('Untitled 1');
-    expect(b.name).toBe('Untitled 2');
-  });
-});
-
-// ─── File extension and pathname ────────────────────────────────────────────
-
 describe('file extension and pathname', () => {
   test('bru format produces .bru extension', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect(item.filename).toBe('Untitled 1.bru');
   });
 
   test('yml format produces .yml extension', () => {
-    const item = transientManager.createHttpRequest(ymlCollection);
+    const item = transientManager.create('http', ymlCollection, metaDetails);
     expect(item.filename).toBe('Untitled 1.yml');
   });
 
   test('missing format defaults to .yml', () => {
-    const item = transientManager.createHttpRequest(noFormatCollection);
+    const item = transientManager.create('http', noFormatCollection, metaDetails);
     expect(item.filename).toBe('Untitled 1.yml');
   });
 
   test('pathname is under .bruno/transient/ with Unix separators', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect(item.pathname).toBe('/Users/test/my-collection/.bruno/transient/Untitled 1.bru');
   });
 
   test('pathname uses backslash separators for Windows paths', () => {
-    const item = transientManager.createHttpRequest(windowsCollection);
+    const item = transientManager.create('http', windowsCollection, metaDetails);
     expect(item.pathname).toBe('C:\\Users\\test\\my-collection\\.bruno\\transient\\Untitled 1.bru');
   });
 });
 
 // ─── HTTP request ───────────────────────────────────────────────────────────
 
-describe('createHttpRequest', () => {
+describe("create('http')", () => {
   test('type is http-request', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect(item.type).toBe('http-request');
   });
 
   test('method defaults to GET', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect(item.request.method).toBe('GET');
   });
 
   test('body mode is none', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect((item.request.body as any).mode).toBe('none');
   });
 
   test('settings has encodeUrl: true', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect(item.settings).toEqual({ encodeUrl: true });
   });
 
   test('has empty url, headers, params, assertions, tests, docs', () => {
-    const item = transientManager.createHttpRequest(bruCollection);
+    const item = transientManager.create('http', bruCollection, metaDetails);
     expect(item.request.url).toBe('');
     expect(item.request.headers).toEqual([]);
     expect(item.request.params).toEqual([]);
@@ -168,19 +113,19 @@ describe('createHttpRequest', () => {
 
 // ─── GraphQL request ────────────────────────────────────────────────────────
 
-describe('createGraphQLRequest', () => {
+describe("create('graphql')", () => {
   test('type is graphql-request', () => {
-    const item = transientManager.createGraphQLRequest(bruCollection);
+    const item = transientManager.create('graphql', bruCollection, metaDetails);
     expect(item.type).toBe('graphql-request');
   });
 
   test('method defaults to POST', () => {
-    const item = transientManager.createGraphQLRequest(bruCollection);
+    const item = transientManager.create('graphql', bruCollection, metaDetails);
     expect(item.request.method).toBe('POST');
   });
 
   test('body mode is graphql with query and variables', () => {
-    const item = transientManager.createGraphQLRequest(bruCollection);
+    const item = transientManager.create('graphql', bruCollection, metaDetails);
     const body = item.request.body as any;
     expect(body.mode).toBe('graphql');
     expect(body.graphql).toEqual({ query: '', variables: '' });
@@ -189,53 +134,53 @@ describe('createGraphQLRequest', () => {
 
 // ─── gRPC request ───────────────────────────────────────────────────────────
 
-describe('createGrpcRequest', () => {
+describe("create('grpc')", () => {
   test('type is grpc-request', () => {
-    const item = transientManager.createGrpcRequest(bruCollection);
+    const item = transientManager.create('grpc', bruCollection, metaDetails);
     expect(item.type).toBe('grpc-request');
   });
 
   test('body mode is grpc with default message', () => {
-    const item = transientManager.createGrpcRequest(bruCollection);
+    const item = transientManager.create('grpc', bruCollection, metaDetails);
     const body = item.request.body as any;
     expect(body.mode).toBe('grpc');
     expect(body.grpc).toEqual([{ name: 'message 1', content: '{}' }]);
   });
 
   test('method and methodType are empty strings', () => {
-    const item = transientManager.createGrpcRequest(bruCollection);
+    const item = transientManager.create('grpc', bruCollection, metaDetails);
     expect(item.request.method).toBe('');
     expect(item.request.methodType).toBe('');
   });
 
   test('settings is empty object', () => {
-    const item = transientManager.createGrpcRequest(bruCollection);
+    const item = transientManager.create('grpc', bruCollection, metaDetails);
     expect(item.settings).toEqual({});
   });
 });
 
 // ─── WebSocket request ──────────────────────────────────────────────────────
 
-describe('createWebSocketRequest', () => {
+describe("create('ws')", () => {
   test('type is ws-request', () => {
-    const item = transientManager.createWebSocketRequest(bruCollection);
+    const item = transientManager.create('ws', bruCollection, metaDetails);
     expect(item.type).toBe('ws-request');
   });
 
   test('method defaults to GET', () => {
-    const item = transientManager.createWebSocketRequest(bruCollection);
+    const item = transientManager.create('ws', bruCollection, metaDetails);
     expect(item.request.method).toBe('GET');
   });
 
   test('body mode is ws with default message', () => {
-    const item = transientManager.createWebSocketRequest(bruCollection);
+    const item = transientManager.create('ws', bruCollection, metaDetails);
     const body = item.request.body as any;
     expect(body.mode).toBe('ws');
     expect(body.ws).toEqual([{ name: 'message 1', type: 'json', content: '{}' }]);
   });
 
   test('settings has timeout and keepAliveInterval', () => {
-    const item = transientManager.createWebSocketRequest(bruCollection);
+    const item = transientManager.create('ws', bruCollection, metaDetails);
     expect(item.settings).toEqual({ timeout: 0, keepAliveInterval: 0 });
   });
 });
@@ -260,19 +205,19 @@ describe('collection presets', () => {
   };
 
   test('base URL preset seeds the url of every request type', () => {
-    expect(transientManager.createHttpRequest(withPresets).request.url).toBe(presetUrl);
-    expect(transientManager.createGraphQLRequest(withPresets).request.url).toBe(presetUrl);
-    expect(transientManager.createGrpcRequest(withPresets).request.url).toBe(presetUrl);
-    expect(transientManager.createWebSocketRequest(withPresets).request.url).toBe(presetUrl);
+    expect(transientManager.create('http', withPresets, metaDetails).request.url).toBe(presetUrl);
+    expect(transientManager.create('graphql', withPresets, metaDetails).request.url).toBe(presetUrl);
+    expect(transientManager.create('grpc', withPresets, metaDetails).request.url).toBe(presetUrl);
+    expect(transientManager.create('ws', withPresets, metaDetails).request.url).toBe(presetUrl);
   });
 
   test('unsaved preset edits on the draft win over the saved config', () => {
-    const item = transientManager.createHttpRequest(withDraftPresets);
+    const item = transientManager.create('http', withDraftPresets, metaDetails);
     expect(item.request.url).toBe(draftPresetUrl);
   });
 
   test('collections without presets still produce an empty url', () => {
-    expect(transientManager.createHttpRequest(bruCollection).request.url).toBe('');
+    expect(transientManager.create('http', bruCollection, metaDetails).request.url).toBe('');
   });
 
   test('the requestType preset does not override the type picked from the menu', () => {
@@ -281,6 +226,31 @@ describe('collection presets', () => {
       pathname: '/Users/test/graphql-preset',
       brunoConfig: { presets: { requestType: 'graphql' } }
     };
-    expect(transientManager.createHttpRequest(graphqlPreset).type).toBe('http-request');
+    expect(transientManager.create('http', graphqlPreset, metaDetails).type).toBe('http-request');
+  });
+});
+
+describe('create from a curl command', () => {
+  test('merges the parsed request and settings over the base of the picked type', () => {
+    const item = transientManager.create('http', bruCollection, {
+      uid: 'u1',
+      name: 'Untitled 9',
+      request: {
+        url: 'https://example.com/users',
+        method: 'POST',
+        headers: [{ uid: 'h1', name: 'X-Trace', value: 'abc', enabled: true }],
+        body: { mode: 'json', json: '{"name":"bruno"}' }
+      },
+      settings: { encodeUrl: false }
+    });
+
+    expect(item.uid).toBe('u1');
+    expect(item.name).toBe('Untitled 9');
+    expect(item.type).toBe('http-request');
+    expect(item.request).toMatchObject({ url: 'https://example.com/users', method: 'POST', vars: { req: [], res: [] } });
+    expect(item.request.headers).toHaveLength(1);
+    // The body replaces the base one whole; the base's empty form modes do not leak in.
+    expect(item.request.body).toEqual({ mode: 'json', json: '{"name":"bruno"}' });
+    expect(item.settings).toEqual({ encodeUrl: false });
   });
 });

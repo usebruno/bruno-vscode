@@ -5,7 +5,7 @@ import AdmZip from 'adm-zip';
 import { expect, type Page, type Frame, type FrameLocator, type Locator, type TestType, type PlaywrightTestOptions, type PlaywrightTestArgs, type PlaywrightWorkerArgs, type PlaywrightWorkerOptions } from '@playwright/test';
 import { buildCommonLocators } from './locators';
 import { activeEditor, getWebviewFrame, getWebviewByTitle, mockBrowseFiles } from './webviews';
-import type { FileFormat, ImportReview, NewRequestOptions, RequestKind, Sidebar } from './sidebar';
+import type { FileFormat, ImportReview, NewRequestOptions, RequestKind, SaveRequestOptions, Sidebar, TransientRequestKind } from './sidebar';
 import { openBrunoSidebar } from './sidebar';
 import { GRPC_SERVER_URL } from '../urls';
 import type { Context } from '../../context';
@@ -71,6 +71,19 @@ export async function importCollections(
 
 export async function openCollectionFromDisk(sidebar: Sidebar, collectionPath: string): Promise<void> {
   await sidebar.openCollectionFromDisk(collectionPath);
+}
+
+export async function newTransientRequest(sidebar: Sidebar, type: TransientRequestKind, curl?: string): Promise<Frame> {
+  return sidebar.newTransientRequest(type, curl);
+}
+
+/** Save the unsaved request in the tab titled `from` into a collection as `name`; the tab is replaced by the saved file's. */
+export async function saveTransientRequest(page: Page, sidebar: Sidebar, from: string, name: string, options?: SaveRequestOptions): Promise<void> {
+  // Bring the request to the front and focus its pane, so the save shortcut reaches it.
+  await buildCommonLocators(page).workbench.editorTab(from).click();
+  await activeEditor(page).locator('#request-url').click();
+  await saveFileByKeyboard(page);
+  await sidebar.answerSaveRequest(name, options);
 }
 
 /** Create a saved request in `collectionName` (or in `opts.folder` inside it) and wait for its row. */

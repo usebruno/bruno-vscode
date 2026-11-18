@@ -152,21 +152,6 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('bruno.newRequest', async () => {
-      await vscode.window.showQuickPick([
-        { label: 'HTTP Request', value: 'http' },
-        { label: 'GraphQL Request', value: 'graphql' },
-        { label: 'gRPC Request', value: 'grpc' },
-        { label: 'WebSocket', value: 'ws' }
-      ], {
-        placeHolder: 'Select request type'
-      });
-
-      vscode.window.showWarningMessage('Please right-click a collection or folder in the sidebar to create a request');
-    })
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openGlobalEnvironments', async () => {
       await openGlobalEnvironmentsPanel(context);
     })
