@@ -6,7 +6,6 @@ import type { Workspace } from '../../e2e-helper';
 
 export const desc = 'Creating a collection adds a .gitignore with the default entries to its root folder';
 
-// Unique per run, so a folder left behind by an earlier run is never picked up
 const COLLECTION = `gitignore-collection-${Date.now()}`;
 
 const DEFAULT_GITIGNORE = [
