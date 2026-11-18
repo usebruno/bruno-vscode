@@ -4,11 +4,10 @@ import { test } from '../../utils/fixtures';
 import { exportPostmanCollection, setAssertions, setAuth, setBody, setDocs, setHeaders, setScript, setTests, setVars } from '../../utils/page/actions';
 import { TEST_SERVER_LOCAL_URL } from '../../utils/urls';
 
-export const desc = 'Postman export keeps each request\'s method, URL, query params, headers, auth, body, scripts, tests and docs, the collection vars, and nests folder requests';
+export const desc = 'Postman export keeps each request\'s method, URL, query params, headers, auth, body, scripts, tests and docs, the collection vars, the collection and folder scripts, and nests folder requests';
 
 const COLLECTION = 'postman-export-collection';
 const REQUEST_URL = `${TEST_SERVER_LOCAL_URL}/api/echo/json?page=1`;
-const FOLDER_REQUEST_URL = `${TEST_SERVER_LOCAL_URL}/ping`;
 const BODY = { name: 'bruno' };
 
 export const workspace: Workspace = {
@@ -21,12 +20,9 @@ export const workspace: Workspace = {
         {
           name: 'export-folder',
           requests: [
-            { name: 'folder-request', url: FOLDER_REQUEST_URL, type: 'HTTP', method: 'GET' },
+            { name: 'export-request', url: REQUEST_URL, type: 'HTTP', method: 'POST' },
           ],
         },
-      ],
-      requests: [
-        { name: 'export-request', url: REQUEST_URL, type: 'HTTP', method: 'POST' },
       ],
     },
   ],
@@ -46,12 +42,18 @@ async function verifyPostmanExport(page: Page) {
     await setDocs(page, 'export-request', 'export docs');
   });
 
+  await test.step('Configure collection and folder scripts', async () => {
+    await setScript(page, COLLECTION, { preRequest: "console.log('collection-pre-request');", postResponse: "console.log('collection-post-response');" });
+    await setScript(page, 'export-folder', { preRequest: "console.log('folder-pre-request');", postResponse: "console.log('folder-post-response');" });
+  });
+
   await test.step('Export as Postman collection', async () => {
     exported = await exportPostmanCollection(page, COLLECTION);
   });
 
   await test.step('Verify exported request', async () => {
-    const { request, event } = exported.item.find((item: any) => item.name === 'export-request');
+    const folder = exported.item.find((item: any) => item.name === 'export-folder');
+    const { request, event } = folder.item.find((item: any) => item.name === 'export-request');
     const scriptOf = (listen: string) => event.find((e: any) => e.listen === listen).script.exec.join('\n');
 
     expect(request.method).toBe('POST');
@@ -66,12 +68,15 @@ async function verifyPostmanExport(page: Page) {
     expect(request.description).toContain('export docs');
   });
 
-  await test.step('Verify collection vars and folder request', async () => {
+  await test.step('Verify collection and folder level exported data', async () => {
     const folder = exported.item.find((item: any) => item.name === 'export-folder');
+    const scriptOf = (event: any[], listen: string) => event.find((e: any) => e.listen === listen).script.exec.join('\n');
 
     expect(exported.variable).toMatchObject([{ key: 'exportVar', value: 'var-value' }]);
-    expect(folder.item[0].name).toBe('folder-request');
-    expect(folder.item[0].request.url.raw).toBe(FOLDER_REQUEST_URL);
+    expect(scriptOf(exported.event, 'prerequest')).toContain("console.log('collection-pre-request');");
+    expect(scriptOf(exported.event, 'test')).toContain("console.log('collection-post-response');");
+    expect(scriptOf(folder.event, 'prerequest')).toContain("console.log('folder-pre-request');");
+    expect(scriptOf(folder.event, 'test')).toContain("console.log('folder-post-response');");
   });
 }
 
