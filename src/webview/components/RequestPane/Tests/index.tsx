@@ -41,7 +41,7 @@ const Tests = ({
   const onSave = () => dispatch(saveRequest(item.uid, collection.uid));
 
   return (
-    <StyledWrapper className="w-full h-full">
+    <StyledWrapper className="w-full h-full" data-testid="request-test-script-editor">
       <CodeEditor
         ref={editorRef}
         collection={collection}

@@ -127,7 +127,7 @@ test.describe('Script errors in the response pane', () => {
     await expect(filePath).toHaveClass(/navigable/);
     await filePath.click();
 
-    const postResponseEditor = editor.locator('[data-testid="post-response-script-editor"]');
+    const postResponseEditor = editor.locator('[data-testid="request-post-response-script-editor"]');
     await expect(postResponseEditor).toBeVisible();
     await expect(postResponseEditor.locator('.cm-error-line-flash')).toHaveCount(1);
   });
