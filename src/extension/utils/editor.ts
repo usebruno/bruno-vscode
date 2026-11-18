@@ -32,6 +32,23 @@ export async function closeTabsUnder(uri: vscode.Uri): Promise<void> {
   }
 }
 
+/**
+ * Close the Bruno editors showing `uri` or anything under it, leaving other files
+ * (package.json, .env, ...) open. Resolves false when one stays open, e.g. because
+ * the user cancelled its save prompt.
+ */
+export async function closeBrunoEditorsUnder(uri: vscode.Uri): Promise<boolean> {
+  const tabs = vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .filter(({ input }) =>
+    (input instanceof vscode.TabInputCustom
+      && input.viewType === BrunoEditorProvider.viewType
+      && (input.uri.toString() === uri.toString() || isInside(input.uri, uri)))
+    );
+
+  return tabs.length === 0 || vscode.window.tabGroups.close(tabs);
+}
+
 /** Bruno editor tabs showing `uri` or anything under it, as they are before a move. */
 export function brunoEditorTabsUnder(uri: vscode.Uri): OpenBrunoEditor[] {
   const found: OpenBrunoEditor[] = [];

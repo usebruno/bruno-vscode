@@ -750,7 +750,7 @@ export class Entity extends vscode.TreeItem {
       this.iconPath = new vscode.ThemeIcon('folder-library');
       // A click on the name expands the collection and opens the collection's settings.
       this.command = {
-        command: 'bruno.sidebar.settings',
+        command: 'bruno.sidebar.collectionClicked',
         title: 'Open Collection Settings',
         arguments: [this]
       };

@@ -14,7 +14,7 @@ import LastOpenedCollections from '../store/last-opened-collections';
 import type { OpenedCollections } from '../store/opened-collections';
 import logsStore from '../store/logs';
 import { stringifyJson, uuid } from '../utils/common';
-import { closeTabsUnder, moveWithEditors, writeThroughEditor } from '../utils/editor';
+import { closeBrunoEditorsUnder, closeTabsUnder, moveWithEditors, writeThroughEditor } from '../utils/editor';
 import { isMovable, shiftItem } from '../utils/reorder';
 import { basename, dirname, doesItExist, isInside, isSameDir, readText, writeText, META_FILES } from '../utils/file';
 import type { CollectionFormat } from '../../utils/collection';
@@ -269,6 +269,7 @@ type SidebarCommands =
   | 'bruno.sidebar.newFolder'
   | 'bruno.sidebar.run'
   | 'bruno.sidebar.settings'
+  | 'bruno.sidebar.collectionClick'
   | 'bruno.sidebar.clone'
   | 'bruno.sidebar.export'
   | 'bruno.sidebar.copy'
@@ -356,7 +357,11 @@ export function registerSidebarCommands(
   });
 
   register('bruno.sidebar.settings', async (item) => {
-    await handleSettings(item, getTarget, treeView);
+    await handleSettings(item, getTarget);
+  });
+
+  register('bruno.sidebar.collectionClick', async (item) => {
+    await handleCollectionClick(item, getTarget, treeView);
   });
 
   register('bruno.sidebar.clone', async (item) => {
@@ -954,11 +959,15 @@ async function handleCloseCollection(item: Entity | undefined, getTarget: GetTar
     return;
   }
 
+  // Only the collection's Bruno editors close.
+  if (!(await closeBrunoEditorsUnder(entity.uri))) {
+    return;
+  }
+
   await openedCollections.remove(entity.uri);
 
   // The editor side tracks the collection by path on its own: stop watching it
   // and drop it from the list the next session reopens, as the webview sidebar did.
-  await closeTabsUnder(entity.uri);
   collectionWatcher.removeWatcher(entity.uri.fsPath);
   new LastOpenedCollections().remove(entity.uri.fsPath);
 }
@@ -1050,17 +1059,32 @@ async function handleRequestsRun(item: Entity | undefined, getTarget: GetTargetF
   await openRunnerPanel(context, entity.collection.uri.fsPath, entity.uri.fsPath, folderUid);
 }
 
+/**
+ * A click on a collection's name: open its settings, then expand it. With a command set on
+ * the row, VS Code leaves expanding to the chevron, so the expand is done here.
+ */
+async function handleCollectionClick(item: Entity | undefined, getTarget: GetTargetFn, treeView: vscode.TreeView<Entity>) {
+  const entity = getTarget(item, 'collection');
+  if (!entity) {
+    return;
+  }
+
+  await vscode.commands.executeCommand('bruno.openSettings', entity.uri);
+  await Promise.resolve(
+    treeView.reveal(entity, { expand: true, select: true, focus: false })
+  ).catch(
+    (): void => undefined
+  );
+}
+
 /** Collection settings open in their panel; folder settings are the folder file in the Bruno editor. */
-async function handleSettings(item: Entity | undefined, getTarget: GetTargetFn, treeView: vscode.TreeView<Entity>) {
+async function handleSettings(item: Entity | undefined, getTarget: GetTargetFn) {
   const entity = getTarget(item, 'collection', 'folder');
   if (!entity) {
     return;
   }
 
   if (entity.type === 'collection') {
-    // A click on the name runs this. With a command set, VS Code leaves expanding to the
-    // chevron, so expand here with a command.
-    await treeView.reveal(entity, { expand: true, select: true, focus: false });
     await vscode.commands.executeCommand('bruno.openSettings', entity.uri);
     return;
   }

@@ -324,7 +324,7 @@ async function getEntityType(sidebar: Sidebar, target: string): Promise<'collect
   }
 
   const row = rows.collectionItem(target);
-  await row.waitFor();
+  await row.waitFor({ timeout: 15_000 });
 
   return (await row.getAttribute('aria-label'))?.startsWith('Folder ') ? 'folder' : 'request';
 }

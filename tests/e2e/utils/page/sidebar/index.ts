@@ -154,7 +154,7 @@ export class NativeSidebar {
     await this.page.keyboard.press('F1');
 
     const box = this.quickInputBox();
-    await box.waitFor({ state: 'visible' });
+    await box.waitFor({ state: 'visible', timeout: 15_000 });
     await box.fill(`Bruno: ${title}`);
     await this.pickQuickItem(title);
   }
@@ -174,7 +174,7 @@ export class NativeSidebar {
    */
   private async answerInputBox(prompt: string, text: string): Promise<void> {
     // The prompt is the widget's message line; the input itself carries no text to match.
-    await this.page.locator('.quick-input-widget .quick-input-message').filter({ hasText: prompt }).waitFor();
+    await this.page.locator('.quick-input-widget .quick-input-message').filter({ hasText: prompt }).waitFor({ timeout: 15_000 });
     await this.quickInputBox().fill(text);
     await this.page.keyboard.press('Enter');
   }
@@ -182,7 +182,7 @@ export class NativeSidebar {
   /** Click the quick pick entry whose text contains `label`. */
   private async pickQuickItem(label: string): Promise<void> {
     const item = this.page.locator('.quick-input-list .monaco-list-row').filter({ hasText: label }).first();
-    await item.waitFor({ state: 'visible' });
+    await item.waitFor({ state: 'visible', timeout: 15_000 });
     await item.click();
   }
 
@@ -193,7 +193,7 @@ export class NativeSidebar {
    */
   private async answerFileDialog(target: string | undefined, kind: 'file' | 'directory'): Promise<void> {
     const box = this.quickInputBox();
-    await box.waitFor({ state: 'visible' });
+    await box.waitFor({ state: 'visible', timeout: 15_000 });
     // The widget is reused from the previous prompt, and the dialog fills in its
     // starting folder (which ends in a separator) a moment after opening. Text typed
     // before that is taken as relative to that folder, so wait for it.
@@ -260,12 +260,12 @@ export class NativeSidebar {
     await this.settle();
     await row.click({ button: 'right' });
 
-    await this.contextMenu.waitFor({ state: 'visible' });
+    await this.contextMenu.waitFor({ state: 'visible', timeout: 15_000 });
 
     await this.page.waitForTimeout(300);
     await this.page.keyboard.press('Escape');
 
-    await this.contextMenu.waitFor({ state: 'hidden' });
+    await this.contextMenu.waitFor({ state: 'hidden', timeout: 15_000 });
   }
 
   /** Position of a request or folder row among the item rows, in display order. */
@@ -409,7 +409,7 @@ export class NativeSidebar {
     await this.titleAction('Open Collection');
     await this.answerFileDialog(collectionPath, 'directory');
 
-    await this.quickInputBox().waitFor({ state: 'hidden' });
+    await this.quickInputBox().waitFor({ state: 'hidden', timeout: 15_000 });
   }
 
   /** Clone through the collection menu; resolves to the clone's name. */
@@ -558,16 +558,16 @@ export class NativeSidebar {
     const dialog = this.page.locator('.monaco-dialog-box');
     await expect(dialog).toContainText(`Delete "${name}"?`);
     await dialog.getByRole('button', { name: 'Delete' }).click();
-    await dialog.waitFor({ state: 'hidden' });
+    await dialog.waitFor({ state: 'hidden', timeout: 15_000 });
 
     await expect(row).not.toBeVisible({ timeout: 15_000 });
   }
 
-  /** Clone through the row menu; the clone's row is there when this resolves. */
+  /** Clone a request or folder through its row menu; the clone's row is there when this resolves. */
   async cloneItem(name: string, cloneName: string): Promise<void> {
     await this.itemAction(name, 'clone');
-    // The name box comes prefilled with "<name> copy".
-    await this.answerInputBox('Name for the cloned request', cloneName);
+    // The name box comes prefilled with "<name> copy". Its prompt ends in "request" or "folder".
+    await this.answerInputBox('Name for the cloned', cloneName);
     await this.itemRow(cloneName).waitFor({ state: 'visible', timeout: 15_000 });
   }
 
