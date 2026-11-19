@@ -16,6 +16,9 @@ on:
   schedule:
     - cron: '30 16 * * 1-5'
 
+env:
+  BUILD_BRANCH: ${{ inputs.branch || 'main' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,24 +27,19 @@ jobs:
     outputs:
       tag_name: ${{ steps.set_tag_name.outputs.TAG_NAME }}
       sha: ${{ steps.build_info.outputs.sha }}
-      branch: ${{ steps.build_info.outputs.branch }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch || 'main' }}
+          ref: ${{ env.BUILD_BRANCH }}
 
       - name: Record build info
         id: build_info
         shell: bash
-        env:
-          BUILD_BRANCH: ${{ inputs.branch || 'main' }}
         run: |
           SHA=$(git rev-parse HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "branch=$BUILD_BRANCH" >> "$GITHUB_OUTPUT"
-          echo "BUILD_BRANCH=$BUILD_BRANCH" >> "$GITHUB_ENV"
           echo "Building branch '$BUILD_BRANCH' at $SHA (trigger: $GITHUB_EVENT_NAME)"
 
       - name: Setup Node.js
@@ -62,15 +60,18 @@ jobs:
             echo "Invalid version: $VERSION"
             exit 1
           fi
-          INPUT_TAG_NAME=$(echo "$INPUT_TAG_NAME" | xargs)
+          # Trim surrounding whitespace without interpreting the text.
+          INPUT_TAG_NAME=$(printf '%s' "$INPUT_TAG_NAME" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
           TODAY=$(date '+%Y.%m.%d')
           if [ -z "$INPUT_TAG_NAME" ]; then
             TAG_NAME="v${VERSION}-${TODAY}"
           else
             TAG_NAME="$INPUT_TAG_NAME"
           fi
-          if ! git check-ref-format "refs/tags/$TAG_NAME"; then
-            echo "::error title=Invalid tag name::'$TAG_NAME' is not a valid git tag name"
+          # Letters, digits, '.', '_' and '-' only, starting with a letter or digit: nothing a
+          # shell or the gh CLI would read as syntax or a flag. check-ref-format adds git's rules.
+          if [[ ! "$TAG_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || ! git check-ref-format "refs/tags/$TAG_NAME"; then
+            echo "::error title=Invalid tag name::'$TAG_NAME' must start with a letter or digit, use only letters, digits, '.', '_' and '-', and be a valid git tag name"
             exit 1
           fi
           echo "TAG_NAME=$TAG_NAME"
@@ -96,8 +97,14 @@ jobs:
 
       - name: Write build summary
         shell: bash
+        env:
+          SHA: ${{ steps.build_info.outputs.sha }}
         run: |
-          SHA="${{ steps.build_info.outputs.sha }}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TRIGGER="workflow_dispatch by @$GITHUB_TRIGGERING_ACTOR"
+          else
+            TRIGGER="$GITHUB_EVENT_NAME"
+          fi
           {
             echo "## Nightly VSIX build"
             echo ""
@@ -106,7 +113,7 @@ jobs:
             echo "| **Branch** | \`$BUILD_BRANCH\` |"
             echo "| **Commit** | [\`${SHA:0:7}\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$SHA) |"
             echo "| **Tag** | \`$TAG_NAME\` |"
-            echo "| **Trigger** | $GITHUB_EVENT_NAME by @$GITHUB_ACTOR |"
+            echo "| **Trigger** | $TRIGGER |"
             echo "| **VSIX** | \`$VSIX_NAME\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -124,17 +131,18 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      BUILD_BRANCH: ${{ needs.build.outputs.branch }}
+      TAG_NAME: ${{ needs.build.outputs.tag_name }}
+      SHA: ${{ needs.build.outputs.sha }}
 
     steps:
       - name: Check if tag_name is present
         shell: bash
         run: |
-          if [ -z "${{ needs.build.outputs.tag_name }}" ]; then
+          if [ -z "$TAG_NAME" ]; then
             echo "TAG_NAME is not present"
             exit 1
           else
-            echo "TAG_NAME is present: ${{ needs.build.outputs.tag_name }}"
+            echo "TAG_NAME is present: $TAG_NAME"
           fi
 
       - name: Check out repository
@@ -150,7 +158,6 @@ jobs:
         id: check_release
         shell: bash
         run: |
-          TAG_NAME="${{ needs.build.outputs.tag_name }}"
           RELEASE_EXISTS=$(gh release view "$TAG_NAME" --json tagName --jq '.tagName' || echo "not_found")
           if [ "$RELEASE_EXISTS" != "not_found" ]; then
             echo "Release with tag $TAG_NAME already exists. Skipping creation of the tag."
@@ -164,8 +171,6 @@ jobs:
         if: ${{ env.release_exists == 'false' }}
         shell: bash
         run: |
-          TAG_NAME="${{ needs.build.outputs.tag_name }}"
-          SHA="${{ needs.build.outputs.sha }}"
           gh release create "$TAG_NAME" \
             ./builds/vsix/*.vsix \
             --target "$SHA" \
@@ -173,11 +178,16 @@ jobs:
             --notes "Nightly VSIX build for $TAG_NAME from branch \`$BUILD_BRANCH\` (commit $SHA)" \
             --prerelease
 
+      # The VSIX is replaced, so move the tag and update the notes to the commit it was built from.
       - name: Replace Artifacts if Release Exists
         if: ${{ env.release_exists == 'true' }}
         shell: bash
         run: |
-          TAG_NAME="${{ needs.build.outputs.tag_name }}"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG_NAME" \
+            -f sha="$SHA" \
+            -F force=true
+          gh release edit "$TAG_NAME" \
+            --notes "Nightly VSIX build for $TAG_NAME from branch \`$BUILD_BRANCH\` (commit $SHA)"
           gh release upload "$TAG_NAME" \
             ./builds/vsix/*.vsix \
             --clobber
@@ -185,6 +195,5 @@ jobs:
       - name: Write release summary
         shell: bash
         run: |
-          TAG_NAME="${{ needs.build.outputs.tag_name }}"
-          ACTION=$([ "${{ env.release_exists }}" = "true" ] && echo "updated (VSIX replaced)" || echo "created")
+          ACTION=$([ "$release_exists" = "true" ] && echo "updated (tag moved, VSIX replaced)" || echo "created")
           echo "Release [\`$TAG_NAME\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG_NAME) $ACTION from branch \`$BUILD_BRANCH\`." >> "$GITHUB_STEP_SUMMARY"
