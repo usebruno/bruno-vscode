@@ -834,7 +834,6 @@
     "vscode:prepublish": "npm run build",
     "build": "npm run build:extension && npm run build:webview",
     "build:extension": "node esbuild.extension.mjs",
-    "build:method-icons": "node scripts/build-method-icons.mjs",
     "build:webview": "rsbuild build -c rsbuild.webview.config.mjs",
     "dev": "npm run dev:extension & npm run dev:webview",
     "dev:extension": "node esbuild.extension.mjs --watch",
