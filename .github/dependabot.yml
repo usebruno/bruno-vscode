@@ -1,0 +1,25 @@
+# Dependabot watches npm for new releases of the @usebruno/* packages
+# (filestore, converters, lang, js, requests, ...) and opens a PR bumping
+# package.json + package-lock.json as soon as one is published.
+# Docs: https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "daily"
+    # Only track Bruno's own packages; leave third-party deps alone.
+    allow:
+      - dependency-name: "@usebruno/*"
+    groups:
+      # The @usebruno packages are released together from the bruno monorepo
+      # and depend on each other, so bump them in a single PR.
+      usebruno:
+        patterns:
+          - "@usebruno/*"
+    # package.json pins exact versions; keep it that way.
+    versioning-strategy: increase
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
