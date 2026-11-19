@@ -1,7 +1,3 @@
-# Dependabot watches npm for new releases of the @usebruno/* packages
-# (filestore, converters, lang, js, requests, ...) and opens a PR bumping
-# package.json + package-lock.json as soon as one is published.
-# Docs: https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
 version: 2
 updates:
   - package-ecosystem: "npm"
