@@ -695,17 +695,20 @@ export class NativeSidebarViewProvider implements vscode.TreeDataProvider<Entity
   }
 }
 
-const methodColors = {
-  'GET': 'charts.green',
-  'POST': 'charts.yellow',
-  'PUT': 'charts.blue',
-  'PATCH': 'charts.orange',
-  'DELETE': 'charts.red',
-  'HEAD': 'charts.purple',
-  'OPTIONS': 'charts.purple',
-  'TRACE': 'charts.purple',
-  'CONNECT': 'charts.purple',
-} as const;
+const requestIcons: Record<RequestMethod | 'GRAPHQL' | 'GRPC' | 'WS', { id: string; color: string }> = {
+  GET: { id: 'bruno-method-get', color: 'terminal.ansiBrightGreen' },
+  POST: { id: 'bruno-method-post', color: 'terminal.ansiBrightBlue' },
+  PUT: { id: 'bruno-method-put', color: 'terminal.ansiBrightYellow' },
+  PATCH: { id: 'bruno-method-patch', color: 'terminal.ansiBrightYellow' },
+  DELETE: { id: 'bruno-method-delete', color: 'terminal.ansiBrightRed' },
+  OPTIONS: { id: 'bruno-method-options', color: 'terminal.ansiBrightCyan' },
+  HEAD: { id: 'bruno-method-head', color: 'terminal.ansiBrightCyan' },
+  TRACE: { id: 'bruno-method-trace', color: 'terminal.ansiBrightCyan' },
+  CONNECT: { id: 'bruno-method-connect', color: 'terminal.ansiBrightCyan' },
+  GRAPHQL: { id: 'bruno-method-graphql', color: 'terminal.ansiBrightMagenta' },
+  GRPC: { id: 'bruno-method-grpc', color: 'terminal.ansiBrightCyan' },
+  WS: { id: 'bruno-method-ws', color: 'terminal.ansiBrightYellow' }
+};
 
 export class Entity extends vscode.TreeItem {
   readonly label: string;
@@ -763,10 +766,6 @@ export class Entity extends vscode.TreeItem {
       this.iconPath = new vscode.ThemeIcon('folder');
     } else {
       this.iconPath = this.getRequestIcon(requestType, requestMethod);
-      // gRPC and WebSocket requests have no HTTP method worth showing.
-      if (requestType === 'HTTP' || requestType === 'GRAPHQL') {
-        this.description = requestMethod;
-      }
       this.command = {
         command: 'vscode.openWith',
         title: 'Open Request',
@@ -777,7 +776,7 @@ export class Entity extends vscode.TreeItem {
 
   /**
    * What a screen reader announces. Sighted users get the same facts from the
-   * icon shape and colour, which assistive tech cannot see. 
+   * icon text and colour, which assistive tech cannot see.
    */
   private getSpokenLabel(requestType?: RequestType, requestMethod?: RequestMethod): string {
     switch (this.type) {
@@ -798,18 +797,20 @@ export class Entity extends vscode.TreeItem {
     }
   }
 
-  private getRequestIcon(type: RequestType, method?: RequestMethod): vscode.ThemeIcon {
-    if (type === 'GRAPHQL') {
-      return new vscode.ThemeIcon('symbol-interface', new vscode.ThemeColor('charts.purple'));
-    } else if (type === 'GRPC') {
-      return new vscode.ThemeIcon('symbol-method', new vscode.ThemeColor('charts.blue'));
-    } else if (type === 'WS') {
-      return new vscode.ThemeIcon('plug', new vscode.ThemeColor('charts.green'));
-    } else if (type === 'APP') {
+  /** The method as coloured text for HTTP requests, the kind for the others. */
+  private getRequestIcon(type: RequestType, method: RequestMethod): vscode.ThemeIcon {
+    if (type === 'APP') {
       return new vscode.ThemeIcon('window');
-    } else {
-      return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor(methodColors[method] ?? 'charts.green'));
     }
+
+    // The method is read from the file as is, so one Bruno does not know has no glyph.
+    const icon = requestIcons[type === 'HTTP' ? method : type] as { id: string; color: string } | undefined;
+
+    if (!icon) {
+      return new vscode.ThemeIcon('circle-filled');
+    }
+
+    return new vscode.ThemeIcon(icon.id, new vscode.ThemeColor(icon.color));
   }
 
   private getTooltip(requestType?: RequestType, requestMethod?: RequestMethod) {

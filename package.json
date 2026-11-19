@@ -44,6 +44,92 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "icons": {
+      "bruno-method-get": {
+        "description": "HTTP GET request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E001"
+        }
+      },
+      "bruno-method-post": {
+        "description": "HTTP POST request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E002"
+        }
+      },
+      "bruno-method-put": {
+        "description": "HTTP PUT request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E003"
+        }
+      },
+      "bruno-method-patch": {
+        "description": "HTTP PATCH request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E004"
+        }
+      },
+      "bruno-method-delete": {
+        "description": "HTTP DELETE request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E005"
+        }
+      },
+      "bruno-method-options": {
+        "description": "HTTP OPTIONS request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E006"
+        }
+      },
+      "bruno-method-head": {
+        "description": "HTTP HEAD request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E007"
+        }
+      },
+      "bruno-method-trace": {
+        "description": "HTTP TRACE request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E008"
+        }
+      },
+      "bruno-method-connect": {
+        "description": "HTTP CONNECT request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E009"
+        }
+      },
+      "bruno-method-graphql": {
+        "description": "GraphQL request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E00A"
+        }
+      },
+      "bruno-method-grpc": {
+        "description": "gRPC request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E00B"
+        }
+      },
+      "bruno-method-ws": {
+        "description": "WebSocket request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E00C"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -748,6 +834,7 @@
     "vscode:prepublish": "npm run build",
     "build": "npm run build:extension && npm run build:webview",
     "build:extension": "node esbuild.extension.mjs",
+    "build:method-icons": "node scripts/build-method-icons.mjs",
     "build:webview": "rsbuild build -c rsbuild.webview.config.mjs",
     "dev": "npm run dev:extension & npm run dev:webview",
     "dev:extension": "node esbuild.extension.mjs --watch",
