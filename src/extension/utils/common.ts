@@ -178,3 +178,51 @@ export const parseDataFromRequest = (request: RequestWithData): ParsedData => {
   requestCopy.data = requestDataString;
   return parseDataFromResponse(requestCopy as unknown as ResponseWithHeaders);
 };
+
+interface SortableItem {
+  name?: string;
+  seq?: number;
+}
+
+/**
+ * Bruno's sidebar ordering, ported from the webview's utils/common so the
+ * extension-host tree matches the app: items without a valid seq are sorted
+ * alphabetically, then each item with a seq is inserted at position seq - 1.
+ * Items sharing a seq stay grouped at that position.
+ */
+export const sortByNameThenSequence = <T extends SortableItem>(items: T[]): T[] => {
+  const isSeqValid = (seq: number | undefined): seq is number =>
+    Number.isFinite(seq) && Number.isInteger(seq) && (seq as number) > 0;
+
+  const alphabeticallySorted = [...items].sort((a, b) =>
+    a.name && b.name ? a.name.localeCompare(b.name) : 0
+  );
+
+  const withoutSeq = alphabeticallySorted.filter((item) => !isSeqValid(item.seq));
+
+  const withSeq = alphabeticallySorted
+    .filter((item): item is T & { seq: number } => isSeqValid(item.seq))
+    .sort((a, b) => a.seq - b.seq);
+
+  const sortedItems: (T | T[])[] = [...withoutSeq];
+
+  withSeq.forEach((item) => {
+    const position = item.seq - 1;
+    const existingItem = sortedItems[position];
+
+    const hasItemWithSameSeq = Array.isArray(existingItem)
+      ? existingItem[0]?.seq === item.seq
+      : existingItem?.seq === item.seq;
+
+    if (hasItemWithSameSeq) {
+      const newGroup = Array.isArray(existingItem)
+        ? [...existingItem, item]
+        : [existingItem as T, item];
+      sortedItems.splice(position, 1, newGroup);
+    } else {
+      sortedItems.splice(position, 0, item);
+    }
+  });
+
+  return sortedItems.flat() as T[];
+};

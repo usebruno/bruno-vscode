@@ -273,6 +273,7 @@ export const generateUniqueName = (baseName: string, checkExists: (name: string)
   return uniqueName;
 };
 
+/** @deprecated Local-disk only (Node fs). The native sidebar uses `uniqueFolderName` in src/extension/app/import-collection.ts, which goes through workspace.fs and so works on remotes. */
 export const makeFolderNameUnique = (baseName: string, parentDir: string): string => {
   const isTaken = (folderName: string): boolean => {
     const dirPath = path.join(parentDir, folderName);

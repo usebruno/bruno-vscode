@@ -33,6 +33,10 @@ import { setMessageSender as setCollectionsMessageSender, setEventEmitter as set
 import { stateManager } from './webview/state-manager';
 import { BrunoEditorProvider, registerScriptErrorSourceHandler } from './editors/bruno-editor-provider';
 import { SidebarViewProvider } from './views/SidebarViewProvider';
+import { NativeSidebarViewProvider } from './views/NativeSidebarViewProvider';
+import { SidebarDragAndDropController } from './views/SidebarDragAndDropController';
+import { registerSidebarCommands } from './commands/sidebar-commands';
+import { OpenedCollections } from './store/opened-collections';
 import { WorkspaceCollectionsProvider } from './views/WorkspaceCollectionsProvider';
 import { LogsViewProvider } from './views/LogsViewProvider';
 import logsStore from './store/logs';
@@ -209,6 +213,23 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
+  // NATIVE_COMPONENTS=true swaps the webview sidebar for the native tree view.
+  // Both views live in the Bruno container; package.json shows one or the other
+  // based on this context key.
+  const nativeMode = process.env.NATIVE_COMPONENTS === 'true';
+  void vscode.commands.executeCommand('setContext', 'bruno.nativeComponents', nativeMode);
+
+  if (nativeMode) {
+    const openedCollections = new OpenedCollections(context.globalState);
+    const nativeSidebarProvider = new NativeSidebarViewProvider(openedCollections);
+    const nativeSidebarView = vscode.window.createTreeView(NativeSidebarViewProvider.viewType, {
+      treeDataProvider: nativeSidebarProvider,
+      dragAndDropController: new SidebarDragAndDropController(nativeSidebarProvider),
+      showCollapseAll: true
+    });
+    context.subscriptions.push(nativeSidebarView, nativeSidebarProvider, openedCollections);
+    registerSidebarCommands(context, nativeSidebarProvider, nativeSidebarView, openedCollections);
+  }
 }
 
 export function deactivate(): void {

@@ -1,6 +1,8 @@
 /**
  * Collection utility functions for VS Code Extension
  * Converted from bruno-electron/src/utils/collection.js
+ * 
+ * @deprecated This has dependency on node:path, going forward use collection-v2.ts
  */
 
 import path from 'path';
@@ -217,14 +219,14 @@ interface Request {
 
 const effectiveCollectionRoot = (collection: Collection): CollectionRoot =>
   collection?.draft?.root
-    || (getUnsavedRoot('collection', collection?.pathname) as CollectionRoot | undefined)
-    || collection?.root
-    || {};
+  || (getUnsavedRoot('collection', collection?.pathname) as CollectionRoot | undefined)
+  || collection?.root
+  || {};
 
 const effectiveFolderRoot = (folder: Item): CollectionRoot | undefined =>
   folder?.draft?.root
-    || (getUnsavedRoot('folder', folder?.pathname) as CollectionRoot | undefined)
-    || folder?.root;
+  || (getUnsavedRoot('folder', folder?.pathname) as CollectionRoot | undefined)
+  || folder?.root;
 
 const mergeHeaders = (collection: Collection, request: Request, requestTreePath: Item[]): void => {
   const headers = new Map<string, string>();

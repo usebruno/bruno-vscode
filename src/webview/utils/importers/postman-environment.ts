@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrunoError } from 'utils/common/error';
-// @ts-expect-error - @usebruno/converters types may not include this export
 import { postmanToBrunoEnvironment } from '@usebruno/converters';
 
 const importEnvironment = async (parsedFiles: any) => {

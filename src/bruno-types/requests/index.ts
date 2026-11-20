@@ -24,3 +24,5 @@ export type {
 } from './websocket';
 
 export type Request = HttpRequest | GrpcRequest | WebSocketRequest;
+
+export type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD' | 'TRACE' | 'CONNECT';
