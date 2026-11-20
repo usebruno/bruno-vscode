@@ -1,21 +1,21 @@
 import { Page, Frame, expect } from '@playwright/test';
-import { createCollection, openNewRequestPanel, createRequest, openRequest, runCommand } from '../../utils/page/actions';
+import { createCollection, createRequestByType, openRequest, runCommand } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 import { selectDropdownItem } from '../../utils/page/oauth2-actions';
+import type { Sidebar } from '../../utils/page/sidebar';
 
 export type GrantType = 'Client Credentials' | 'Password Credentials' | 'Authorization Code' | 'Implicit';
 
 export async function setupOAuth2Request(
   page: Page,
-  sidebar: Frame,
+  sidebar: Sidebar,
   tmpDir: string,
   collectionName: string,
   grantType: GrantType,
   url: string
 ): Promise<Frame> {
-  await createCollection(page, sidebar, collectionName, tmpDir);
-  const newReqPanel = await openNewRequestPanel(page, sidebar, collectionName);
-  await createRequest(page, newReqPanel, sidebar, collectionName, 'User Info', url);
+  await createCollection(sidebar, collectionName, tmpDir);
+  await createRequestByType(sidebar, collectionName, { name: 'User Info', url: url });
   const editor = await openRequest(page, sidebar, collectionName, 'User Info');
 
   const oauth2 = buildCommonLocators(editor).oauth2;

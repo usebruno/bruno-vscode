@@ -46,7 +46,7 @@ async function setupGrpcEchoRequest(
   const protoInCollection = path.join(tmpDir, 'echo.proto');
   fs.copyFileSync(path.resolve(__dirname, '../../utils/fixtures/echo.proto'), protoInCollection);
 
-  await createRequestByType(page, sidebar, collectionName, { name: requestName, url: GRPC_SERVER, type: 'gRPC' });
+  await createRequestByType(sidebar, collectionName, { name: requestName, url: GRPC_SERVER, type: 'gRPC' });
   const editor = await openGrpcRequest(page, sidebar, collectionName, requestName);
 
   await loadGrpcProtoFile(editor, protoInCollection);

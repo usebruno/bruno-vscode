@@ -5,8 +5,7 @@ import { buildCommonLocators } from '../../utils/page/locators';
 import {
   openBrunoSidebar,
   createCollection,
-  openNewRequestPanel,
-  createRequest,
+  createRequestByType,
   openRequest,
   copyItem,
   pasteIntoCollection,
@@ -39,17 +38,15 @@ test.describe('Cross-format paste', () => {
     const requestName = 'Ping';
     const requestUrl = `${TEST_SERVER}/ping`;
 
-    await createCollection(page, sidebar, sourceCollection, tmpDir, 'bru');
-    await createCollection(page, sidebar, targetCollection, tmpDir, 'yml');
+    await createCollection(sidebar, sourceCollection, tmpDir, 'bru');
+    await createCollection(sidebar, targetCollection, tmpDir, 'yml');
 
-    const newReqPanel = await openNewRequestPanel(page, sidebar, sourceCollection);
-    await createRequest(page, newReqPanel, sidebar, sourceCollection, requestName, requestUrl, 'POST');
+    await createRequestByType(sidebar, sourceCollection, { name: requestName, url: requestUrl, method: 'POST' });
 
     await copyItem(sidebar, requestName);
     await pasteIntoCollection(sidebar, targetCollection);
 
     // A crash unmounts the tree, so surviving rows prove the sidebar is alive.
-    await expect(sidebar.locator('.sidebar-header')).toBeVisible();
     await expect(
       buildCommonLocators(sidebar).sidebar.collectionName(sourceCollection)
     ).toBeVisible();

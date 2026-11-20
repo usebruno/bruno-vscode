@@ -29,7 +29,7 @@ test.describe('Scripting: variable APIs', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Script Vars';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     // Write a request whose pre-request script sets `token`, used in a header echoed by the mock server.
     const collectionDir = findCollectionDir(tmpDir);
@@ -72,7 +72,7 @@ test.describe('Scripting: variable APIs', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Env Script Vars';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     // An environment with a seed var the script will delete.

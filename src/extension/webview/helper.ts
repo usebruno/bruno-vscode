@@ -41,14 +41,10 @@ export class WebviewHelper {
     return this.buildHtml(webview, extensionUri, 'index');
   }
 
-  static getHtmlForSimplePanel(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-    return this.buildHtml(webview, extensionUri, 'simple');
-  }
-
   private static buildHtml(
     webview: vscode.Webview,
     extensionUri: vscode.Uri,
-    entryName: 'index' | 'simple'
+    entryName: 'index'
   ): string {
     const distRoot = path.join(extensionUri.fsPath, 'dist', 'webview');
     const htmlPath = path.join(distRoot, `${entryName}.html`);

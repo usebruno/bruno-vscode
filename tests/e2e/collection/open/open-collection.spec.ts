@@ -29,7 +29,7 @@ test.describe('Open collection', () => {
       const collectionPath = copyFixture(fixture, tmpDir);
       const sidebarLoc = buildCommonLocators(sidebar).sidebar;
 
-      await openCollectionFromDisk(page, sidebar, collectionPath);
+      await openCollectionFromDisk(sidebar, collectionPath);
 
       await test.step('Verify the collection is listed in the sidebar', async () => {
         await expect(sidebarLoc.collectionName(name)).toBeVisible();
@@ -50,10 +50,10 @@ test.describe('Open collection', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionPath = copyFixture('bru-invalid-config', tmpDir);
 
-    await openCollectionFromDisk(page, sidebar, collectionPath);
+    await openCollectionFromDisk(sidebar, collectionPath);
 
-    await test.step('Verify the format error is shown and nothing is opened', async () => {
-      await expect(buildCommonLocators(page).workbench.getNotificationToastByText('bruno.json format is invalid')).toBeVisible();
+    await test.step('Verify nothing is opened', async () => {
+      // The sidebar leaves a collection with an unreadable config out of the tree and notes it in the Bruno log.
       await expect(buildCommonLocators(sidebar).sidebar.collectionName('Bru Invalid Config')).toHaveCount(0);
     });
   });

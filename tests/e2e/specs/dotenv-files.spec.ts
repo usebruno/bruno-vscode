@@ -10,6 +10,7 @@ import {
   openEnvironmentsTab
 } from '../utils/page/actions';
 import { buildCommonLocators } from '../utils/page/locators';
+import type { Sidebar } from '../utils/page/sidebar';
 
 /** Seed a collection environment on disk; the file watcher picks it up. */
 function writeEnvironmentFile(collectionDir: string, name: string, vars: Record<string, string>): void {
@@ -22,13 +23,13 @@ function writeEnvironmentFile(collectionDir: string, name: string, vars: Record<
 /** Open environment settings; "Configure" only appears once an environment exists. */
 async function openEnvironmentSettings(
   page: Page,
-  sidebar: Frame,
+  sidebar: Sidebar,
   collectionName: string,
   collectionDir: string
 ): Promise<Frame> {
   const settings = await test.step('open the collection with an environment on disk', async () => {
     writeEnvironmentFile(collectionDir, 'Local', { host: 'localhost' });
-    return openCollectionSettings(page, sidebar, collectionName);
+    return openCollectionSettings(sidebar, collectionName);
   });
 
   return test.step('the Environments tab opens with the .env section', async () => {
@@ -42,7 +43,7 @@ test.describe('.env files', () => {
   test('lists, edits and deletes .env files alongside environments', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'DotEnv Collection';
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     const dotEnvPath = path.join(collectionDir, '.env');
@@ -84,7 +85,7 @@ test.describe('.env files', () => {
   test('keeps comments when saving from the raw view', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'DotEnv Raw Collection';
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     const dotEnvPath = path.join(collectionDir, '.env.local');

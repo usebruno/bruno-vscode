@@ -4,8 +4,7 @@ import {
   openBrunoSidebar,
   createCollection,
   importCollection,
-  openNewRequestPanel,
-  createRequest,
+  createRequestByType,
   openRequest,
   setJsonBody,
   sendRequest,
@@ -20,7 +19,7 @@ test.describe('Collection management', () => {
   test('TC-3504: Create a collection from the sidebar', { tag: '@sanity' }, async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'My Test Collection';
-    await createCollection(page, sidebar, collectionName, tmpDir);
+    await createCollection(sidebar, collectionName, tmpDir);
     // Verify the collection is visible in the sidebar
     const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(collectionName);
     await expect(collectionRow).toBeVisible();
@@ -30,7 +29,7 @@ test.describe('Collection management', () => {
     const sidebar = await openBrunoSidebar(page);
     const fixturePath = path.resolve(__dirname, 'fixtures/echo-collection.json');
     const expectedName = 'Echo Collection';
-    await importCollection(page, sidebar, fixturePath, tmpDir, expectedName);
+    await importCollection(sidebar, fixturePath, tmpDir, expectedName);
 
     // Verify the imported collection is visible in the sidebar
     await test.step('Verify the imported collection is visible in the sidebar', async () => {
@@ -47,11 +46,10 @@ test.describe('Collection management', () => {
     const body = '{"foo":"bar"}';
 
     // Step 1: Create a new collection
-    await createCollection(page, sidebar, collectionName, tmpDir);
+    await createCollection(sidebar, collectionName, tmpDir);
 
     // Step 2: Create a new POST request inside the collection
-    const newReqPanel = await openNewRequestPanel(page, sidebar, collectionName);
-    await createRequest(page, newReqPanel, sidebar, collectionName, requestName, requestUrl, 'POST');
+    await createRequestByType(sidebar, collectionName, { name: requestName, url: requestUrl, method: 'POST' });
 
     // Step 3: Open the request in the editor (expand collection first)
     const editor = await openRequest(page, sidebar, collectionName, requestName);

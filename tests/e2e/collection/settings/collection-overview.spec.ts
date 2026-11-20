@@ -9,9 +9,9 @@ test.describe('Collection overview', () => {
     const fixturePath = path.resolve(__dirname, 'fixtures/request-count-collection.json');
     const collectionName = 'Request Count Collection';
 
-    await importCollection(page, sidebar, fixturePath, tmpDir, collectionName);
+    await importCollection(sidebar, fixturePath, tmpDir, collectionName);
 
-    const settings = await openCollectionSettings(page, sidebar, collectionName);
+    const settings = await openCollectionSettings(sidebar, collectionName);
 
     await test.step('Verify the request count is correct', async () => {
       const requestsInfo = buildCommonLocators(settings).collectionSettings.requestsInfo();

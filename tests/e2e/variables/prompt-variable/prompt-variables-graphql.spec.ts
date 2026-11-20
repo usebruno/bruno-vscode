@@ -23,6 +23,7 @@ import {
   expectSentWithoutPrompt,
   expectRequestAborted,
 } from './request-actions';
+import type { Sidebar } from '../../utils/page/sidebar';
 
 /**
  * Prompt-variable coverage for GraphQL requests. They go through the same
@@ -35,13 +36,13 @@ import {
 /** Create a GraphQL request (POST) with the given query, open it, return the editor. */
 async function newGraphqlRequest(
   page: import('@playwright/test').Page,
-  sidebar: Frame,
+  sidebar: Sidebar,
   collectionName: string,
   name: string,
   url: string,
   query = '{ ping }'
 ): Promise<Frame> {
-  await createRequestByType(page, sidebar, collectionName, { name, url, type: 'GraphQL', method: 'POST' });
+  await createRequestByType(sidebar, collectionName, { name, url, type: 'GraphQL', method: 'POST' });
   const editor = await openRequest(page, sidebar, collectionName, name);
   // Set the query on the default (Query) tab.
   await setCodeMirrorValue(page, buildCommonLocators(editor).graphql.queryEditor(), query);

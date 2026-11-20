@@ -15,13 +15,13 @@ test.describe('Clone collection', () => {
     const locators = buildCommonLocators(sidebar);
 
     await test.step('Create a collection', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
+      await createCollection(sidebar, collectionName, tmpDir);
       await expect(locators.sidebar.collectionName(collectionName)).toBeVisible();
     });
 
     await test.step('Clone it from the collection ellipse menu', async () => {
-      const cloneName = await cloneCollection(page, sidebar, collectionName, tmpDir);
-      await expect(locators.sidebar.collectionById(collectionName)).toBeVisible();
+      const cloneName = await cloneCollection(sidebar, collectionName, tmpDir);
+      await expect(locators.sidebar.collectionName(collectionName)).toBeVisible();
       await expect(locators.sidebar.collectionName(cloneName)).toBeVisible();
     });
 
