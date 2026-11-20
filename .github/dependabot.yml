@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "03:00"
+      timezone: "Etc/UTC"
+    # Only track Bruno's own packages; leave third-party deps alone.
+    allow:
+      - dependency-name: "@usebruno/*"
+    groups:
+      # The @usebruno packages pin each other at exact versions, so bump them in a single PR.
+      usebruno:
+        patterns:
+          - "@usebruno/*"
+    commit-message:
+      prefix: "chore(deps)"
