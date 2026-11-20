@@ -4,7 +4,7 @@ import { test } from '../../utils/fixtures';
 import { exportPostmanCollection, setAssertions, setAuth, setBody, setDocs, setHeaders, setScript, setTests, setVars } from '../../utils/page/actions';
 import { TEST_SERVER_LOCAL_URL } from '../../utils/urls';
 
-export const desc = 'Postman export keeps each request\'s method, URL, query params, headers, auth, body, scripts, tests and docs, the collection vars, the collection and folder scripts, and nests folder requests';
+export const desc = 'Postman export keeps request details, collection vars, and collection and folder scripts';
 
 const COLLECTION = 'postman-export-collection';
 const REQUEST_URL = `${TEST_SERVER_LOCAL_URL}/api/echo/json?page=1`;
@@ -73,10 +73,10 @@ async function verifyPostmanExport(page: Page) {
     const scriptOf = (event: any[], listen: string) => event.find((e: any) => e.listen === listen).script.exec.join('\n');
 
     expect(exported.variable).toMatchObject([{ key: 'exportVar', value: 'var-value' }]);
-    expect(scriptOf(exported.event, 'prerequest')).toContain("console.log('collection-pre-request');");
-    expect(scriptOf(exported.event, 'test')).toContain("console.log('collection-post-response');");
-    expect(scriptOf(folder.event, 'prerequest')).toContain("console.log('folder-pre-request');");
-    expect(scriptOf(folder.event, 'test')).toContain("console.log('folder-post-response');");
+    expect(scriptOf(exported.event, 'prerequest')).toBe("console.log('collection-pre-request');");
+    expect(scriptOf(exported.event, 'test')).toBe("console.log('collection-post-response');");
+    expect(scriptOf(folder.event, 'prerequest')).toBe("console.log('folder-pre-request');");
+    expect(scriptOf(folder.event, 'test')).toBe("console.log('folder-post-response');");
   });
 }
 

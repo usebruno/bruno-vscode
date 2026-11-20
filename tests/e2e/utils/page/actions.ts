@@ -1,6 +1,6 @@
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import AdmZip from 'adm-zip';
 import { expect, type Page, type Frame, type FrameLocator, type Locator, type TestType, type PlaywrightTestOptions, type PlaywrightTestArgs, type PlaywrightWorkerArgs, type PlaywrightWorkerOptions } from '@playwright/test';
 import { buildCommonLocators } from './locators';
@@ -1215,12 +1215,20 @@ export async function setBody(page: Page, request: string, json: string): Promis
   await saveRequest(page);
 }
 
-export async function setScript(page: Page, target: string, script: { preRequest: string; postResponse: string }): Promise<void> {
+export async function setScript(page: Page, target: string, script: { preRequest?: string; postResponse?: string }): Promise<void> {
   const itemType = await openTab(page, target, 'Script');
   const editor = activeEditor(page);
-  await setCodeMirrorValue(page, editor.getByTestId(`${itemType}-pre-request-script-editor`).locator('.CodeMirror'), script.preRequest);
-  await editor.getByTestId('tab-trigger-post-response').click();
-  await setCodeMirrorValue(page, editor.getByTestId(`${itemType}-post-response-script-editor`).locator('.CodeMirror'), script.postResponse);
+
+  if (script.preRequest) {
+    await editor.getByTestId('tab-trigger-pre-request').click();
+    await setCodeMirrorValue(page, editor.getByTestId(`${itemType}-level-pre-request-script-editor`).locator('.CodeMirror'), script.preRequest);
+  }
+
+  if (script.postResponse) {
+    await editor.getByTestId('tab-trigger-post-response').click();
+    await setCodeMirrorValue(page, editor.getByTestId(`${itemType}-level-post-response-script-editor`).locator('.CodeMirror'), script.postResponse);
+  }
+
   await saveItem(page, itemType);
 }
 
@@ -1230,12 +1238,12 @@ export async function setTests(page: Page, target: string, tests: string): Promi
   await saveItem(page, itemType);
 }
 
-export async function setDocs(page: Page, request: string, docs: string): Promise<void> {
-  await openTab(page, request, 'Docs');
+export async function setDocs(page: Page, target: string, docs: string): Promise<void> {
+  const itemType = await openTab(page, target, 'Docs');
   const editor = activeEditor(page);
   await editor.getByTestId('docs-edit-toggle').click();
   await setCodeMirrorValue(page, editor.getByTestId('docs-editor').locator('.CodeMirror'), docs);
-  await saveRequest(page);
+  await saveItem(page, itemType);
 }
 
 type TableRow = { name: string; value: string };

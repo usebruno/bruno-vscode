@@ -8,6 +8,7 @@ import { cloneDeep, each, get } from 'lodash';
 import { findCollectionByUid, areItemsLoading } from 'utils/collections/index';
 import { ipcRenderer } from 'utils/ipc';
 import toast from 'react-hot-toast';
+import type { RootState } from 'providers/ReduxStore';
 
 const StyledWrapper = styled.div`
   width: 100%;
@@ -247,7 +248,7 @@ interface ExportCollectionViewProps {
 }
 
 const ExportCollectionView: React.FC<ExportCollectionViewProps> = ({ collection }) => {
-  const store = useStore();
+  const store = useStore<RootState>();
   const [isExporting, setIsExporting] = useState(false);
   const isCollectionLoading = areItemsLoading(collection);
 
@@ -298,7 +299,7 @@ const ExportCollectionView: React.FC<ExportCollectionViewProps> = ({ collection 
     setIsExporting(true);
     try {
       await ipcRenderer.invoke('renderer:mount-collection', { collectionUid: collection.uid, collectionPathname: collection.pathname });
-      const loadedCollection = findCollectionByUid((store.getState() as any).collections.collections, collection.uid);
+      const loadedCollection = findCollectionByUid(store.getState().collections.collections, collection.uid);
       const exportData = await ipcRenderer.invoke('renderer:convert-bruno-to-postman', cloneDeep(loadedCollection));
       const content = JSON.stringify(exportData, null, 2);
 
