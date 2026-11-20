@@ -144,7 +144,10 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     quickInputBox: () => frame.locator('.quick-input-widget .quick-input-box input'),
     notificationToasts: () => frame.locator('.notifications-toasts .notification-toast'),
     getNotificationToastByText: (text: string) =>
-      frame.locator('.notifications-toasts .notification-toast').filter({ hasText: text })
+      frame.locator('.notifications-toasts .notification-toast').filter({ hasText: text }),
+    // Only rendered in-page with `window.dialogStyle: 'custom'`.
+    dialogButton: (name: string) =>
+      frame.locator('.monaco-dialog-box').getByRole('button', { name, exact: true })
   },
   // New Request panel form.
   newRequest: {

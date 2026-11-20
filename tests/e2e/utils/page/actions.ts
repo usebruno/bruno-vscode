@@ -1338,7 +1338,7 @@ export async function closeEditorTab(page: Page, title: string, unsavedChoice?: 
   await locators.workbench.editorTabClose(title).click();
 
   if (unsavedChoice) {
-    await page.locator('.monaco-dialog-box').getByRole('button', { name: unsavedChoice, exact: true }).click();
+    await locators.workbench.dialogButton(unsavedChoice).click();
   }
 
   await expect(tab).toHaveCount(0, { timeout: 2_000 });

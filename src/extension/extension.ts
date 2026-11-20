@@ -40,7 +40,6 @@ import { registerTreeCommands, registerMainCommands } from './commands';
 import { registerDirtyStateHandlers, registerSaveHandler } from './editors/dirty-state-manager';
 import { createOAuth2UriHandler } from './ipc/network/authorize-user-in-system-browser';
 import { openTransientRequestPanel, TransientRequestEditorProvider } from './panels/transient-request-panel';
-import { AppItem } from '@bruno-types';
 
 let extensionActivated = false;
 
@@ -186,8 +185,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openTransientRequest',
-      (itemUid: string, itemName: string, collectionUid: string, collectionPath: string, item?: AppItem) => {
-        openTransientRequestPanel(context, itemUid, itemName, collectionUid, collectionPath, item);
+      (itemUid: string, itemName: string, collectionUid: string, collectionPath: string) => {
+        openTransientRequestPanel(itemUid, itemName, collectionUid, collectionPath);
       }
     )
   );
