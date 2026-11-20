@@ -29,7 +29,7 @@ import { splitOnFirst, parsePathParams } from 'utils/url';
 import { parseQueryParams, getDataTypeFromValue } from '@usebruno/common/utils';
 // @ts-expect-error - @usebruno/common/utils may not export buildQueryString in types
 import { buildQueryString as stringifyQueryParams } from '@usebruno/common/utils';
-import type { AppCollection, AppItem, UID, KeyValue, DraftRequestBody, HttpRequestParam, ResponseState, AuthMode, OAuth2CredentialEntry, TimelineEntry } from '@bruno-types';
+import type { AppCollection, AppItem, UID, KeyValue, DraftRequestBody, HttpRequestParam, ResponseState, Auth, AuthMode, OAuth2CredentialEntry, TimelineEntry } from '@bruno-types';
 import type {
   CollectionUidPayload,
   ItemUidPayload,
@@ -285,6 +285,13 @@ const ensureFolderRootDraft = (item: AppItem) => {
     item.draft.root = cloneDeep(item.root);
   }
   return item.draft;
+};
+
+const resolveAuthForMode = (savedAuth: Auth | null | undefined, mode: AuthMode): Auth => {
+  if (savedAuth?.mode === mode) {
+    return cloneDeep(savedAuth);
+  }
+  return { mode };
 };
 
 export const collectionsSlice = createSlice({
@@ -715,8 +722,7 @@ export const collectionsSlice = createSlice({
         if (item) {
           const draft = ensureDraft(item);
           if (draft.request) {
-            // Reset auth to empty object to clear any null values from YAML parsing
-            draft.request.auth = { mode };
+            draft.request.auth = resolveAuthForMode(get(item, 'request.auth'), mode);
           }
         }
       }
@@ -1256,8 +1262,7 @@ export const collectionsSlice = createSlice({
       if (collection) {
         const draft = ensureCollectionRootDraft(collection);
         if (!draft.root!.request) draft.root!.request = {};
-        // Reset auth to empty object to clear any null values from YAML parsing
-        draft.root!.request.auth = { mode };
+        draft.root!.request.auth = resolveAuthForMode(get(collection, 'root.request.auth'), mode);
       }
     },
 
@@ -1423,8 +1428,7 @@ export const collectionsSlice = createSlice({
         if (folder) {
           const draft = ensureFolderRootDraft(folder);
           if (!draft.root!.request) draft.root!.request = {};
-          // Reset auth to empty object to clear any null values from YAML parsing
-          draft.root!.request.auth = { mode };
+          draft.root!.request.auth = resolveAuthForMode(get(folder, 'root.request.auth'), mode);
         }
       }
     },
