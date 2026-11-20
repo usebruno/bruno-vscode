@@ -92,6 +92,7 @@ const DEFAULT_GITIGNORE = [
   '# OS files',
   '.DS_Store',
   'Thumbs.db',
+  '',
 ].join('\n');
 
 function verifyGitignore(ctx: Context, collection: string) {

@@ -57,7 +57,7 @@ import { getProcessEnvVars } from '../store/process-env';
 import collectionWatcher from '../app/collection-watcher';
 import { transformBrunoConfigBeforeSave } from '../utils/transformBrunoConfig';
 import { defaultBrunoConfig, defaultCollectionRoot } from '../../utils/collection';
-import { REQUEST_TYPES } from '../utils/constants';
+import { DEFAULT_GITIGNORE } from '../utils/constants';
 import { parseRequest, parseRequestViaWorker, parseCollection, parseFolder } from '../utils/parse';
 
 const {
@@ -75,18 +75,6 @@ const {
   wsdlToBruno: wsdlToBrunoConverter,
   openCollectionToBruno: openCollectionToBrunoConverter
 } = require('@usebruno/converters');
-
-const DEFAULT_GITIGNORE = [
-  '# Secrets',
-  '.env*',
-  '',
-  '# Dependencies',
-  'node_modules',
-  '',
-  '# OS files',
-  '.DS_Store',
-  'Thumbs.db'
-].join('\n');
 
 const environmentSecretsStore = new EnvironmentSecretsStore();
 const collectionSecurityStore = new CollectionSecurityStore();
