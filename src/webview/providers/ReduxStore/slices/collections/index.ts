@@ -287,6 +287,10 @@ const ensureFolderRootDraft = (item: AppItem) => {
   return item.draft;
 };
 
+const resolveAuthForMode = (savedAuth: any, mode: AuthMode) => {
+  return get(savedAuth, 'mode') === mode ? cloneDeep(savedAuth) : { mode };
+};
+
 export const collectionsSlice = createSlice({
   name: 'collections',
   initialState,
@@ -715,13 +719,7 @@ export const collectionsSlice = createSlice({
         if (item) {
           const draft = ensureDraft(item);
           if (draft.request) {
-            const savedAuth = get(item, 'request.auth');
-            const savedMode = get(savedAuth, 'mode');
-            if (mode === savedMode) {
-              draft.request.auth = cloneDeep(savedAuth);
-            } else {
-              draft.request.auth = { mode };
-            }
+            draft.request.auth = resolveAuthForMode(get(item, 'request.auth'), mode);
           }
         }
       }
@@ -1261,13 +1259,7 @@ export const collectionsSlice = createSlice({
       if (collection) {
         const draft = ensureCollectionRootDraft(collection);
         if (!draft.root!.request) draft.root!.request = {};
-        const savedAuth = get(collection, 'root.request.auth');
-        const savedMode = get(savedAuth, 'mode');
-        if (mode === savedMode) {
-          draft.root!.request.auth = cloneDeep(savedAuth);
-        } else {
-          draft.root!.request.auth = { mode };
-        }
+        draft.root!.request.auth = resolveAuthForMode(get(collection, 'root.request.auth'), mode);
       }
     },
 
@@ -1433,13 +1425,7 @@ export const collectionsSlice = createSlice({
         if (folder) {
           const draft = ensureFolderRootDraft(folder);
           if (!draft.root!.request) draft.root!.request = {};
-          const savedAuth = get(folder, 'root.request.auth');
-          const savedMode = get(savedAuth, 'mode');
-          if (mode === savedMode) {
-            draft.root!.request.auth = cloneDeep(savedAuth);
-          } else {
-            draft.root!.request.auth = { mode };
-          }
+          draft.root!.request.auth = resolveAuthForMode(get(folder, 'root.request.auth'), mode);
         }
       }
     },

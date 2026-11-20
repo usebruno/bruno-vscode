@@ -79,13 +79,19 @@ async function verifyApiKeyAuth(page: Page) {
   await expect(response(page)).toContainText('query-secret-456');
 }
 
-async function verifySavedAuthRestoredOnModeSwitch(page: Page) {
-  for (const [target, itemType] of [['auth-types-collection', 'collection'], ['folder-1', 'folder'], ['basic-request', 'request']]) {
+async function verifyAuthRestoration(page: Page) {
+  const targets = [
+    ['auth-types-collection', 'collection'],
+    ['folder-1', 'folder'],
+    ['basic-request', 'request']
+  ];
+
+  for (const [target, itemType] of targets) {
     await setAuth(page, target, 'basic', { username: 'bruno', password: 'della' });
     await selectAuthMode(page, 'Bearer Token');
     await selectAuthMode(page, 'Basic Auth');
-    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-username`)).toContainText('bruno');
-    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-password`)).toContainText('*****');
+    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-username`)).toHaveText('bruno');
+    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-password`)).toHaveText('*****');
   }
 }
 
@@ -96,6 +102,6 @@ export async function run(page: Page) {
   await verifyBearerAuth(page);
   await verifyDigestAuth(page);
   await verifyApiKeyAuth(page);
-  await verifySavedAuthRestoredOnModeSwitch(page);
+  await verifyAuthRestoration(page);
 }
 
