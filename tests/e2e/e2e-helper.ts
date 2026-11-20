@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { expect, type Frame, type Page } from "@playwright/test";
 import { test } from "./utils/fixtures";
 import { Context } from "./context";
@@ -80,6 +82,24 @@ type Config<EnvName extends string = string> = {
 }
 
 
+const DEFAULT_GITIGNORE = [
+  '# Secrets',
+  '.env*',
+  '',
+  '# Dependencies',
+  'node_modules',
+  '',
+  '# OS files',
+  '.DS_Store',
+  'Thumbs.db',
+  '',
+].join('\n');
+
+function verifyGitignore(ctx: Context, collection: string) {
+  const gitignorePath = path.join(ctx.getCollection(collection).location, collection, '.gitignore')
+  expect(fs.readFileSync(gitignorePath, 'utf8')).toBe(DEFAULT_GITIGNORE)
+}
+
 type FolderEntry = { folder: FolderConfig, parent?: string }
 type RequestEntry = { request: RequestConfig, folder?: string }
 
@@ -138,6 +158,8 @@ export async function createSetup<const EnvName extends string = never>(config: 
 
       await createCollectionV2(page, sidebar, ctx, collection.name, index !== 0, collection.format)
       collections.push(collection.name)
+
+      verifyGitignore(ctx, collection.name)
 
       if (collection.vars) {
         await setVars(page, collection.name, toRows(collection.vars, ['name', 'value']));

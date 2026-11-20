@@ -56,7 +56,7 @@ import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, parseBruFileMet
 import { getProcessEnvVars } from '../store/process-env';
 import collectionWatcher from '../app/collection-watcher';
 import { transformBrunoConfigBeforeSave } from '../utils/transformBrunoConfig';
-import { REQUEST_TYPES } from '../utils/constants';
+import { REQUEST_TYPES, DEFAULT_GITIGNORE } from '../utils/constants';
 import { parseRequest, parseRequestViaWorker, parseCollection, parseFolder } from '../utils/parse';
 
 const {
@@ -210,6 +210,8 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       } else {
         throw new Error(`Invalid format: ${format}`);
       }
+
+      await writeFile(path.join(dirPath, '.gitignore'), DEFAULT_GITIGNORE);
 
       const lastOpenedStore = new LastOpenedCollections();
       lastOpenedStore.add(dirPath);
