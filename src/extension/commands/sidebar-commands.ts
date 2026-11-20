@@ -4,7 +4,7 @@ import { stringifyCollection, stringifyFolder, stringifyRequest } from '@usebrun
 
 import { getRequestFromCurlCommand, isCurlCommand, normalizeCurlCommand } from '../../utils/curl';
 import { DEFAULT_GITIGNORE } from '../utils/constants';
-import type { CollectionFormat } from '../../utils/collection';
+import { defaultBrunoConfig, defaultCollectionRoot, type CollectionFormat } from '../../utils/collection';
 
 import collectionWatcher from '../app/collection-watcher';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
@@ -44,8 +44,7 @@ const HAS_COPIED_ITEM_KEY = 'bruno.sidebar.hasCopiedItem';
 /**
  * Bruno names request files after the request, e.g. "Get Users.bru". The
  * display name itself lives inside the file and may hold anything, so
- * characters a file name cannot carry (like "/" in "user/:id") are swapped out
- * here, as the Bruno app does.
+ * characters a file name cannot carry (like "/" in "user/:id") are swapped out here
  */
 function getRequestFileUri(dir: vscode.Uri, name: string, format: CollectionFormat): vscode.Uri {
   return vscode.Uri.joinPath(dir, `${sanitizeName(name.trim())}.${format}`);
@@ -312,7 +311,7 @@ type SidebarCommands =
   | 'bruno.sidebar.newFolder'
   | 'bruno.sidebar.run'
   | 'bruno.sidebar.settings'
-  | 'bruno.sidebar.collectionClick'
+  | 'bruno.sidebar.click'
   | 'bruno.sidebar.clone'
   | 'bruno.sidebar.export'
   | 'bruno.sidebar.copy'
@@ -415,8 +414,8 @@ export function registerSidebarCommands(
     await handleSettings(item, getTarget);
   });
 
-  register('bruno.sidebar.collectionClick', async (item) => {
-    await handleCollectionClick(item, getTarget, treeView);
+  register('bruno.sidebar.click', async (item) => {
+    await handleClick(item, getTarget, treeView);
   });
 
   register('bruno.sidebar.clone', async (item) => {
@@ -1154,16 +1153,17 @@ async function handleRequestsRun(item: Entity | undefined, getTarget: GetTargetF
 }
 
 /**
- * A click on a collection's name: open its settings, then expand it. With a command set on
- * the row, VS Code leaves expanding to the chevron, so the expand is done here.
+ * A click on a collection's or folder's name: open its settings, then expand it.
+ * With a command set on the row, VS Code leaves expanding to the chevron, so the
+ * expand is done here. It comes second so a failed reveal cannot keep the settings closed.
  */
-async function handleCollectionClick(item: Entity | undefined, getTarget: GetTargetFn, treeView: vscode.TreeView<Entity>) {
-  const entity = getTarget(item, 'collection');
+async function handleClick(item: Entity | undefined, getTarget: GetTargetFn, treeView: vscode.TreeView<Entity>) {
+  const entity = getTarget(item, 'collection', 'folder');
   if (!entity) {
     return;
   }
 
-  await vscode.commands.executeCommand('bruno.openSettings', entity.uri);
+  await openSettingsFile(entity);
   await Promise.resolve(
     treeView.reveal(entity, { expand: true, select: true, focus: false })
   ).catch(
@@ -1171,27 +1171,39 @@ async function handleCollectionClick(item: Entity | undefined, getTarget: GetTar
   );
 }
 
-/** Collection settings open in their panel; folder settings are the folder file in the Bruno editor. */
+/** The context menu's Settings entry: the settings alone, with the row left as it is. */
 async function handleSettings(item: Entity | undefined, getTarget: GetTargetFn) {
   const entity = getTarget(item, 'collection', 'folder');
   if (!entity) {
     return;
   }
 
+  await openSettingsFile(entity);
+}
+
+/** Open the collection's or folder's settings file in the Bruno editor, writing a default one first if it has none. */
+async function openSettingsFile(entity: Entity): Promise<void> {
+  const { format, name } = entity.collection;
+  let file: vscode.Uri;
+
   if (entity.type === 'collection') {
-    await vscode.commands.executeCommand('bruno.openSettings', entity.uri);
-    return;
+    // A YAML collection keeps its settings in opencollection.yml, which is what identified it.
+    // A BRU one keeps them in collection.bru, which it has only once something was set.
+    file = vscode.Uri.joinPath(entity.uri, format === 'yml' ? 'opencollection.yml' : 'collection.bru');
+
+    if (format === 'bru' && !(await doesItExist(file))) {
+      await writeText(file, await stringifyCollection(defaultCollectionRoot(name), defaultBrunoConfig(name, format), { format }));
+    }
+  } else {
+    // A folder created outside Bruno has no folder file yet; the editor needs one to show.
+    file = vscode.Uri.joinPath(entity.uri, `folder.${format}`);
+
+    if (!(await doesItExist(file))) {
+      await writeText(file, await stringifyFolder({ meta: { name: entity.label } }, { format }));
+    }
   }
 
-  // A folder created outside Bruno has no folder file yet; the editor needs one to show.
-  const { format } = entity.collection;
-  const folderFile = vscode.Uri.joinPath(entity.uri, `folder.${format}`);
-
-  if (!(await doesItExist(folderFile))) {
-    await writeText(folderFile, await stringifyFolder({ meta: { name: entity.label } }, { format }));
-  }
-
-  await vscode.commands.executeCommand('vscode.openWith', folderFile, BrunoEditorProvider.viewType);
+  await vscode.commands.executeCommand('vscode.openWith', file, BrunoEditorProvider.viewType);
 }
 
 async function handleClone(

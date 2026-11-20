@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { BrunoEditorProvider, setPendingVariablesMode, ensureBrunoEditorIntent } from '../editors/bruno-editor-provider';
+import { BrunoEditorProvider, setPendingVariablesMode } from '../editors/bruno-editor-provider';
 import { resolveCollectionRoot } from '../utils/path';
 import { openRunnerPanel } from '../panels/runner-panel';
 import { openGlobalEnvironmentsPanel } from '../panels/global-environments-panel';
@@ -119,8 +119,6 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
       const collectionRoot = resolveCollectionRoot(fsPath) || fsPath;
       const collectionRootFile = await ensureCollectionRootFile(collectionRoot);
 
-      await ensureBrunoEditorIntent(collectionRootFile, 'default');
-
       await vscode.commands.executeCommand(
         'vscode.openWith',
         vscode.Uri.file(collectionRootFile),
@@ -140,7 +138,6 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
       const collectionRoot = resolveCollectionRoot(fsPath) || fsPath;
       const collectionRootFile = await ensureCollectionRootFile(collectionRoot);
 
-      await ensureBrunoEditorIntent(collectionRootFile, 'default');
       setPendingVariablesMode(collectionRootFile, collectionRoot);
 
       await vscode.commands.executeCommand(

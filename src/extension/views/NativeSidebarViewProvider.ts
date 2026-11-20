@@ -756,14 +756,19 @@ export class Entity extends vscode.TreeItem {
       this.tooltip = `${uri.toString()} cannot be read. Close it, or bring the folder back.`;
     } else if (type === 'collection') {
       this.iconPath = new vscode.ThemeIcon('folder-library');
-      // A click on the name expands the collection and opens the collection's settings.
+      // A click on the name opens the collection's settings and expands it
       this.command = {
-        command: 'bruno.sidebar.collectionClick',
+        command: 'bruno.sidebar.click',
         title: 'Open Collection Settings',
         arguments: [this]
       };
     } else if (type === 'folder') {
       this.iconPath = new vscode.ThemeIcon('folder');
+      this.command = {
+        command: 'bruno.sidebar.click',
+        title: 'Open Folder Settings',
+        arguments: [this]
+      };
     } else {
       this.iconPath = this.getRequestIcon(requestType, requestMethod);
       this.command = {
