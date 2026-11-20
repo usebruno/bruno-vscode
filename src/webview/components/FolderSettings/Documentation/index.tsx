@@ -48,13 +48,13 @@ const Documentation = ({
 
   return (
     <StyledWrapper className="w-full h-full min-h-0 relative flex flex-col">
-      <div className="editing-mode flex justify-between items-center flex-shrink-0" role="tab" onClick={toggleViewMode}>
+      <div className="editing-mode flex justify-between items-center flex-shrink-0" role="tab" onClick={toggleViewMode} data-testid="docs-edit-toggle">
         {isEditing ? 'Preview' : 'Edit'}
       </div>
 
       {isEditing ? (
         <div className="flex flex-col flex-1 min-h-0">
-          <div className="mt-2 flex-1 overflow-auto min-h-0">
+          <div className="mt-2 flex-1 overflow-auto min-h-0" data-testid="docs-editor">
             <CodeEditor
               collection={collection}
               theme={displayedTheme}
