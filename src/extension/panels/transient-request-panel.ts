@@ -22,7 +22,6 @@ import {
 } from '../ipc/handlers';
 import { loadCollectionMetadata } from '../app/collections';
 import collectionWatcher from '../app/collection-watcher';
-import { AppItem } from '@bruno-types';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -75,9 +74,11 @@ function itemUidFromUri(uri: vscode.Uri): string {
 class TransientRequestDocument implements vscode.CustomDocument {
   isDirty = false;
 
-  constructor(readonly uri: vscode.Uri, readonly itemUid: string) {}
+  constructor(readonly uri: vscode.Uri, readonly itemUid: string, private readonly onDispose: () => void) {}
 
-  dispose(): void {}
+  dispose(): void {
+    this.onDispose();
+  }
 }
 
 export class TransientRequestEditorProvider implements vscode.CustomEditorProvider<TransientRequestDocument> {
@@ -86,10 +87,19 @@ export class TransientRequestEditorProvider implements vscode.CustomEditorProvid
   private readonly onDidChangeEmitter = new vscode.EventEmitter<vscode.CustomDocumentContentChangeEvent<TransientRequestDocument>>();
   readonly onDidChangeCustomDocument = this.onDidChangeEmitter.event;
 
+  private readonly documents = new Map<string, TransientRequestDocument>();
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   openCustomDocument(uri: vscode.Uri): TransientRequestDocument {
-    return new TransientRequestDocument(uri, itemUidFromUri(uri));
+    const itemUid = itemUidFromUri(uri);
+    const document = new TransientRequestDocument(uri, itemUid, () => {
+      if (this.documents.get(itemUid) === document) {
+        this.documents.delete(itemUid);
+      }
+    });
+    this.documents.set(itemUid, document);
+    return document;
   }
 
   resolveCustomEditor(document: TransientRequestDocument, panel: vscode.WebviewPanel): void {
@@ -99,19 +109,28 @@ export class TransientRequestEditorProvider implements vscode.CustomEditorProvid
       panel.dispose();
       return;
     }
-    setupTransientPanel(this.context, panel, document, meta, this);
+    setupTransientPanel(this.context, panel, document.itemUid, meta, this);
   }
 
-  markDirty(document: TransientRequestDocument): void {
-    if (document.isDirty) return;
+  markDirty(itemUid: string): void {
+    const document = this.documents.get(itemUid);
+    if (!document || document.isDirty) {
+      return;
+    }
     document.isDirty = true;
     this.onDidChangeEmitter.fire({ document });
   }
 
   // A custom document only goes clean via save or revert, and revert acts on the active editor.
-  async markClean(document: TransientRequestDocument, panel: vscode.WebviewPanel): Promise<void> {
-    if (!document.isDirty) return;
-    if (panel.active) {
+  async markClean(itemUid: string): Promise<void> {
+    const document = this.documents.get(itemUid);
+    if (!document?.isDirty) {
+      return;
+    }
+    const activeInput = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    const isActive = activeInput instanceof vscode.TabInputCustom
+      && activeInput.uri.toString() === document.uri.toString();
+    if (isActive) {
       await vscode.commands.executeCommand('workbench.action.files.revert');
     }
   }
@@ -125,7 +144,9 @@ export class TransientRequestEditorProvider implements vscode.CustomEditorProvid
     }
 
     const panel = transientPanels.get(document.itemUid);
-    if (!panel) return;
+    if (!panel) {
+      throw new vscode.CancellationError();
+    }
 
     // The draft lives in the webview; ask it to send the item back.
     const saved = await new Promise<boolean>((resolve) => {
@@ -170,12 +191,10 @@ function settlePendingSave(itemUid: string, saved: boolean): void {
 }
 
 export async function openTransientRequestPanel(
-  _context: vscode.ExtensionContext,
   itemUid: string,
   itemName: string,
   collectionUid: string,
-  collectionPath: string,
-  _item?: AppItem
+  collectionPath: string
 ): Promise<void> {
   // If panel already exists for this item, reveal it
   const existing = transientPanels.get(itemUid);
@@ -201,11 +220,10 @@ export async function openTransientRequestPanel(
 function setupTransientPanel(
   context: vscode.ExtensionContext,
   panel: vscode.WebviewPanel,
-  document: TransientRequestDocument,
+  itemUid: string,
   meta: TransientMeta,
   provider: TransientRequestEditorProvider
 ): void {
-  const { itemUid } = document;
   const { itemName, collectionUid, collectionPath } = meta;
   // panel.webview throws inside onDidDispose, so capture it now.
   const webview = panel.webview;
@@ -332,9 +350,9 @@ function setupTransientPanel(
 
         if (dirtyPayload?.itemUid === itemUid) {
           if (dirtyPayload.isDirty) {
-            provider.markDirty(document);
+            provider.markDirty(itemUid);
           } else {
-            await provider.markClean(document, panel);
+            await provider.markClean(itemUid);
           }
           result = { success: true };
         } else if (hasHandler(channel)) {
@@ -398,7 +416,7 @@ function setupTransientPanel(
         }
         // Handle save transient request — args[0] is the serialized item data
         if (channel === 'transient:save-request' && args?.[0]) {
-          await handleSaveRequest(panel, document, provider, collectionUid, collectionPath, args[0] as Record<string, unknown>);
+          await handleSaveRequest(panel, itemUid, provider, collectionUid, collectionPath, args[0] as Record<string, unknown>);
         }
         if (channel === 'transient:item-updated' && args?.[0]) {
           const { itemUid: updatedUid, item } = args[0] as { itemUid: string; item: Record<string, unknown> };
@@ -434,13 +452,12 @@ export function closeTransientPanel(itemUid: string): void {
 // Handles transient:save-request, answering either a VS Code save (close prompt, Save All) or Bruno's own save.
 async function handleSaveRequest(
   panel: vscode.WebviewPanel,
-  document: TransientRequestDocument,
+  itemUid: string,
   provider: TransientRequestEditorProvider,
   collectionUid: string,
   collectionPath: string,
   itemData: Record<string, unknown>
 ): Promise<void> {
-  const { itemUid } = document;
   const pending = pendingSaves.get(itemUid);
   if (pending) {
     // Webview answered; don't time out the folder picker.
@@ -474,7 +491,7 @@ async function handleSaveRequest(
 
   if (savedPath) {
     // Clear the dot so closing the panel doesn't raise the save prompt.
-    await provider.markClean(document, panel);
+    await provider.markClean(itemUid);
     await openSavedRequest(panel, savedPath, panel.viewColumn);
   }
 }
