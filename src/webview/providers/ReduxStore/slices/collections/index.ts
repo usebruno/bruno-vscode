@@ -29,7 +29,7 @@ import { splitOnFirst, parsePathParams } from 'utils/url';
 import { parseQueryParams, getDataTypeFromValue } from '@usebruno/common/utils';
 // @ts-expect-error - @usebruno/common/utils may not export buildQueryString in types
 import { buildQueryString as stringifyQueryParams } from '@usebruno/common/utils';
-import type { AppCollection, AppItem, UID, KeyValue, DraftRequestBody, HttpRequestParam, ResponseState, AuthMode, OAuth2CredentialEntry, TimelineEntry } from '@bruno-types';
+import type { AppCollection, AppItem, UID, KeyValue, DraftRequestBody, HttpRequestParam, ResponseState, Auth, AuthMode, OAuth2CredentialEntry, TimelineEntry } from '@bruno-types';
 import type {
   CollectionUidPayload,
   ItemUidPayload,
@@ -287,8 +287,11 @@ const ensureFolderRootDraft = (item: AppItem) => {
   return item.draft;
 };
 
-const resolveAuthForMode = (savedAuth: any, mode: AuthMode) => {
-  return get(savedAuth, 'mode') === mode ? cloneDeep(savedAuth) : { mode };
+const resolveAuthForMode = (savedAuth: Auth | null | undefined, mode: AuthMode): Auth => {
+  if (savedAuth?.mode === mode) {
+    return cloneDeep(savedAuth);
+  }
+  return { mode };
 };
 
 export const collectionsSlice = createSlice({
