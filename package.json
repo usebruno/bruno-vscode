@@ -361,7 +361,7 @@
         "command": "bruno.sidebar.newRequest",
         "title": "New Request",
         "category": "Bruno",
-        "icon": "$(new-file)"
+        "icon": "$(add)"
       },
       {
         "command": "bruno.sidebar.newFolder",
@@ -569,12 +569,12 @@
         {
           "command": "bruno.sidebar.newRequest",
           "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
-          "group": "inline@1"
+          "group": "inline@2"
         },
         {
           "command": "bruno.sidebar.run",
           "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
-          "group": "inline@2"
+          "group": "inline@1"
         },
         {
           "command": "bruno.sidebar.newRequest",
