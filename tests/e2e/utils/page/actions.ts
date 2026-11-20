@@ -1591,6 +1591,10 @@ export async function fillRequestDetails(webview: FrameLocator, ctx: Context, ty
   await clearField(urlInput);
   await urlInput.pressSequentially(url);
 
+  if (type === 'gRPC') {
+    await urlInput.page().waitForTimeout(1200);
+  }
+
   if (type === 'GraphQL' && payload) {
     // A new GraphQL request opens on the Query tab with an empty query. Not setCodeMirrorValue: its trailing Tab lands in the query.
     const queryEditor = buildCommonLocators(webview).graphql.queryEditor();
@@ -1785,7 +1789,7 @@ export async function openTab(page: Page, target: string, tab: string): Promise<
   return itemType;
 }
 
-async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
+export async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
   if (itemType === 'request') {
     await saveRequest(page);
   } else {

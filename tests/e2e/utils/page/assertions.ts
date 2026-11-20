@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { ResponsePaneTab, TextCheck } from '../../e2e-helper';
 import {
-  editorLocators, getWebviewFrame, loadGrpcProtoFile, openRequestEditor, openResponseTab, openTab, selectGrpcMethod,
+  editorLocators, getWebviewFrame, loadGrpcProtoFile, openRequestEditor, openResponseTab, openTab, saveItem, selectGrpcMethod,
   sendRequestByName, setGrpcMessage,
 } from './actions';
 
@@ -55,6 +55,7 @@ export async function sendGrpcRequestAndVerify(
   if (options.message) {
     await setGrpcMessage(page, editor, options.message);
   }
+  await saveItem(page, 'request');
 
   const { grpc } = editorLocators(page);
   await grpc.sendRequestButton().click();
