@@ -18,6 +18,7 @@ import { openCollectionDialog } from '../app/collections';
 import collectionWatcher from '../app/collection-watcher';
 import { getCollectionFormat } from '../utils/filesystem';
 import { stateManager } from '../webview/state-manager';
+import { isDirty } from '../editors/dirty-state-manager';
 
 const { stringifyCollection } = require('@usebruno/filestore');
 
@@ -85,7 +86,29 @@ export function registerMainCommands(
       if (activeTab && activeTab.input instanceof vscode.TabInputCustom) {
         const uri = activeTab.input.uri;
         if (uri.fsPath.endsWith('.bru') || uri.fsPath.endsWith('.yml')) {
-          await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+          let closeCommand = 'workbench.action.closeActiveEditor';
+
+          if (isDirty(uri.fsPath)) {
+            const choice = await vscode.window.showWarningMessage(
+              `Do you want to save the changes you made to ${path.basename(uri.fsPath)}?`,
+              { modal: true, detail: "Your changes will be lost if you don't save them." },
+              'Save',
+              "Don't Save"
+            );
+            if (!choice) return;
+
+            if (choice === 'Save') {
+              await vscode.commands.executeCommand('bruno.saveFromEditor');
+              for (let attempt = 0; attempt < 50 && isDirty(uri.fsPath); attempt++) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+              }
+              if (isDirty(uri.fsPath)) return;
+            } else {
+              closeCommand = 'workbench.action.revertAndCloseActiveEditor';
+            }
+          }
+
+          await vscode.commands.executeCommand(closeCommand);
           await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
         }
       }
