@@ -1570,6 +1570,10 @@ export async function createRequestV2(page: Page, _sidebar: Frame, ctx: Context,
   const webview = await getWebviewByTitle(page, 'Untitled 1');
   expect(webview).toBeTruthy();
 
+  if (type === 'gRPC' || type === 'WebSocket') {
+    return webview;
+  }
+
   const requestTypeDropdown = webview.getByTestId('request-method');
   if ((await requestTypeDropdown.getAttribute('aria-expanded')) === 'false') {
     await requestTypeDropdown.click()
@@ -1587,6 +1591,10 @@ export async function fillRequestDetails(webview: FrameLocator, ctx: Context, ty
   await clearField(urlInput);
   await urlInput.pressSequentially(url);
 
+  if (type === 'gRPC') {
+    await urlInput.page().waitForTimeout(1200);
+  }
+
   if (type === 'GraphQL' && payload) {
     // A new GraphQL request opens on the Query tab with an empty query. Not setCodeMirrorValue: its trailing Tab lands in the query.
     const queryEditor = buildCommonLocators(webview).graphql.queryEditor();
@@ -1603,7 +1611,7 @@ export async function clearField(field: Locator) {
 }
 
 export async function saveRequestV2(page: Page, webview: FrameLocator, ctx: Context, name: string, newRequest = true) {
-  await webview.getByTitle('Save Request').click();
+  await webview.getByTestId('save-request').click();
   if (newRequest) {
     const workbench = buildCommonLocators(page).workbench;
     const quickInputWidget = page.locator('.quick-input-widget');
@@ -1748,7 +1756,8 @@ export async function sendRequestByName(page: Page, request: string): Promise<vo
   await activeEditor(page).locator('#send-request').click();
 }
 
-async function openRequestEditor(page: Page, request: string) {
+// Opens a request by its name in the sidebar
+export async function openRequestEditor(page: Page, request: string) {
   const sidebar = await openBrunoSidebar(page);
   await expect(async () => {
     await buildCommonLocators(sidebar).sidebar.collectionItem(request).click();
@@ -1780,7 +1789,7 @@ export async function openTab(page: Page, target: string, tab: string): Promise<
   return itemType;
 }
 
-async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
+export async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
   if (itemType === 'request') {
     await saveRequest(page);
   } else {
