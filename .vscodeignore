@@ -15,6 +15,17 @@ tsconfig.webview.json
 .eslintrc*
 *.vsix
 
+# Tests, their fixtures (including mTLS test certificates), tooling and local editor settings never ship
+tests/**
+.claude/**
+.vscode-test/**
+test-results/**
+playwright-report/**
+e2e-screenshots/**
+.github/**
+vitest.config.*
+playwright.config.*
+
 # Exclude all node_modules by default
 node_modules/**
 

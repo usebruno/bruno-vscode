@@ -195,6 +195,7 @@ declare module 'is-valid-path' {
 }
 
 declare module 'js-yaml' {
-  export function load(content: string): unknown;
+  export const JSON_SCHEMA: unknown;
+  export function load(content: string, options?: { schema?: unknown }): unknown;
   export function dump(obj: unknown, options?: unknown): string;
 }

@@ -141,6 +141,7 @@ declare module '@usebruno/common' {
   export function createContentType(value: string): string;
   export function getHeaderValue(headers: unknown[], name: string): string | undefined;
   export function getTLDfromUrl(url: string): string | undefined;
+  export function transformExampleStatusInCollection<T>(collection: T): T;
   export const utils: unknown;
   export const mockDataFunctions: unknown[];
 }
@@ -168,6 +169,7 @@ declare module '@usebruno/common/utils' {
   export function valueToString(value: unknown, indent?: number): string;
   export function validateDataTypeValue(value: any, dataType?: BrunoVariableDataType): string | null;
   export function jsonToDotenv(variables: Array<{ name: string; value?: string }>): string;
+  export function patternHasher(input: string, pattern?: string | RegExp): { hashed: string; restore: (text: string) => string };
 }
 
 declare module '@usebruno/schema' {
@@ -188,12 +190,29 @@ declare module '@usebruno/graphql-docs' {
 
 declare module '@usebruno/converters' {
   export function brunoToPostman(collection: unknown): unknown;
-  export function postmanToBruno(collection: unknown): unknown;
+  export function brunoToOpenCollection(collection: unknown): unknown;
+  export function postmanToBruno(
+    collection: unknown,
+    options?: { preserveScripts?: boolean }
+  ): Promise<{ collection: unknown; issues?: Array<{ severity: 'error' | 'warning'; path: string; message: string }> }>;
+  export function postmanToBrunoEnvironment(env: unknown): unknown;
+  export function openApiToBruno(spec: unknown, options?: { groupBy?: 'tags' | 'path'; collectionFormat?: 'bru' | 'yml' }): unknown;
+  export function insomniaToBruno(collection: unknown): unknown;
+  export function openCollectionToBruno(collection: unknown): unknown;
+  export function wsdlToBruno(wsdl: string): Promise<unknown>;
+
+  // Names from an older package version. None exists at runtime; importing one yields undefined.
+  /** @deprecated Not exported by the package; use `openApiToBruno`. */
   export function openapiToBruno(spec: unknown): unknown;
+  /** @deprecated Not exported by the package; there is no OpenAPI exporter. */
   export function brunoToOpenapi(collection: unknown): unknown;
+  /** @deprecated Not exported by the package; use `insomniaToBruno`. */
   export function insomniaCollectionToBruno(collection: unknown): unknown;
+  /** @deprecated Not exported by the package; use `openCollectionToBruno`. */
   export function opencollectionToBruno(collection: unknown): unknown;
+  /** @deprecated Not exported by the package; use `brunoToOpenCollection`. */
   export function brunoToOpencollection(collection: unknown): unknown;
+  /** @deprecated Not exported by the package; use `postmanToBrunoEnvironment`. */
   export function postmanEnvironmentToBruno(env: unknown): unknown;
 }
 

@@ -24,7 +24,7 @@ test.describe('HTML response preview', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Html Preview';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     fs.mkdirSync(path.join(collectionDir, 'environments'), { recursive: true });
@@ -52,7 +52,7 @@ test.describe('HTML response preview', () => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Html Preview Save';
 
-    await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+    await createCollection(sidebar, collectionName, tmpDir, 'bru');
 
     const collectionDir = findCollectionDir(tmpDir);
     seedGetRequest(collectionDir, 'Page', `${TEST_SERVER}/htmlpage-autofocus`);

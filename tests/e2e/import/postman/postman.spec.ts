@@ -9,7 +9,7 @@ test.describe('Import Postman collection', () => {
     const sidebar = await openBrunoSidebar(page);
     const fixturePath = path.resolve(__dirname, 'fixtures/postman-collection.json');
     const expectedName = 'Postman_collection';
-    await importCollection(page, sidebar, fixturePath, tmpDir, expectedName);
+    await importCollection(sidebar, fixturePath, tmpDir, expectedName);
 
     await test.step('Verify the imported postman collection is visible in the sidebar', async () => {
       const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(expectedName);

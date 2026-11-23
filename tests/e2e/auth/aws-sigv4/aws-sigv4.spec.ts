@@ -3,8 +3,7 @@ import {
   activeEditor,
   openBrunoSidebar,
   createCollection,
-  openNewRequestPanel,
-  createRequest,
+  createRequestByType,
   openRequest,
   saveRequest,
   selectAuthMode,
@@ -29,9 +28,8 @@ test.describe('AWS Signature V4 auth', () => {
     const locators = buildCommonLocators(activeEditor(page));
 
     await test.step('Create a collection and a request', async () => {
-      await createCollection(page, sidebar, collectionName, tmpDir);
-      const panel = await openNewRequestPanel(page, sidebar, collectionName);
-      await createRequest(page, panel, sidebar, collectionName, requestName, `${TEST_SERVER_LOCAL_URL}/api/echo/auth`);
+      await createCollection(sidebar, collectionName, tmpDir);
+      await createRequestByType(sidebar, collectionName, { name: requestName, url: `${TEST_SERVER_LOCAL_URL}/api/echo/auth` });
     });
 
     await test.step('Set auth type as AWS Sig V4 and fill in the credentials', async () => {

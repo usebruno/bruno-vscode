@@ -18,7 +18,7 @@ test.describe('gRPC method type', () => {
   test('the selected method type drives how many request messages are allowed', async ({ page, tmpDir }) => {
     const collectionName = 'gRPC Method Type';
     const sidebar = await openBrunoSidebar(page);
-    await createCollection(page, sidebar, collectionName, tmpDir);
+    await createCollection(sidebar, collectionName, tmpDir);
 
     const editor = await createGrpcRequestWithProto(page, sidebar, collectionName, {
       name: 'MethodType',

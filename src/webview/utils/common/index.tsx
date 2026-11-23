@@ -2,9 +2,6 @@ import { customAlphabet } from 'nanoid';
 import xmlFormat from 'xml-formatter';
 import { JSONPath } from 'jsonpath-plus';
 import fastJsonFormat from 'fast-json-format';
-import { format, applyEdits } from 'jsonc-parser';
-// @ts-expect-error - @usebruno/common/utils types incomplete
-import { patternHasher } from '@usebruno/common/utils';
 
 declare global {
   interface Window {
@@ -444,20 +441,7 @@ export const formatResponse = (
   return safeStringifyJSON(data, !isVeryLargeResponse) ?? '';
 };
 
-export const prettifyJsonString = (jsonDataString: string): string => {
-  if (typeof jsonDataString !== 'string') return jsonDataString;
-
-  try {
-    const { hashed, restore } = patternHasher(jsonDataString);
-    const edits = format(hashed, undefined, { tabSize: 2, insertSpaces: true });
-    const formattedJsonDataStringHashed = applyEdits(hashed, edits);
-    const formattedJsonDataString = restore(formattedJsonDataStringHashed);
-    return formattedJsonDataString;
-  } catch (error) {
-    console.error(error);
-  }
-  return jsonDataString;
-};
+export { prettifyJsonString } from '../../../utils/json';
 
 /**
  * Returns the given string value converted to title case.

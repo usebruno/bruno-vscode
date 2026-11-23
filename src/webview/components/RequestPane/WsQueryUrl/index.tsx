@@ -72,7 +72,7 @@ const WsQueryUrl = ({
 
   const handleConnect = async () => {
     dispatch(wsConnectOnly(item, collection.uid));
-    previousDeboundedInterpolatedURL.current = debouncedInterpolatedURL;
+    previousDeboundedInterpolatedURL.current = interpolatedURL;
   };
 
   const handleDisconnect = async (e?: React.MouseEvent, notify = true) => {

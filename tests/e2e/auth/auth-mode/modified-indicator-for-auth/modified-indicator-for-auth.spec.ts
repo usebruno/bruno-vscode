@@ -26,19 +26,18 @@ test.describe('Modified indicator for auth tab', () => {
     const collectionName = 'modified-indicator-collection';
     const sidebar = await openBrunoSidebar(page);
     const locators = buildCommonLocators(activeEditor(page));
-    const sidebarLocators = buildCommonLocators(sidebar);
     const folderAuthTabDot = () => locators.paneTabs.folderSettingsTab('auth').getByTestId('status-dot-auth');
     const authTabDot = () => locators.tabs.byText('Auth').getByTestId('status-dot-auth');
 
     const setFolderAuth = async (mode: string) => {
-      await sidebarLocators.sidebar.folder('folder-1').click();
+      await sidebar.itemAction('folder-1', 'settings');
       await locators.paneTabs.folderSettingsTab('auth').click();
       await selectAuthMode(page, mode);
       await locators.saveButton().click();
     };
 
     await test.step('Set auth type for the collection as No Auth', async () => {
-      await sidebarLocators.sidebar.collectionName(collectionName).click();
+      await sidebar.openCollectionSettings(collectionName);
       await locators.paneTabs.collectionSettingsTab('auth').click();
       await selectAuthMode(page, 'No Auth');
       await locators.saveButton().click();
@@ -65,7 +64,7 @@ test.describe('Modified indicator for auth tab', () => {
 
     for (const { protocol, requestName } of requestProtocolCases) {
       await test.step(`Set auth type for the ${protocol} request as Inherit and verify the Auth tab does not show the dot (folder-1 is No Auth)`, async () => {
-        await sidebarLocators.sidebar.collectionItem(requestName).click();
+        await sidebar.clickItem(requestName);
         await selectRequestPaneTab(page, 'Auth');
         await selectAuthMode(page, 'Inherit');
         await saveRequest(page);
@@ -79,7 +78,7 @@ test.describe('Modified indicator for auth tab', () => {
 
     for (const { protocol, requestName } of requestProtocolCases) {
       await test.step(`Verify the ${protocol} request Auth tab now shows the dot (inherits Basic Auth from folder-1)`, async () => {
-        await sidebarLocators.sidebar.collectionItem(requestName).click();
+        await sidebar.clickItem(requestName);
         await selectRequestPaneTab(page, 'Auth');
         await expect(authTabDot()).toBeVisible();
       });

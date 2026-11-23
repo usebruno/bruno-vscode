@@ -20,10 +20,6 @@ import {
 import { buildCommonLocators } from '../utils/page/locators';
 import { parseCollection } from '@usebruno/filestore';
 
-// Render showOpenDialog/showSaveDialog as a quick input so the folder picker and save dialog can be driven,
-// and modal messages (e.g. delete confirmation) in the workbench DOM instead of as native OS dialogs.
-test.use({ vscodeSettings: { 'files.simpleDialog.enable': true, 'window.dialogStyle': 'custom' } });
-
 const COLLECTION = 'collection-1';
 const TEST_SERVER = 'https://testbench-sanity.usebruno.com';
 const GRAPHQL_QUERY = '{ ping }';
@@ -44,7 +40,7 @@ const updatedSettings = {
   headers: { 'x-lifecycle': 'header-updated' },
 };
 
-test('Collection lifecycle: settings, vars, headers, run request, clone, delete, move, run collection, export', async ({ page }) => {
+test('Collection lifecycle: settings, vars, headers, run request, clone, delete, move, run collection, export', async ({ page, tmpDir }) => {
   const { sidebar, ctx } = await createSetup({
     collections: [
       {
@@ -84,7 +80,7 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
         vars: []
       }
     ]
-  }, page)
+  }, page, tmpDir)
 
   // What should be left after the clone, delete and move below.
   const remainingPaths = ['folder-1/request-1', 'request-1 copy', 'graphql-1'];
@@ -92,28 +88,30 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
   const sidebarElements = buildCommonLocators(sidebar).sidebar;
 
   await test.step('Clone request-1', async () => {
-    await cloneRequest(page, sidebar, COLLECTION, 'request-1')
+    await cloneRequest(sidebar, COLLECTION, 'request-1')
     await expect(sidebarElements.collectionItem('request-1 copy')).toBeVisible();
   });
 
   await test.step('Clone graphql-1', async () => {
-    await cloneRequest(page, sidebar, COLLECTION, 'graphql-1')
+    await cloneRequest(sidebar, COLLECTION, 'graphql-1')
     await expect(sidebarElements.collectionItem('graphql-1 copy')).toBeVisible();
   });
 
   await test.step('Delete graphql-1 copy', async () => {
-    await deleteRequest(page, sidebar, COLLECTION, 'graphql-1 copy')
+    await deleteRequest(sidebar, COLLECTION, 'graphql-1 copy')
     await expect(sidebarElements.collectionItem('graphql-1 copy')).toHaveCount(0);
   });
 
   await test.step('Move request-1 into folder-1', async () => {
     await dragItem(page, { dragItem: 'request-1', target: 'folder-1', position: 'inside' })
     await expandFolder(sidebar, 'folder-1')
-    await expect(sidebarElements.folderChild('folder-1', 'request-1')).toBeVisible();
+    // The tree nests the request one level below its folder.
+    const folderLevel = Number(await sidebarElements.folder('folder-1').getAttribute('aria-level'))
+    await expect(sidebarElements.collectionItem('request-1')).toHaveAttribute('aria-level', String(folderLevel + 1));
   });
 
   await test.step('Edit collection settings', async () => {
-    const settings = await openCollectionSettings(page, sidebar, COLLECTION);
+    const settings = await openCollectionSettings(sidebar, COLLECTION);
     await openRequestPaneTab(settings, 'Overview');
     await expect(buildCommonLocators(settings).collectionSettings.requestsInfo()).toHaveText(`${remainingPaths.length} requests in collection`);
 
@@ -122,7 +120,7 @@ test('Collection lifecycle: settings, vars, headers, run request, clone, delete,
   });
 
   await test.step('Run collection', async () => {
-    const runner = await openCollectionRunner(page, sidebar, COLLECTION);
+    const runner = await openCollectionRunner(sidebar, COLLECTION);
     const runnerElements = buildCommonLocators(runner).runner;
     await expect(runnerElements.requestCountText()).toContainText(String(remainingPaths.length));
     await runCollection(runner);

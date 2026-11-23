@@ -63,18 +63,4 @@ export const processOpenCollection = async (jsonData: any) => {
   }
 };
 
-export const isOpenCollection = (data: any) => {
-  if (typeof data !== 'object' || data === null) {
-    return false;
-  }
-
-  if (typeof data.opencollection !== 'string' || !data.opencollection.trim()) {
-    return false;
-  }
-
-  if (typeof data.info !== 'object' || data.info === null) {
-    return false;
-  }
-
-  return true;
-};
+export { isOpenCollection } from '../../../utils/collection';

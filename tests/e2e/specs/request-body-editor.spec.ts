@@ -8,7 +8,7 @@ const TEST_SERVER = 'http://127.0.0.1:8081';
 
 async function setupRequest(page: any, tmpDir: string, collectionName: string): Promise<Frame> {
   const sidebar = await openBrunoSidebar(page);
-  await createCollection(page, sidebar, collectionName, tmpDir, 'bru');
+  await createCollection(sidebar, collectionName, tmpDir, 'bru');
   const collectionDir = findCollectionDir(tmpDir);
 
   fs.writeFileSync(path.join(collectionDir, 'Echo.bru'), [

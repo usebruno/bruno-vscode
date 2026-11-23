@@ -70,6 +70,7 @@ export const updateUidsInCollection = (_collection: any) => {
 // need to eventually get rid of supporting old collection app models
 // 1. start with making request type a constant fetched from a single place
 // 2. move references of param and replace it with query inside the app
+/** @deprecated Webview-only copy; the native sidebar uses `upgradeBrunoExport` in src/extension/app/import-collection.ts, which skips the uid assignment the webview store needs. */
 export const transformItemsInCollection = (collection: any) => {
   const transformItems = (items: any[] = []) => {
     each(items, (item) => {
@@ -158,6 +159,7 @@ export const transformItemsInCollection = (collection: any) => {
   return collection;
 };
 
+/** @deprecated Webview-only copy; the native sidebar uses `hydrateSeq` in src/extension/app/import-collection.ts. */
 export const hydrateSeqInCollection = (collection: any) => {
   const hydrateSeq = (items: any[] = []) => {
     let index = 1;

@@ -10,6 +10,7 @@ import {
   findCollectionDir
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
+import type { Sidebar } from '../../utils/page/sidebar';
 
 
 const DOMAIN = 'localhost';
@@ -61,8 +62,8 @@ export function storedCertPaths(tmpDir: string): string[] {
     .map((match) => path.resolve(collectionDir, match[1]));
 }
 
-export async function openClientCertsTab(page: Page, sidebar: Frame, collectionName: string): Promise<Frame> {
-  const settings = await openCollectionSettings(page, sidebar, collectionName);
+export async function openClientCertsTab(sidebar: Sidebar, collectionName: string): Promise<Frame> {
+  const settings = await openCollectionSettings(sidebar, collectionName);
   await openRequestPaneTab(settings, 'Client Certificates');
   return settings;
 }

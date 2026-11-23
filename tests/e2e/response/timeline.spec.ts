@@ -4,6 +4,7 @@ import * as path from 'path';
 import type { Frame } from '@playwright/test';
 import { test, expect } from '../utils/fixtures';
 import { openBrunoSidebar, createCollection, openRequest, sendRequest, findCollectionDir } from '../utils/page/actions';
+import type { Sidebar } from '../utils/page/sidebar';
 
 const TEST_SERVER = 'http://127.0.0.1:8081';
 
@@ -69,9 +70,9 @@ function ipv6LoopbackReachable(port: number): Promise<boolean> {
   });
 }
 
-async function setupCollection(page: any, name: string, tmpDir: string): Promise<{ sidebar: Frame; collectionDir: string }> {
+async function setupCollection(page: any, name: string, tmpDir: string): Promise<{ sidebar: Sidebar; collectionDir: string }> {
   const sidebar = await openBrunoSidebar(page);
-  await createCollection(page, sidebar, name, tmpDir, 'bru');
+  await createCollection(sidebar, name, tmpDir, 'bru');
   return { sidebar, collectionDir: findCollectionDir(tmpDir) };
 }
 

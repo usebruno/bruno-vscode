@@ -9,7 +9,7 @@ test.describe('Import WSDL collection', () => {
     const sidebar = await openBrunoSidebar(page);
     const fixturePath = path.resolve(__dirname, 'fixtures/wsdl-collection.wsdl');
     const expectedName = 'WSDL Collection';
-    await importCollection(page, sidebar, fixturePath, tmpDir, expectedName);
+    await importCollection(sidebar, fixturePath, tmpDir, expectedName);
 
     await test.step('Verify the imported WSDL collection is visible in the sidebar', async () => {
       const collectionRow = buildCommonLocators(sidebar).sidebar.collectionName(expectedName);

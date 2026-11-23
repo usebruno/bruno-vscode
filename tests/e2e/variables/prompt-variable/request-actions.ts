@@ -1,8 +1,9 @@
 import { Page, Frame, expect } from '@playwright/test';
-import { openBrunoSidebar, createCollection, openNewRequestPanel, createRequest, openRequest } from '../../utils/page/actions';
+import { openBrunoSidebar, createCollection, createRequestByType, openRequest } from '../../utils/page/actions';
 import { getActiveEditorFrame } from '../../utils/page/oauth2-actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 import { expectNoPromptModal } from './prompt-actions';
+import type { Sidebar } from '../../utils/page/sidebar';
 
 /** Shared setup/assertion helpers for the prompt-variable specs (http / graphql / websocket / grpc). */
 
@@ -13,23 +14,22 @@ export const GRPC_SERVER = 'grpc://localhost:8082';
 export { getActiveEditorFrame };
 
 /** Open the Bruno sidebar and create a fresh collection; returns the sidebar frame. */
-export async function setupCollection(page: Page, tmpDir: string, collectionName: string): Promise<Frame> {
+export async function setupCollection(page: Page, tmpDir: string, collectionName: string): Promise<Sidebar> {
   const sidebar = await openBrunoSidebar(page);
-  await createCollection(page, sidebar, collectionName, tmpDir);
+  await createCollection(sidebar, collectionName, tmpDir);
   return sidebar;
 }
 
 /** Create an HTTP request via the UI and open it; returns the editor frame. */
 export async function newHttpRequest(
   page: Page,
-  sidebar: Frame,
+  sidebar: Sidebar,
   collectionName: string,
   name: string,
   url: string,
   method: string = 'GET'
 ): Promise<Frame> {
-  const panel = await openNewRequestPanel(page, sidebar, collectionName);
-  await createRequest(page, panel, sidebar, collectionName, name, url, method);
+  await createRequestByType(sidebar, collectionName, { name: name, url: url, method: method });
   return openRequest(page, sidebar, collectionName, name);
 }
 
