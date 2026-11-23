@@ -1,5 +1,34 @@
 # Changelog
 
+## [6.1.0]
+
+### Added
+- Preferences panel for extension settings
+- `.env` file support in environment settings
+- Runtime variables support
+
+### Fixed
+- OAuth 2.0 state param validation
+- OAuth 2.0 Get Token in Cursor now returns to Cursor instead of opening VS Code
+- AWS Signature v4 and NTLM auth are now applied when sending requests
+- Auth inheritance across collection, folder, and request levels
+- Sending a request no longer turns off certificate checks for other requests and extensions
+- Long-running requests no longer fail with an IPC timeout
+- Adding a client certificate through the file picker no longer crashes the extension
+- Transient requests now inherit collection environments, settings, and presets, and can be saved into folders
+- OpenAPI import failing in remote environments
+- Drag and drop reordering is now saved in YAML collections
+- Renamed requests now show up in the sidebar right away
+- Environment tab now shows the selected environment, and requests refresh when a secret variable changes
+- Collection presets are now saved
+- JSON body comments are now stripped when sending requests
+- Undo no longer causes infinite loading on POST requests
+- Opening a collection with a version number in its name
+- gRPC: Add Message button only shows for client-streaming methods, method search no longer closes, and multiple responses are shown
+- Request-level apps only show when enabled
+- Body editor now uses the full available height
+- Bruno Logs panel is no longer empty after switching panels
+
 ## [6.0.0]
 
 ### Added
