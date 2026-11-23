@@ -1411,7 +1411,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
   });
 
   registerHandler('renderer:convert-bruno-to-postman', async (args) => {
-    const [collection] = args as [any];
+    const [collection] = args as [BrunoCollection];
     try {
       return brunoToPostmanConverter(collection);
     } catch (error) {
