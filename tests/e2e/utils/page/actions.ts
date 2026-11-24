@@ -1091,7 +1091,28 @@ export async function sendRequestByName(page: Page, request: string): Promise<vo
   await activeEditor(page).locator('#send-request').click();
 }
 
-export async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
+export async function sendGrpcRequest(
+  page: Page,
+  request: string,
+  options: { proto: string, method: string, message?: string }
+): Promise<void> {
+  await openRequestEditor(page, request);
+  const editor = await getWebviewFrame(page, (frame) => frame.getByTestId('grpc-query-url-container'));
+  await loadGrpcProtoFile(editor, options.proto);
+  await selectGrpcMethod(editor, options.method);
+  if (options.message) {
+    await setGrpcMessage(page, editor, options.message);
+  }
+  await saveItem(page, 'request');
+  await editorLocators(page).grpc.sendRequestButton().click();
+}
+
+export async function connectWebSocket(page: Page, request: string): Promise<void> {
+  await openRequestEditor(page, request);
+  await editorLocators(page).ws.connectButton().click();
+}
+
+async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
   if (itemType === 'request') {
     await saveRequest(page);
   } else {
