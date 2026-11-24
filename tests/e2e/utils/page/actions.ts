@@ -330,7 +330,7 @@ async function getEntityType(sidebar: Sidebar, target: string): Promise<'collect
   return (await row.getAttribute('aria-label'))?.startsWith('Folder ') ? 'folder' : 'request';
 }
 
-async function openRequestEditor(page: Page, request: string) {
+export async function openRequestEditor(page: Page, request: string) {
   const sidebar = await openBrunoSidebar(page);
 
   await expect(async () => {
@@ -1091,7 +1091,7 @@ export async function sendRequestByName(page: Page, request: string): Promise<vo
   await activeEditor(page).locator('#send-request').click();
 }
 
-async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
+export async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {
   if (itemType === 'request') {
     await saveRequest(page);
   } else {
