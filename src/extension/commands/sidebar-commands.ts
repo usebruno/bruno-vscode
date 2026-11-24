@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import type { GrpcRequest, HttpItemSettings, HttpRequest, HttpRequestBody, ItemType, WebSocketRequest } from '@bruno-types';
+import type { GrpcRequest, HttpItemSettings, HttpRequest, HttpRequestBody, HttpRequestParam, ItemType, WebSocketRequest } from '@bruno-types';
 import { stringifyCollection, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
 
 import { getRequestFromCurlCommand, isCurlCommand, normalizeCurlCommand } from '../../utils/curl';
 import { DEFAULT_GITIGNORE } from '../utils/constants';
 import { defaultBrunoConfig, defaultCollectionRoot, type CollectionFormat } from '../../utils/collection';
+import { parseParamsFromUrl } from '../../utils/url';
 
 import collectionWatcher from '../app/collection-watcher';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
@@ -227,6 +228,7 @@ type CurlRequest = NewTransientRequest & {
       value: string;
       enabled: boolean
     }[];
+    params: HttpRequestParam[];
     body: unknown;
     auth?: unknown
   };
@@ -234,8 +236,8 @@ type CurlRequest = NewTransientRequest & {
 
 /**
  * An HTTP or GraphQL request carrying what the curl command says: URL, method,
- * headers, body and basic auth. It is GraphQL when the URL ends in /graphql or
- * the content type says so, the rule the webview's New Request form applies.
+ * headers, body and basic auth, with the URL's query and path params. It is GraphQL when the URL ends in /graphql or the
+ * content type says so, the rule the webview's New Request form applies.
  */
 function getRequestFromCurl(command: string): CurlRequest | undefined {
   const probe = getRequestFromCurlCommand(command);
@@ -255,6 +257,7 @@ function getRequestFromCurl(command: string): CurlRequest | undefined {
       url: parsed.url,
       method: parsed.method.toUpperCase(),
       headers: (parsed.headers ?? []).map((header) => ({ uid: uuid(), ...header })),
+      params: parseParamsFromUrl(parsed.url).map((param) => ({ uid: uuid(), ...param })),
       body: parsed.body,
       ...(parsed.auth ? { auth: parsed.auth } : {})
     }

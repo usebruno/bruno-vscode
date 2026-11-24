@@ -1,6 +1,6 @@
 import React from 'react';
 import { collectionSchema, environmentSchema, itemSchema } from '@usebruno/schema';
-import { parseQueryParams, extractPromptVariables, getDataTypeFromValue } from '@usebruno/common/utils';
+import { extractPromptVariables, getDataTypeFromValue } from '@usebruno/common/utils';
 import { REQUEST_TYPES } from 'utils/common/constants';
 import cloneDeep from 'lodash/cloneDeep';
 import filter from 'lodash/filter';
@@ -186,7 +186,7 @@ import { each, omit } from 'lodash';
 import { closeAllCollectionTabs, closeTabs, updateResponsePaneScrollPosition } from 'providers/ReduxStore/slices/tabs';
 import { removeCollectionFromWorkspace, addCollectionToWorkspace } from 'providers/ReduxStore/slices/workspaces';
 import { resolveRequestFilename } from 'utils/common/platform';
-import { interpolateUrl, parsePathParams, splitOnFirst } from 'utils/url/index';
+import { interpolateUrl, parseParamsFromUrl } from 'utils/url/index';
 import { sendCollectionOauth2Request as _sendCollectionOauth2Request } from 'utils/network/index';
 import {
   getGlobalEnvironmentVariables,
@@ -1488,27 +1488,7 @@ export const newHttpRequest = (params: NewHttpRequestParams): ThunkAction<Promis
       return reject(new Error('Collection not found'));
     }
 
-    interface RequestParam {
-      name: string;
-      value: string;
-      enabled?: boolean;
-      type?: 'query' | 'path';
-    }
-
-    const parts = splitOnFirst(requestUrl, '?');
-    const queryParams = (parseQueryParams(parts[1]) ?? []) as RequestParam[];
-    each(queryParams, (urlParam) => {
-      urlParam.enabled = true;
-      urlParam.type = 'query';
-    });
-
-    const pathParams = parsePathParams(requestUrl) as RequestParam[];
-    each(pathParams, (pathParam) => {
-      pathParam.enabled = true;
-      pathParam.type = 'path';
-    });
-
-    const requestParams = [...queryParams, ...pathParams];
+    const requestParams = parseParamsFromUrl(requestUrl);
 
     const item: Record<string, unknown> = {
       uid: uuid(),

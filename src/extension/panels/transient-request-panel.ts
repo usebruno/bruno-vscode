@@ -150,37 +150,40 @@ export async function openTransientRequestPanel(
   });
 
   panel.onDidDispose(() => {
+    // The panel is gone either way; only the item is kept for the restore.
+    stateManager.removeWebview(webview);
+    transientPanels.delete(itemUid);
+
     if (savedPanels.has(itemUid)) {
       savedPanels.delete(itemUid);
-      stateManager.removeWebview(webview);
-      transientPanels.delete(itemUid);
       openTransients.delete(itemUid);
       return;
     }
 
     const GRACE_MS = 10_000;
 
-    const timer = setTimeout(() => {
-      stateManager.removeWebview(webview);
-      transientPanels.delete(itemUid);
-      openTransients.delete(itemUid);
-    }, GRACE_MS);
+    // A progress notification, unlike a message, closes from code: it is gone once the
+    // grace period ends, so no restore can be asked for after the item is dropped.
+    // Its only button is VS Code's "Cancel", which restores the request.
+    vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `"${itemName}" closed. Cancel to restore it.`,
+        cancellable: true
+      },
+      (_progress, token) => new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          openTransients.delete(itemUid);
+          resolve();
+        }, GRACE_MS);
 
-    vscode.window.showInformationMessage(
-      `"${itemName}" closed. Click Undo to restore.`,
-      'Undo'
-    ).then((choice) => {
-      if (choice === 'Undo') {
-        clearTimeout(timer);
-        vscode.commands.executeCommand(
-          'bruno.openTransientRequest',
-          itemUid,
-          itemName,
-          collectionUid,
-          collectionPath
-        );
-      }
-    });
+        token.onCancellationRequested(() => {
+          clearTimeout(timer);
+          vscode.commands.executeCommand('bruno.openTransientRequest', itemUid, itemName, collectionUid, collectionPath);
+          resolve();
+        });
+      })
+    );
   });
 
   const webviewSender = (channel: string, ...args: unknown[]) => {

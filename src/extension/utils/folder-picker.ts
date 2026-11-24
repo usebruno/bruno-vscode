@@ -78,29 +78,39 @@ async function showFolderStep(rootPath: vscode.Uri, rootName: string, title?: st
     quickPick.totalSteps = 2;
     quickPick.matchOnDescription = true;
 
+    // Only the latest load may fill the list to avoid race conditions on a slow system
+    let latestLoad = 0;
+
     const loadFolders = async () => {
+      const load = ++latestLoad;
+      const dir = currentPath;
       quickPick.busy = true;
-      const relative = getRelativePath(rootPath, currentPath);
+      const relative = getRelativePath(rootPath, dir);
       const items: FolderPickItem[] = [{
         label: '$(check) Select this folder',
         description: relative === '/' ? `${rootName} (root)` : relative,
-        uri: currentPath,
+        uri: dir,
         action: 'select'
       }];
 
-      if (!isSameDir(currentPath, rootPath)) {
+      if (!isSameDir(dir, rootPath)) {
         items.push({
           label: '$(arrow-up) ..',
           description: 'Go to parent folder',
-          uri: dirname(currentPath),
+          uri: dirname(dir),
           action: 'navigate'
         });
       }
 
-      for (const folder of await listSubfolders(currentPath)) {
+      const subfolders = await listSubfolders(dir);
+      if (load !== latestLoad) {
+        return;
+      }
+
+      for (const folder of subfolders) {
         items.push({
           label: `$(folder) ${folder}`,
-          uri: vscode.Uri.joinPath(currentPath, folder),
+          uri: vscode.Uri.joinPath(dir, folder),
           action: 'navigate'
         });
       }
