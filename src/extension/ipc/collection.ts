@@ -73,7 +73,8 @@ const {
   openApiToBruno: openApiToBrunoConverter,
   insomniaToBruno: insomniaToBrunoConverter,
   wsdlToBruno: wsdlToBrunoConverter,
-  openCollectionToBruno: openCollectionToBrunoConverter
+  openCollectionToBruno: openCollectionToBrunoConverter,
+  brunoToPostman: brunoToPostmanConverter
 } = require('@usebruno/converters');
 
 const environmentSecretsStore = new EnvironmentSecretsStore();
@@ -1405,6 +1406,16 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       return await openCollectionToBrunoConverter(openCollectionData);
     } catch (error) {
       console.error('[Collection IPC] Error converting OpenCollection to Bruno:', error);
+      throw error;
+    }
+  });
+
+  registerHandler('renderer:convert-bruno-to-postman', async (args) => {
+    const [collection] = args as [BrunoCollection];
+    try {
+      return brunoToPostmanConverter(collection);
+    } catch (error) {
+      console.error('[Collection IPC] Error converting Bruno to Postman:', error);
       throw error;
     }
   });

@@ -1,5 +1,6 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import AdmZip from 'adm-zip';
 import { expect, type Page, type Frame, type FrameLocator, type Locator, type TestType, type PlaywrightTestOptions, type PlaywrightTestArgs, type PlaywrightWorkerArgs, type PlaywrightWorkerOptions } from '@playwright/test';
 import { buildCommonLocators } from './locators';
@@ -1036,6 +1037,25 @@ export async function takeScreenshot(page: Page, test: Test) {
   await test.info().attach('final-state', { path: screenshotPath, contentType: 'image/png' })
 }
 
+export async function exportPostmanCollection(page: Page, collectionName: string) {
+  const sidebar = await openBrunoSidebar(page);
+  await sidebar.collectionAction(collectionName, 'export');
+
+  const webview = await getWebviewByTitle(page, 'Export Collection');
+  await webview.locator('[data-testid="export-option-postman"]:not(.disabled)').click();
+
+  const exportPath = path.join(os.tmpdir(), `${collectionName}-${Date.now()}_postman.json`);
+  const saveInput = buildCommonLocators(page).workbench.quickInputBox();
+  await saveInput.fill(exportPath);
+  await expect(async () => {
+    await page.keyboard.press('Enter');
+    await expect(saveInput).toBeHidden();
+  }).toPass();
+
+  await webview.owner().waitFor({ state: 'detached', timeout: 10_000 });
+  return JSON.parse(fs.readFileSync(exportPath, 'utf8'));
+}
+
 export const authModeLabels: Record<AuthMode, string> = {
   inherit: 'Inherit',
   none: 'No Auth',
@@ -1193,6 +1213,37 @@ export async function setBody(page: Page, request: string, json: string): Promis
   await saveRequest(page);
 }
 
+export async function setScript(page: Page, target: string, script: { preRequest?: string; postResponse?: string }): Promise<void> {
+  const itemType = await openTab(page, target, 'Script');
+  const editor = activeEditor(page);
+
+  if (script.preRequest) {
+    await editor.getByTestId('tab-trigger-pre-request').click();
+    await setCodeMirrorValue(page, editor.getByTestId(`${itemType}-level-pre-request-script-editor`).locator('.CodeMirror'), script.preRequest);
+  }
+
+  if (script.postResponse) {
+    await editor.getByTestId('tab-trigger-post-response').click();
+    await setCodeMirrorValue(page, editor.getByTestId(`${itemType}-level-post-response-script-editor`).locator('.CodeMirror'), script.postResponse);
+  }
+
+  await saveItem(page, itemType);
+}
+
+export async function setTests(page: Page, target: string, test: string): Promise<void> {
+  const itemType = await openTab(page, target, 'Tests');
+  await setCodeMirrorValue(page, activeEditor(page).getByTestId(`${itemType}-test-script-editor`).locator('.CodeMirror'), test);
+  await saveItem(page, itemType);
+}
+
+export async function setDocs(page: Page, target: string, doc: string): Promise<void> {
+  const itemType = await openTab(page, target, 'Docs');
+  const editor = activeEditor(page);
+  await editor.getByTestId('docs-edit-toggle').click();
+  await setCodeMirrorValue(page, editor.getByTestId('docs-editor').locator('.CodeMirror'), doc);
+  await saveItem(page, itemType);
+}
+
 type TableRow = { name: string; value: string };
 // Which Vars table to target: the Pre Request or the Post Response one.
 type VarsPhase = 'preRequest' | 'postResponse';
@@ -1229,6 +1280,12 @@ export async function setHeaders(page: Page, target: string, rows: TableRow[]): 
   const { headersTable } = buildCommonLocators(activeEditor(page));
   await addTableRows(page, headersTable(itemType), rows, 'editor');
   await saveItem(page, itemType);
+}
+
+export async function setAssertions(page: Page, request: string, rows: TableRow[]): Promise<void> {
+  await openTab(page, request, 'Assert');
+  await addTableRows(page, activeEditor(page).getByTestId('assertions-table'), rows, 'input');
+  await saveRequest(page);
 }
 
 // Edits the value of existing rows, matched by name; fails if a name has no row (add those with setVars/setHeaders).

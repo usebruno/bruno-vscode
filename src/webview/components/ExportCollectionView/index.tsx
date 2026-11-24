@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useStore } from 'react-redux';
 import styled from 'styled-components';
 import { IconUpload, IconLoader2, IconAlertTriangle, IconShare } from '@tabler/icons';
 import Bruno from 'components/Bruno';
@@ -8,6 +8,7 @@ import { cloneDeep, each, get } from 'lodash';
 import { findCollectionByUid, areItemsLoading } from 'utils/collections/index';
 import { ipcRenderer } from 'utils/ipc';
 import toast from 'react-hot-toast';
+import type { RootState } from 'providers/ReduxStore';
 
 const StyledWrapper = styled.div`
   width: 100%;
@@ -247,6 +248,7 @@ interface ExportCollectionViewProps {
 }
 
 const ExportCollectionView: React.FC<ExportCollectionViewProps> = ({ collection }) => {
+  const store = useStore<RootState>();
   const [isExporting, setIsExporting] = useState(false);
   const isCollectionLoading = areItemsLoading(collection);
 
@@ -296,7 +298,9 @@ const ExportCollectionView: React.FC<ExportCollectionViewProps> = ({ collection 
 
     setIsExporting(true);
     try {
-      const exportData = prepareCollectionForExport(collection);
+      await ipcRenderer.invoke('renderer:mount-collection', { collectionUid: collection.uid, collectionPathname: collection.pathname });
+      const loadedCollection = findCollectionByUid(store.getState().collections.collections, collection.uid);
+      const exportData = await ipcRenderer.invoke('renderer:convert-bruno-to-postman', cloneDeep(loadedCollection));
       const content = JSON.stringify(exportData, null, 2);
 
       const result = await ipcRenderer.invoke('sidebar:save-file', {
@@ -354,6 +358,7 @@ const ExportCollectionView: React.FC<ExportCollectionViewProps> = ({ collection 
 
           <div
             className={`export-option ${isDisabled ? 'disabled' : ''}`}
+            data-testid="export-option-postman"
             onClick={isDisabled ? undefined : handleExportPostmanCollection}
           >
             <div className="icon-container">

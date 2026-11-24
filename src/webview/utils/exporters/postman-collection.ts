@@ -2,7 +2,7 @@ import React from 'react';
 import * as FileSaver from 'file-saver';
 import { brunoToPostman } from '@usebruno/converters';
 
-export const exportCollection = (collection: any) => {
+export const exportToPostman = (collection: any) => {
   const collectionToExport = brunoToPostman(collection);
 
   const fileName = `${collection.name}.json`;
@@ -11,4 +11,4 @@ export const exportCollection = (collection: any) => {
   FileSaver.saveAs(fileBlob, fileName);
 };
 
-export default exportCollection;
+export default exportToPostman;

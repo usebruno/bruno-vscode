@@ -127,7 +127,7 @@ test.describe('Script errors in the response pane', () => {
     await expect(filePath).toHaveClass(/navigable/);
     await filePath.click();
 
-    const postResponseEditor = editor.locator('[data-testid="post-response-script-editor"]');
+    const postResponseEditor = editor.locator('[data-testid="request-level-post-response-script-editor"]');
     await expect(postResponseEditor).toBeVisible();
     await expect(postResponseEditor.locator('.cm-error-line-flash')).toHaveCount(1);
   });
@@ -274,7 +274,7 @@ test.describe('Script errors in the response pane', () => {
     await settings.locator('[role="tab"]').filter({ hasText: 'Script' }).first().click();
     await settings.locator('.tab-trigger').filter({ hasText: 'Post Response' }).first().click();
 
-    const folderScript = settings.locator('[data-testid="folder-post-response-script-editor"]');
+    const folderScript = settings.locator('[data-testid="folder-level-post-response-script-editor"]');
     await expect(folderScript.locator('.CodeMirror')).toBeVisible({ timeout: 15_000 });
     await setCodeMirrorValue(page, folderScript.locator('.CodeMirror'), "throw new Error('boom from the folder draft');");
 
@@ -324,7 +324,7 @@ test.describe('Script errors in the response pane', () => {
     await card.locator('[data-testid="script-error-file-path"]').click();
 
     const settings = await frameWith(page, '[data-testid="folder-settings"]');
-    const preRequest = settings.locator('[data-testid="folder-pre-request-script-editor"]');
+    const preRequest = settings.locator('[data-testid="folder-level-pre-request-script-editor"]');
     await expect(preRequest).toBeVisible({ timeout: 15_000 });
     await expect(preRequest.locator('.cm-error-line-flash')).toHaveCount(1);
 
@@ -332,7 +332,7 @@ test.describe('Script errors in the response pane', () => {
     await expect(preRequest.locator('.cm-error-line-flash')).toHaveCount(0);
 
     await settings.locator('.tab-trigger').filter({ hasText: 'Post Response' }).first().click();
-    const postResponse = settings.locator('[data-testid="folder-post-response-script-editor"]');
+    const postResponse = settings.locator('[data-testid="folder-level-post-response-script-editor"]');
     await expect(postResponse).toBeVisible();
 
     await setCodeMirrorValue(page, postResponse.locator('.CodeMirror'), 'const edited = 1;');
