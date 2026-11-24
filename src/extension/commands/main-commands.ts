@@ -86,14 +86,18 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
               'Save',
               "Don't Save"
             );
-            if (!choice) return;
+            if (!choice) {
+              return;
+            }
 
             if (choice === 'Save') {
               await vscode.commands.executeCommand('bruno.saveFromEditor');
               for (let attempt = 0; attempt < 50 && isDirty(uri.fsPath); attempt++) {
                 await new Promise((resolve) => setTimeout(resolve, 100));
               }
-              if (isDirty(uri.fsPath)) return;
+              if (isDirty(uri.fsPath)) {
+                return;
+              }
             } else {
               closeCommand = 'workbench.action.revertAndCloseActiveEditor';
             }
