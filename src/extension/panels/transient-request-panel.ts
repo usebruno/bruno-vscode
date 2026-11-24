@@ -137,20 +137,22 @@ export async function openTransientRequestPanel(
   panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'bruno-icon.png');
 
   transientPanels.set(itemUid, panel);
-  panel.webview.html = WebviewHelper.getHtmlForWebview(panel.webview, context.extensionUri);
-  stateManager.addWebview(panel.webview);
-  stateManager.setActiveEditorWebview(panel.webview);
+  // Taken while the panel is alive: once it is disposed, reading `panel.webview` throws.
+  const webview = panel.webview;
+  webview.html = WebviewHelper.getHtmlForWebview(webview, context.extensionUri);
+  stateManager.addWebview(webview);
+  stateManager.setActiveEditorWebview(webview);
 
   panel.onDidChangeViewState((e) => {
     if (e.webviewPanel.active) {
-      stateManager.setActiveEditorWebview(panel.webview);
+      stateManager.setActiveEditorWebview(webview);
     }
   });
 
   panel.onDidDispose(() => {
     if (savedPanels.has(itemUid)) {
       savedPanels.delete(itemUid);
-      stateManager.removeWebview(panel.webview);
+      stateManager.removeWebview(webview);
       transientPanels.delete(itemUid);
       openTransients.delete(itemUid);
       return;
@@ -159,7 +161,7 @@ export async function openTransientRequestPanel(
     const GRACE_MS = 10_000;
 
     const timer = setTimeout(() => {
-      stateManager.removeWebview(panel.webview);
+      stateManager.removeWebview(webview);
       transientPanels.delete(itemUid);
       openTransients.delete(itemUid);
     }, GRACE_MS);
@@ -182,7 +184,7 @@ export async function openTransientRequestPanel(
   });
 
   const webviewSender = (channel: string, ...args: unknown[]) => {
-    stateManager.sendTo(panel.webview, channel, ...args);
+    stateManager.sendTo(webview, channel, ...args);
   };
 
   let collectionLoaded = false;
@@ -204,7 +206,7 @@ export async function openTransientRequestPanel(
     const item = openTransients.get(itemUid)?.item;
     if (item) {
       // Reopened (Undo) with the item as it was: this webview's store takes it as is.
-      stateManager.sendTo(panel.webview, 'main:reopen-transient-request', {
+      stateManager.sendTo(webview, 'main:reopen-transient-request', {
         collectionUid,
         item
       });
@@ -212,7 +214,7 @@ export async function openTransientRequestPanel(
       // 2) Flip the view as soon as the item is in Redux. ViewContainer will
       // render the request pane; any missing data (e.g. environments) fills
       // in progressively as the background scan completes.
-      stateManager.sendTo(panel.webview, 'main:set-view', {
+      stateManager.sendTo(webview, 'main:set-view', {
         viewType: 'request',
         collectionUid,
         itemUid
@@ -220,7 +222,7 @@ export async function openTransientRequestPanel(
     } else if (create) {
       // Nothing stored yet: the webview builds the item from the collection it just
       // received (presets, format) and reports it back through transient:item-updated.
-      stateManager.sendTo(panel.webview, 'main:new-transient-request', {
+      stateManager.sendTo(webview, 'main:new-transient-request', {
         collectionUid,
         itemUid,
         name: itemName,
@@ -242,11 +244,11 @@ export async function openTransientRequestPanel(
     }
   };
 
-  panel.webview.onDidReceiveMessage(async (message: IpcMessage) => {
+  webview.onDidReceiveMessage(async (message: IpcMessage) => {
     const { type, channel, args, requestId } = message;
 
     if (type === 'invoke' && requestId) {
-      setCurrentWebview(panel.webview);
+      setCurrentWebview(webview);
 
       try {
         let result: unknown;
@@ -257,7 +259,7 @@ export async function openTransientRequestPanel(
           result = null;
         }
 
-        panel.webview.postMessage({
+        webview.postMessage({
           type: 'response',
           requestId,
           result
@@ -269,7 +271,7 @@ export async function openTransientRequestPanel(
           return;
         }
       } catch (error) {
-        panel.webview.postMessage({
+        webview.postMessage({
           type: 'response',
           requestId,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -278,7 +280,7 @@ export async function openTransientRequestPanel(
         clearCurrentWebview();
       }
     } else if (type === 'send') {
-      setCurrentWebview(panel.webview);
+      setCurrentWebview(webview);
       try {
         if (channel === 'open-external' && typeof args?.[0] === 'string') {
           vscode.env.openExternal(vscode.Uri.parse(args[0]));
@@ -324,7 +326,7 @@ export async function openTransientRequestPanel(
         if (channel === 'transient:item-ready' && args?.[0]) {
           const { itemUid: readyItemUid, collectionUid: readyCollUid } = args[0] as { itemUid: string; collectionUid: string };
           if (readyItemUid && readyCollUid) {
-            stateManager.sendTo(panel.webview, 'main:set-view', {
+            stateManager.sendTo(webview, 'main:set-view', {
               viewType: 'request',
               collectionUid: readyCollUid,
               itemUid: readyItemUid
