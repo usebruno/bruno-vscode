@@ -163,6 +163,22 @@ class Oauth2Store {
       return undefined;
     }
   }
+
+  clearCredentialsByCredentialsId({ collectionUid, credentialsId }: { collectionUid: string; credentialsId: string }): OAuth2DataForCollection | undefined {
+    try {
+      const oauth2DataForCollection = this.getOauth2DataOfCollection({ collectionUid });
+      const filteredCredentials = oauth2DataForCollection?.credentials?.filter((c) => c?.credentialsId !== credentialsId);
+      const newOauth2DataForCollection: OAuth2DataForCollection = {
+        ...oauth2DataForCollection,
+        credentials: filteredCredentials
+      };
+      this.updateOauth2DataOfCollection({ collectionUid, data: newOauth2DataForCollection });
+      return newOauth2DataForCollection;
+    } catch (err) {
+      console.error('error clearing oauth2 credentials by credentialsId from cache', err);
+      return undefined;
+    }
+  }
 }
 
 export default Oauth2Store;

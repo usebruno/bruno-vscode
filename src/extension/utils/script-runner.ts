@@ -5,6 +5,7 @@ import isEqual from 'lodash/isEqual';
 import { sendToWebview, broadcastToAllWebviews } from '../ipc/handlers';
 import { setRuntimeVariables } from '../store/runtime-variables';
 import logsStore, { LogLevel } from '../store/logs';
+import { clearOauth2CredentialsByCredentialsId } from './oauth2';
 import type { ScriptErrorContext } from '@bruno-types';
 
 const decomment = (script: string): string => {
@@ -31,6 +32,7 @@ interface ScriptContext {
 interface ScriptRunResult {
   success: boolean;
   skipRequest?: boolean;
+  stopExecution?: boolean;
   nextRequestName?: string;
   envVariables?: Record<string, unknown> | null;
   runtimeVariables?: Record<string, unknown> | null;
@@ -48,6 +50,7 @@ interface TestRunResult {
     passed: boolean;
     error?: string;
   }>;
+  stopExecution?: boolean;
   error?: string;
   errorContext?: ScriptErrorContext | null;
 }
@@ -135,6 +138,28 @@ const emitScriptVariableUpdates = (
   }
 };
 
+const resetOauth2Credentials = (credentialIds: unknown, request: unknown, context: ScriptContext): void => {
+  if (!Array.isArray(credentialIds) || !credentialIds.length) return;
+
+  const req = request as {
+    oauth2Credentials?: { credentialsId?: string } | null;
+    oauth2CredentialVariables?: Record<string, unknown>;
+  };
+  for (const credentialsId of credentialIds as string[]) {
+    clearOauth2CredentialsByCredentialsId({ collectionUid: context.collectionUid, credentialsId });
+    if (req.oauth2Credentials?.credentialsId === credentialsId) {
+      req.oauth2Credentials = null;
+    }
+    const prefix = `$oauth2.${credentialsId}.`;
+    for (const key of Object.keys(req.oauth2CredentialVariables || {})) {
+      if (key.startsWith(prefix)) {
+        delete req.oauth2CredentialVariables![key];
+      }
+    }
+    broadcastToAllWebviews('main:credentials-clear', { collectionUid: context.collectionUid, credentialsId });
+  }
+};
+
 export const runPreRequestScript = async (
   request: unknown,
   context: ScriptContext
@@ -171,12 +196,14 @@ export const runPreRequestScript = async (
     );
 
     emitScriptVariableUpdates(result, context, envVarsBefore);
+    resetOauth2Credentials((result as any).oauth2CredentialsToReset, request, context);
 
     emitScriptTestResults('main:pre-request-test-results', (result as any).results, context);
 
     return {
       success: true,
       skipRequest: result.skipRequest,
+      stopExecution: result.stopExecution,
       nextRequestName: result.nextRequestName,
       envVariables: result.envVariables,
       runtimeVariables: result.runtimeVariables,
@@ -196,6 +223,30 @@ export const runPreRequestScript = async (
       envVariables: err.partialResults?.envVariables,
       runtimeVariables: err.partialResults?.runtimeVariables as Record<string, unknown> | undefined
     };
+  }
+};
+
+export const runOnFailHandler = async (
+  request: unknown,
+  error: unknown,
+  errorMessage: string,
+  context: ScriptContext
+): Promise<string> => {
+  const handler = (request as { onFailHandler?: unknown } | undefined)?.onFailHandler;
+  if (typeof handler !== 'function') {
+    return errorMessage;
+  }
+
+  const envVarsBefore = { ...context.envVars };
+  try {
+    const result = await handler(error);
+    if (result) {
+      emitScriptVariableUpdates(result, context, envVarsBefore);
+    }
+    return errorMessage;
+  } catch (handlerError) {
+    console.error('Error executing onFail handler', handlerError);
+    return `1. Request failed: ${errorMessage}\n2. Error executing onFail handler: ${(handlerError as Error)?.message || 'Unknown error'}`;
   }
 };
 
@@ -279,11 +330,13 @@ export const runPostResponseScript = async (
     );
 
     emitScriptVariableUpdates(result, context, envVarsBefore);
+    resetOauth2Credentials((result as any).oauth2CredentialsToReset, request, context);
 
     emitScriptTestResults('main:post-response-test-results', (result as any).results, context);
 
     return {
       success: true,
+      stopExecution: result.stopExecution,
       nextRequestName: result.nextRequestName,
       envVariables: result.envVariables,
       runtimeVariables: result.runtimeVariables,
@@ -353,7 +406,8 @@ export const runTests = async (
 
     return {
       success: true,
-      results: result.results
+      results: result.results,
+      stopExecution: result.stopExecution
     };
   } catch (error) {
     const err = error as ScriptError;

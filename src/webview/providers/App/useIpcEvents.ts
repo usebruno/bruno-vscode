@@ -41,6 +41,7 @@ import { hasPlatformSupport } from 'utils/common/platform';
 import { globalEnvironmentsUpdateEvent, updateGlobalEnvironments } from 'providers/ReduxStore/slices/global-environments';
 import {
   collectionAddOauth2CredentialsByUrl,
+  collectionClearOauth2CredentialsByCredentialsId,
   updateCollectionLoadingState,
   updateCollectionPathname,
   testResultsReceived,
@@ -450,6 +451,10 @@ const useIpcEvents = () => {
       dispatch(hydrateCollectionSecurityConfig(val));
     });
 
+    const removeCollectionOauth2CredentialsClearListener = ipcRenderer.on('main:credentials-clear', (val: unknown) => {
+      dispatch(collectionClearOauth2CredentialsByCredentialsId(val as { collectionUid: string; credentialsId: string }));
+    });
+
     const removeCollectionOauth2CredentialsUpdatesListener = ipcRenderer.on('main:credentials-update', (val: unknown) => {
       const credData = val as Partial<CollectionAddOauth2CredentialsByUrlPayload>;
       const payload: CollectionAddOauth2CredentialsByUrlPayload = {
@@ -685,6 +690,7 @@ const useIpcEvents = () => {
       removeSnapshotHydrationListener();
       removeSecurityConfigUpdatedListener();
       removeCollectionOauth2CredentialsUpdatesListener();
+      removeCollectionOauth2CredentialsClearListener();
       removeHttpStreamNewDataListener();
       removeHttpStreamEndListener();
       removeCollectionLoadingStateListener();

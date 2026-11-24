@@ -120,6 +120,7 @@ import type {
   StreamDataReceivedPayload,
   CollectionAddOauth2CredentialsByUrlPayload,
   CollectionClearOauth2CredentialsByUrlPayload,
+  CollectionClearOauth2CredentialsByCredentialsIdPayload,
   CollectionAddEnvFileEventPayload,
   MoveCollectionPayload,
   ResetRunResultsPayload,
@@ -2689,6 +2690,17 @@ export const collectionsSlice = createSlice({
       );
     },
 
+    collectionClearOauth2CredentialsByCredentialsId: (state, action: PayloadAction<CollectionClearOauth2CredentialsByCredentialsIdPayload>) => {
+      const { collectionUid, credentialsId } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (!collection) return;
+      if (!collection.oauth2Credentials || !Array.isArray(collection.oauth2Credentials)) return;
+
+      collection.oauth2Credentials = collection.oauth2Credentials.filter(
+        (creds: OAuth2CredentialEntry) => creds.credentialsId !== credentialsId
+      );
+    },
+
     collectionAddEnvFileEvent: (state, action: PayloadAction<CollectionAddEnvFileEventPayload>) => {
       const { environment, collectionUid } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
@@ -3351,6 +3363,7 @@ export const {
   streamDataReceived,
   collectionAddOauth2CredentialsByUrl,
   collectionClearOauth2CredentialsByUrl,
+  collectionClearOauth2CredentialsByCredentialsId,
   collectionAddEnvFileEvent,
   moveCollection,
   resetRunResults,

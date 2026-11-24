@@ -62,6 +62,7 @@ declare module '@usebruno/js' {
     globalEnvironmentVariables?: Record<string, unknown> | null;
     nextRequestName?: string;
     skipRequest?: boolean;
+    stopExecution?: boolean;
     error?: string;
   }
 
@@ -78,6 +79,7 @@ declare module '@usebruno/js' {
     runtimeVariables?: Record<string, unknown> | null;
     collectionVariables?: Record<string, unknown> | null;
     globalEnvironmentVariables?: Record<string, unknown> | null;
+    stopExecution?: boolean;
   }
 
   export interface VarsResult {

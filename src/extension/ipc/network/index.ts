@@ -2,7 +2,7 @@
 import { AxiosResponse, AxiosError } from 'axios';
 import decomment from 'decomment';
 import { registerHandler, sendToWebview, broadcastToAllWebviews } from '../handlers';
-import { prepareRequest, BrunoRequest as PrepareRequestType } from './prepare-request';
+import { prepareRequest, setAuthHeaders, BrunoRequest as PrepareRequestType } from './prepare-request';
 import { interpolateVars } from './interpolate-vars';
 import { createAxiosInstance, axiosOptionsFromCertsAndProxyConfig, AxiosInstanceOptions } from './axios-instance';
 import { resolveAwsV4Credentials, addAwsV4Interceptor, AwsV4Config } from './awsv4auth-helper';
@@ -16,13 +16,13 @@ import { getPreferences, preferencesUtil } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
 import { getRuntimeVariables, setRuntimeVariables } from '../../store/runtime-variables';
 import { getCertsAndProxyConfig } from './cert-utils';
-import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, hydrateRequestWithUuid, Item } from '../../utils/collection';
+import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, hydrateRequestWithUuid, resolveInheritedSettings, Item } from '../../utils/collection';
 import { getCollectionFormat } from '../../utils/filesystem';
 import fs from 'fs';
 import path from 'path';
-import { parseRequest } from '../../utils/parse';
+import { parseRequest, parseFolder } from '../../utils/parse';
 import { registerOAuth2Handlers, applyOAuth2ToRequest } from './oauth2-handlers';
-import { runPreRequestScript, runPostResponseVars, runPostResponseScript, runTests, runAssertions } from '../../utils/script-runner';
+import { runPreRequestScript, runPostResponseVars, runPostResponseScript, runTests, runAssertions, runOnFailHandler } from '../../utils/script-runner';
 import type { ScriptErrorContext, ScriptMetadata } from '@bruno-types';
 import { v4 as uuidv4 } from 'uuid';
 import { cloneDeep, get, filter, forOwn } from 'lodash';
@@ -82,7 +82,11 @@ const promisifyStream = async (stream: Readable): Promise<Buffer> => {
  * Parse response data from buffer (like bruno-electron's parseDataFromResponse)
  * Returns data as parsed object and dataBuffer as BASE64 encoded string (required by webview)
  */
-const parseDataFromResponse = (rawBuffer: Buffer, contentType: string): { data: unknown; dataBuffer: string } => {
+const parseDataFromResponse = (
+  rawBuffer: Buffer,
+  contentType: string,
+  disableParsingResponseJson = false
+): { data: unknown; dataBuffer: string } => {
   const charsetMatch = /charset=([^()<>@,;:"/[\]?.=\s]*)/i.exec(contentType || '');
   const charset = charsetMatch?.[1] || 'utf-8';
 
@@ -98,7 +102,7 @@ const parseDataFromResponse = (rawBuffer: Buffer, contentType: string): { data: 
   let parsedData: unknown = dataString;
   try {
     const cleanedData = dataString.replace(/^\uFEFF/, '');
-    parsedData = JSON.parse(cleanedData);
+    parsedData = disableParsingResponseJson ? cleanedData : JSON.parse(cleanedData);
   } catch {
     // Not JSON, keep as string
   }
@@ -208,6 +212,19 @@ interface RequestOptions {
   };
   disableCookies?: boolean;
 }
+
+const networkErrors = new WeakMap<RequestResult, unknown>();
+
+const handleNetworkFailure = async (
+  result: RequestResult,
+  scriptRequest: unknown,
+  scriptContext: Parameters<typeof runOnFailHandler>[3]
+): Promise<void> => {
+  const networkError = networkErrors.get(result);
+  if (networkError && result.error) {
+    result.error = await runOnFailHandler(scriptRequest, networkError, result.error, scriptContext);
+  }
+};
 
 interface RequestResult {
   status: number;
@@ -477,7 +494,7 @@ const executeRequest = async (
       response = await axiosInstance.request(preparedRequest);
     } catch (error) {
       if ((error as Error).name === 'AbortError' || (error as Error).name === 'CanceledError') {
-        throw new Error('Request cancelled');
+        throw Object.assign(new Error('Request cancelled'), { isCancel: true });
       }
       throw error;
     }
@@ -496,7 +513,8 @@ const executeRequest = async (
     const responseSize = rawBuffer.length;
 
     const responseContentType = responseHeaders['content-type'] || '';
-    const { data: parsedData, dataBuffer: dataString } = parseDataFromResponse(rawBuffer, responseContentType);
+    const disableParsingResponseJson = Boolean((request as { __brunoDisableParsingResponseJson?: boolean }).__brunoDisableParsingResponseJson);
+    const { data: parsedData, dataBuffer: dataString } = parseDataFromResponse(rawBuffer, responseContentType, disableParsingResponseJson);
 
     // Note: Cookies are already saved to the shared cookieJar in the axios interceptor
     if (!options.disableCookies && preferencesUtil.shouldStoreCookies()) {
@@ -544,7 +562,11 @@ const executeRequest = async (
           errorRawBuffer = await promisifyStream(axiosError.response.data as Readable);
           errorSize = errorRawBuffer.length;
           const contentType = responseHeaders['content-type'] || '';
-          const parsed = parseDataFromResponse(errorRawBuffer, contentType);
+          const parsed = parseDataFromResponse(
+            errorRawBuffer,
+            contentType,
+            Boolean((request as { __brunoDisableParsingResponseJson?: boolean }).__brunoDisableParsingResponseJson)
+          );
           errorData = parsed.data;
           errorDataString = parsed.dataBuffer;
         } catch {
@@ -579,7 +601,7 @@ const executeRequest = async (
 
     // Network error or other failure
     const errorMessage = (error as Error).message || 'Error occurred while executing the request!';
-    return {
+    const networkErrorResult: RequestResult = {
       status: 0,
       // Desktop reports the axios error code here and keeps the readable text in `error`.
       statusText: axiosError.code || errorMessage,
@@ -593,6 +615,10 @@ const executeRequest = async (
       requestSent,
       error: errorMessage
     };
+    if (!(error as { isCancel?: boolean }).isCancel) {
+      networkErrors.set(networkErrorResult, error);
+    }
+    return networkErrorResult;
   } finally {
     if (!existingController) {
       deleteCancelToken(cancelTokenUid);
@@ -713,6 +739,35 @@ const hydrateItemRequestFromDisk = async (
   }
 };
 
+const loadItemTreeFromDisk = async (
+  collection: Record<string, unknown>,
+  itemPathname: string,
+  collectionPath: string
+): Promise<{ item: Record<string, unknown>; collection: Record<string, unknown> } | undefined> => {
+  if (!fs.existsSync(itemPathname)) return undefined;
+
+  const item: Record<string, unknown> = { uid: uuidv4(), pathname: itemPathname, partial: true };
+  await hydrateItemRequestFromDisk(item, collectionPath);
+
+  const format = getCollectionFormat(collectionPath);
+
+  const isCollectionSubfolder = (dir: string) => {
+    const relative = path.relative(collectionPath, dir);
+    return Boolean(relative) && !relative.startsWith('..');
+  };
+
+  let node = item;
+  for (let dir = path.dirname(itemPathname); isCollectionSubfolder(dir); dir = path.dirname(dir)) {
+    const folderFilePath = path.join(dir, format === 'yml' ? 'folder.yml' : 'folder.bru');
+    const root = fs.existsSync(folderFilePath)
+      ? await parseFolder(await fs.promises.readFile(folderFilePath, 'utf8'), { format })
+      : {};
+    node = { uid: uuidv4(), type: 'folder', name: path.basename(dir), pathname: dir, root, items: [node] };
+  }
+
+  return { item, collection: { ...collection, items: [node] } };
+};
+
 const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest => {
   const _item = cloneDeep(item) as Record<string, unknown>;
   const _collection = collection as Record<string, unknown>;
@@ -777,36 +832,6 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
 
   const settings = (_item.draft ? (_item.draft as Record<string, unknown>).settings : _item.settings) as Record<string, unknown> || {};
 
-  let digestConfig: { username?: string; password?: string } | undefined;
-  if (auth?.mode === 'digest' && auth.digest) {
-    digestConfig = {
-      username: auth.digest.username,
-      password: auth.digest.password
-    };
-  }
-
-  let ntlmConfig: { username: string; password: string; domain?: string } | undefined;
-  if (auth?.mode === 'ntlm' && auth.ntlm) {
-    ntlmConfig = {
-      username: auth.ntlm.username,
-      password: auth.ntlm.password,
-      domain: auth.ntlm.domain
-    }
-  }
-
-  let awsv4config: AwsV4Config | undefined;
-  if (auth?.mode === 'awsv4' && auth.awsv4) {
-    const awsv4 = auth.awsv4 as AwsV4Config;
-    awsv4config = {
-      accessKeyId: awsv4.accessKeyId,
-      secretAccessKey: awsv4.secretAccessKey,
-      sessionToken: awsv4.sessionToken,
-      service: awsv4.service,
-      region: awsv4.region,
-      profileName: awsv4.profileName
-    };
-  }
-
   // This is needed for BrunoRequest.getBody() to work in scripts/assertions
   const data = getRequestData(body);
 
@@ -819,12 +844,12 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
 
   const globalEnvironmentVariables = (_collection.globalEnvironmentVariables || {}) as Record<string, unknown>;
 
-  return {
+  const preparedRequest = {
     uid: _item.uid as string,
     pathname: (_item.pathname as string) || '',
     url: (request.url as string) || '',
     method: (request.method as string) || 'GET',
-    headers,
+    headers: headersArrayToObject(headers),
     params,
     pathParams,
     body,
@@ -835,16 +860,13 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
     testsMetadata: request.testsMetadata as ScriptMetadata | null,
     vars,
     assertions,
-    timeout: (settings.timeout === 'inherit' ? undefined : settings.timeout as number) || 0,
+    timeout: resolveInheritedSettings(settings).timeout as number,
     settings: {
       followRedirects: settings.followRedirects as boolean | undefined,
       maxRedirects: settings.maxRedirects as number | undefined,
       timeout: settings.timeout === 'inherit' ? undefined : settings.timeout as number | undefined,
       encodeUrl: settings.encodeUrl as boolean | undefined
     },
-    digestConfig,
-    ntlmConfig,
-    awsv4config,
     // Additional properties for scripts
     name,
     tags,
@@ -854,6 +876,9 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
     globalEnvironmentVariables,
     promptVariables: (_collection.promptVariables || {}) as Record<string, unknown>
   };
+
+  const collectionRoot = get(_collection, 'draft.root') || _collection.root;
+  return setAuthHeaders(preparedRequest, request as { auth?: { mode?: string } }, collectionRoot);
 };
 
 /** Sent on success too, with a null message, since the webview keys the card off the last report. */
@@ -905,7 +930,8 @@ const registerNetworkIpc = (): void => {
         requestVariables: request.requestVariables || {},
         globalEnvironmentVariables: request.globalEnvironmentVariables || {},
         name: request.name || '',
-        tags: request.tags || []
+        tags: request.tags || [],
+        __bruno__executionMode: 'standalone'
       };
 
       const scriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
@@ -945,12 +971,19 @@ const registerNetworkIpc = (): void => {
             itemPathname = `${itemPathname}.bru`;
           }
         }
-        const foundItem = findItemInCollectionByPathname(_collection as never, itemPathname);
+        let foundItem = findItemInCollectionByPathname(_collection as never, itemPathname) as unknown as Record<string, unknown> | undefined;
+        let itemCollection = _collection;
+        if (!foundItem) {
+          const loaded = await loadItemTreeFromDisk(_collection, itemPathname, collectionPath);
+          foundItem = loaded?.item;
+          itemCollection = loaded?.collection ?? _collection;
+        }
         if (!foundItem) {
           throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
         }
         const innerItem = cloneDeep(foundItem);
-        const innerRequest = prepareItemRequest(innerItem, collection);
+        await hydrateItemRequestFromDisk(innerItem, collectionPath);
+        const innerRequest = prepareItemRequest(innerItem, itemCollection);
         const innerScriptRequest = {
           ...innerRequest,
           headers: headersArrayToObject(innerRequest.headers),
@@ -959,7 +992,8 @@ const registerNetworkIpc = (): void => {
           requestVariables: innerRequest.requestVariables || {},
           globalEnvironmentVariables: innerRequest.globalEnvironmentVariables || {},
           name: innerRequest.name || '',
-          tags: innerRequest.tags || []
+          tags: innerRequest.tags || [],
+          __bruno__executionMode: 'standalone'
         };
         const innerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
         const innerIsFormUrlEncoded = innerScriptContentType === 'application/x-www-form-urlencoded' ||
@@ -974,7 +1008,7 @@ const registerNetworkIpc = (): void => {
           cancelTokenUid,
           collectionUid,
           collectionPath,
-          itemUid: innerItem.uid,
+          itemUid: innerItem.uid as string,
           itemPathname,
           envVars,
           collectionVariables: innerScriptRequest.collectionVariables || {},
@@ -989,7 +1023,7 @@ const registerNetworkIpc = (): void => {
           collectionUid,
           collectionPath,
           collectionName: _collection.name as string || '',
-          itemUid: innerItem.uid,
+          itemUid: innerItem.uid as string,
           requestUid: uuidv4(),
           envVars: envVars as Record<string, unknown>,
           runtimeVariables: mutableRuntimeVariables, // Shared with parent
@@ -1031,6 +1065,7 @@ const registerNetworkIpc = (): void => {
         }
 
         const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
+        await handleNetworkFailure(result, innerScriptRequest, innerScriptContext);
 
         const innerResponse = {
           status: result.status,
@@ -1172,6 +1207,7 @@ const registerNetworkIpc = (): void => {
       // Use scriptRequest so pre-request script changes are respected
       // scriptRequest will be mutated by interpolateVars inside executeRequest
       const result = await executeRequest(scriptRequest as unknown as BrunoRequest, context);
+      await handleNetworkFailure(result, scriptRequest, scriptContext);
 
       const oauth2Credentials = (scriptRequest as {
         oauth2Credentials?: {
@@ -1296,13 +1332,15 @@ const registerNetworkIpc = (): void => {
       setRuntimeVariables(collectionUid, mutableRuntimeVariables);
       broadcastRuntimeVariables(collectionUid, mutableRuntimeVariables);
 
+      const finalDataBuffer = Buffer.isBuffer(response.dataBuffer) ? response.dataBuffer : result.rawBuffer;
+
       return {
         status: result.status,
         statusText: result.statusText,
         headers: result.headers,
-        data: result.data,
-        dataBuffer: result.dataBuffer,
-        size: result.size,
+        data: response.data,
+        dataBuffer: finalDataBuffer ? finalDataBuffer.toString('base64') : result.dataBuffer,
+        size: finalDataBuffer ? finalDataBuffer.length : result.size,
         duration: result.duration,
         timeline: result.timeline,
         requestSent: result.requestSent,
@@ -1855,7 +1893,9 @@ const registerNetworkIpc = (): void => {
         }
 
         let currentRequestIndex = 0;
+        let stopRunnerExecution = false;
         while (currentRequestIndex < folderRequests.length) {
+          stopRunnerExecution = false;
           if (abortController.signal.aborted) {
             const error = new Error('Runner execution cancelled');
             throw error;
@@ -1905,7 +1945,8 @@ const registerNetworkIpc = (): void => {
               requestVariables: request.requestVariables || {},
               globalEnvironmentVariables: request.globalEnvironmentVariables || {},
               name: request.name || '',
-              tags: request.tags || []
+              tags: request.tags || [],
+              __bruno__executionMode: 'runner'
             };
 
             const runnerScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
@@ -1943,7 +1984,8 @@ const registerNetworkIpc = (): void => {
                 requestVariables: innerRequest.requestVariables || {},
                 globalEnvironmentVariables: innerRequest.globalEnvironmentVariables || {},
                 name: innerRequest.name || '',
-                tags: innerRequest.tags || []
+                tags: innerRequest.tags || [],
+                __bruno__executionMode: 'standalone'
               };
               const runnerInnerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
               const runnerInnerIsFormUrlEncoded = runnerInnerScriptContentType === 'application/x-www-form-urlencoded' ||
@@ -2013,6 +2055,7 @@ const registerNetworkIpc = (): void => {
               }
 
               const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
+              await handleNetworkFailure(result, innerScriptRequest, innerScriptContext);
 
               const innerResponse = {
                 status: result.status,
@@ -2100,6 +2143,7 @@ const registerNetworkIpc = (): void => {
 
               skipRequest = preRequestResult.skipRequest || false;
               nextRequestName = preRequestResult.nextRequestName;
+              stopRunnerExecution = Boolean(preRequestResult.stopExecution);
 
               if (preRequestResult.runtimeVariables) {
                 Object.assign(runnerRuntimeVariables, preRequestResult.runtimeVariables);
@@ -2183,6 +2227,7 @@ const registerNetworkIpc = (): void => {
 
             // Use scriptRequest so pre-request script changes are respected
             const result = await executeRequest(scriptRequest as unknown as BrunoRequest, context, { runnerContext: { isRunningFolder: true, delay } });
+            await handleNetworkFailure(result, scriptRequest, scriptContext);
 
             // In this case, skip post-processing and report the error
             if (result.error && result.status === 0) {
@@ -2202,6 +2247,7 @@ const registerNetworkIpc = (): void => {
                 },
                 ...eventData
               });
+              if (stopRunnerExecution) break;
               currentRequestIndex++;
               continue;
             }
@@ -2282,6 +2328,10 @@ const registerNetworkIpc = (): void => {
               if (postResponseResult.nextRequestName) {
                 nextRequestName = postResponseResult.nextRequestName;
               }
+
+              if (postResponseResult.stopExecution) {
+                stopRunnerExecution = true;
+              }
             } catch (postResError) {
               console.error('Post-response script error:', postResError);
               sendToWebview('main:run-folder-event', {
@@ -2323,6 +2373,9 @@ const registerNetworkIpc = (): void => {
             try {
               const testResult = await runTests(scriptRequest, response, scriptContext);
               testResults = testResult.results || [];
+              if (testResult.stopExecution) {
+                stopRunnerExecution = true;
+              }
 
               notifyScriptExecution('main:run-folder-event', 'test', eventData, testResult);
 
@@ -2346,6 +2399,8 @@ const registerNetworkIpc = (): void => {
               });
             }
 
+            if (stopRunnerExecution) break;
+
             if (nextRequestName) {
               const nextIndex = folderRequests.findIndex(r => r.name === nextRequestName);
               if (nextIndex !== -1) {
@@ -2365,6 +2420,7 @@ const registerNetworkIpc = (): void => {
             });
           }
 
+          if (stopRunnerExecution) break;
           currentRequestIndex++;
         }
 
@@ -2372,6 +2428,7 @@ const registerNetworkIpc = (): void => {
           type: 'testrun-ended',
           collectionUid,
           folderUid,
+          ...(stopRunnerExecution && { statusText: 'collection run was terminated!' }),
           runCompletionTime: new Date().toISOString()
         });
 
