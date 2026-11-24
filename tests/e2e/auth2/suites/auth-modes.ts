@@ -90,8 +90,8 @@ async function verifyAuthRestoration(page: Page) {
     await setAuth(page, target, 'basic', { username: 'bruno', password: 'della' });
     await selectAuthMode(page, 'Bearer Token');
     await selectAuthMode(page, 'Basic Auth');
-    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-username`)).toHaveText('bruno');
-    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-password`)).toHaveText('*****');
+    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-username`).locator('.CodeMirror-line')).toHaveText('bruno');
+    await expect(activeEditor(page).getByTestId(`${itemType}-auth-basic-password`).locator('.CodeMirror-line')).toHaveText('*****');
   }
 }
 

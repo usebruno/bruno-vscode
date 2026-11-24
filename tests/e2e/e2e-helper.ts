@@ -82,6 +82,24 @@ type Config<EnvName extends string = string> = {
 }
 
 
+const DEFAULT_GITIGNORE = [
+  '# Secrets',
+  '.env*',
+  '',
+  '# Dependencies',
+  'node_modules',
+  '',
+  '# OS files',
+  '.DS_Store',
+  'Thumbs.db',
+  '',
+].join('\n');
+
+function verifyGitignore(ctx: Context, collection: string) {
+  const gitignorePath = path.join(ctx.getCollection(collection).location, collection, '.gitignore')
+  expect(fs.readFileSync(gitignorePath, 'utf8')).toBe(DEFAULT_GITIGNORE)
+}
+
 type FolderEntry = { folder: FolderConfig, parent?: string }
 type RequestEntry = { request: RequestConfig, folder?: string }
 
@@ -145,6 +163,8 @@ export async function createSetup<const EnvName extends string = never>(
 
       await createCollectionV2(sidebar, ctx, collection.name, location, collection.format)
       collections.push(collection.name)
+
+      verifyGitignore(ctx, collection.name)
 
       if (collection.vars) {
         await setVars(page, collection.name, toRows(collection.vars, ['name', 'value']));

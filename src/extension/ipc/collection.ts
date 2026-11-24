@@ -57,7 +57,7 @@ import { getProcessEnvVars } from '../store/process-env';
 import collectionWatcher from '../app/collection-watcher';
 import { transformBrunoConfigBeforeSave } from '../utils/transformBrunoConfig';
 import { defaultBrunoConfig, defaultCollectionRoot } from '../../utils/collection';
-import { REQUEST_TYPES } from '../utils/constants';
+import { DEFAULT_GITIGNORE } from '../utils/constants';
 import { parseRequest, parseRequestViaWorker, parseCollection, parseFolder } from '../utils/parse';
 
 const {
@@ -172,6 +172,8 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         const content = await stringifyJson(brunoConfig);
         await writeFile(path.join(dirPath, 'bruno.json'), content);
       }
+
+      await writeFile(path.join(dirPath, '.gitignore'), DEFAULT_GITIGNORE);
 
       const lastOpenedStore = new LastOpenedCollections();
       lastOpenedStore.add(dirPath);
