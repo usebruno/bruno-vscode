@@ -1042,9 +1042,7 @@ export async function exportPostmanCollection(page: Page, collectionName: string
   await sidebar.collectionAction(collectionName, 'export');
 
   const webview = await getWebviewByTitle(page, 'Export Collection');
-  const postmanOption = webview.getByTestId('export-option-postman');
-  await expect(postmanOption).not.toContainClass('disabled');
-  await postmanOption.click();
+  await webview.locator('[data-testid="export-option-postman"]:not(.disabled)').click();
 
   const exportPath = path.join(os.tmpdir(), `${collectionName}-${Date.now()}_postman.json`);
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
@@ -1232,17 +1230,17 @@ export async function setScript(page: Page, target: string, script: { preRequest
   await saveItem(page, itemType);
 }
 
-export async function setTests(page: Page, target: string, tests: string): Promise<void> {
+export async function setTests(page: Page, target: string, test: string): Promise<void> {
   const itemType = await openTab(page, target, 'Tests');
-  await setCodeMirrorValue(page, activeEditor(page).getByTestId(`${itemType}-test-script-editor`).locator('.CodeMirror'), tests);
+  await setCodeMirrorValue(page, activeEditor(page).getByTestId(`${itemType}-test-script-editor`).locator('.CodeMirror'), test);
   await saveItem(page, itemType);
 }
 
-export async function setDocs(page: Page, target: string, docs: string): Promise<void> {
+export async function setDocs(page: Page, target: string, doc: string): Promise<void> {
   const itemType = await openTab(page, target, 'Docs');
   const editor = activeEditor(page);
   await editor.getByTestId('docs-edit-toggle').click();
-  await setCodeMirrorValue(page, editor.getByTestId('docs-editor').locator('.CodeMirror'), docs);
+  await setCodeMirrorValue(page, editor.getByTestId('docs-editor').locator('.CodeMirror'), doc);
   await saveItem(page, itemType);
 }
 
