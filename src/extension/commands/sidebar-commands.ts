@@ -6,6 +6,7 @@ import { convertToBruno, getImportedCollectionName, isUnbundledCollectionRoot, r
 import { readCollectionZip, writeCollectionZip, type CollectionZip } from '../utils/import-zip';
 import { getRequestFromCurlCommand, isCurlCommand, normalizeCurlCommand } from '../../utils/curl';
 import { writeCollectionConfig } from '../utils/collection-v2';
+import { DEFAULT_GITIGNORE } from '../utils/constants';
 import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { openRunnerPanel } from '../panels/runner-panel';
 import collectionWatcher from '../app/collection-watcher';
@@ -515,6 +516,7 @@ async function handleCreateCollection(
 
   await vscode.workspace.fs.createDirectory(dir);
   await writeCollectionConfig(dir, collectionName, format);
+  await writeText(vscode.Uri.joinPath(dir, '.gitignore'), DEFAULT_GITIGNORE);
   await showNewCollection(provider, treeView, openedCollections, dir);
 }
 
