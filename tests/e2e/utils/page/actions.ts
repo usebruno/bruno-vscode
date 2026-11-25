@@ -330,7 +330,7 @@ async function getEntityType(sidebar: Sidebar, target: string): Promise<'collect
   return (await row.getAttribute('aria-label'))?.startsWith('Folder ') ? 'folder' : 'request';
 }
 
-async function openRequestEditor(page: Page, request: string) {
+export async function openRequestEditor(page: Page, request: string) {
   const sidebar = await openBrunoSidebar(page);
 
   await expect(async () => {
@@ -1089,6 +1089,27 @@ export async function openResponseTab(page: Page, request: string, paneTab: Resp
 export async function sendRequestByName(page: Page, request: string): Promise<void> {
   await openRequestEditor(page, request);
   await activeEditor(page).locator('#send-request').click();
+}
+
+export async function sendGrpcRequest(
+  page: Page,
+  request: string,
+  options: { proto: string, method: string, message?: string }
+): Promise<void> {
+  await openRequestEditor(page, request);
+  const editor = await getWebviewFrame(page, (frame) => frame.getByTestId('grpc-query-url-container'));
+  await loadGrpcProtoFile(editor, options.proto);
+  await selectGrpcMethod(editor, options.method);
+  if (options.message) {
+    await setGrpcMessage(page, editor, options.message);
+  }
+  await saveItem(page, 'request');
+  await editorLocators(page).grpc.sendRequestButton().click();
+}
+
+export async function connectWebSocket(page: Page, request: string): Promise<void> {
+  await openRequestEditor(page, request);
+  await editorLocators(page).ws.connectButton().click();
 }
 
 async function saveItem(page: Page, itemType: 'collection' | 'folder' | 'request') {

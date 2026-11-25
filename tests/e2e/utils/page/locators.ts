@@ -246,7 +246,10 @@ const buildLocators = (frame: FrameLike) => ({
     previewContainer: () => frame.getByTestId('response-preview-container'),
     loadingOverlay: () => frame.getByTestId('response-loading-overlay'),
     body: () => frame.getByTestId('response-status-code').locator('..'),
-    error: () => frame.getByTestId('response-error')
+    error: () => frame.getByTestId('response-error'),
+    actionButton: (action: string) => frame.getByTestId(`response-${action}-btn`),
+    actionsMenu: () => frame.getByTestId('response-actions-menu'),
+    actionsMenuItem: (id: string) => frame.getByTestId(`response-actions-menu-${id}`)
   },
   clientCerts: {
     emptyMessage: () => frame.getByText('No client certificates added'),
