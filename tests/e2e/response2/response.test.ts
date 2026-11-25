@@ -2,8 +2,16 @@ import * as path from 'node:path';
 import { expect, type Page } from '@playwright/test';
 import { createSetup, type Workspace } from '../e2e-helper';
 import { test } from '../utils/fixtures';
-import { closeAllEditors, editorLocators, openBrunoSidebar, removeCollection, takeScreenshot } from '../utils/page/actions';
-import { connectWebSocketAndVerify, sendGrpcRequestAndVerify, sendRequestAndVerify } from '../utils/page/assertions';
+import {
+  closeAllEditors,
+  connectWebSocket,
+  editorLocators,
+  openBrunoSidebar,
+  removeCollection,
+  sendGrpcRequest,
+  takeScreenshot,
+} from '../utils/page/actions';
+import { sendRequestAndVerify } from '../utils/page/assertions';
 import { GRPC_SERVER_URL, TEST_SERVER_LOCAL_URL } from '../utils/urls';
 
 const WS_SERVER_URL = TEST_SERVER_LOCAL_URL.replace('http', 'ws');
@@ -69,10 +77,15 @@ test.describe('response lifecycle', () => {
     await sendRequestAndVerify(page, 'graphql-request', 200);
     await verifyResponsePaneActionButtons(page, ['copy', 'clear', 'layout']);
 
-    await sendGrpcRequestAndVerify(page, 'grpc-request', { proto: ECHO_PROTO, method: 'Echo', message: '{"message": "hello"}' }, 0);
+    const { grpc, ws } = editorLocators(page);
+
+    await sendGrpcRequest(page, 'grpc-request', { proto: ECHO_PROTO, method: 'Echo', message: '{"message": "hello"}' });
+    await expect(grpc.responseStatusCode()).toContainText('0');
     await verifyResponsePaneActionButtons(page, ['clear', 'layout']);
 
-    await connectWebSocketAndVerify(page, 'ws-request', 'welcome');
+    await connectWebSocket(page, 'ws-request');
+    await expect(ws.connectionStatusStrip()).toBeVisible();
+    await expect(ws.incomingMessage()).toContainText('welcome');
     await verifyResponsePaneActionButtons(page, ['clear', 'layout']);
   });
 });
