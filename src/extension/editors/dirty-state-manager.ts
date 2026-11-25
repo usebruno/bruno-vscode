@@ -382,6 +382,22 @@ export function registerSaveHandler(context: vscode.ExtensionContext): void {
         return;
       }
 
+      const { document } = event;
+      const normalizedPath = normalizePath(document.uri.fsPath);
+      const isOwnWrite = filesBeingWritten.has(normalizedPath);
+      if (dirtyDocuments.has(normalizedPath) && event.reason === vscode.TextDocumentSaveReason.Manual && !isOwnWrite) {
+        vscode.commands.executeCommand('bruno.saveFromEditor');
+        event.waitUntil(new Promise<vscode.TextEdit[]>((resolve) => {
+          const finish = () => {
+            changes.dispose();
+            resolve(dirtyMarkerRanges(document).map((range) => vscode.TextEdit.delete(range)));
+          };
+          const changes = vscode.workspace.onDidChangeTextDocument((change) => change.document === document && finish());
+          setTimeout(finish, 1000);
+        }));
+        return;
+      }
+
       const ranges = dirtyMarkerRanges(event.document);
       if (ranges.length) {
         event.waitUntil(Promise.resolve(ranges.map((range) => vscode.TextEdit.delete(range))));
