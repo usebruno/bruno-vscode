@@ -205,9 +205,11 @@ const applyAuthConfig = (target: Record<string, unknown> & { headers: Record<str
     }
     case 'apikey': {
       const apiKeyAuth = auth.apikey as { key?: string; value?: string; placement?: string } | undefined;
-      if (!apiKeyAuth?.key) break;
+      if (!apiKeyAuth?.key) {
+        break;
+      }
       if (apiKeyAuth.placement === 'header') {
-        target.headers[apiKeyAuth.key] = apiKeyAuth.value as string;
+        target.headers[apiKeyAuth.key] = apiKeyAuth.value || '';
         target.apiKeyHeaderName = apiKeyAuth.key;
       } else if (apiKeyAuth.placement === 'queryparams') {
         target.apiKeyAuthValueForQueryParams = apiKeyAuth;

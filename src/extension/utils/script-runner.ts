@@ -139,7 +139,9 @@ const emitScriptVariableUpdates = (
 };
 
 const resetOauth2Credentials = (credentialIds: unknown, request: unknown, context: ScriptContext): void => {
-  if (!Array.isArray(credentialIds) || !credentialIds.length) return;
+  if (!Array.isArray(credentialIds) || !credentialIds.length) {
+    return;
+  }
 
   const req = request as {
     oauth2Credentials?: { credentialsId?: string } | null;

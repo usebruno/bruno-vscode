@@ -744,7 +744,13 @@ const loadItemTreeFromDisk = async (
   itemPathname: string,
   collectionPath: string
 ): Promise<{ item: Record<string, unknown>; collection: Record<string, unknown> } | undefined> => {
-  if (!fs.existsSync(itemPathname)) return undefined;
+  const relativeItemPath = path.relative(collectionPath, itemPathname);
+  if (!relativeItemPath || relativeItemPath.startsWith('..') || path.isAbsolute(relativeItemPath)) {
+    return undefined;
+  }
+  if (!fs.existsSync(itemPathname)) {
+    return undefined;
+  }
 
   const item: Record<string, unknown> = { uid: uuidv4(), pathname: itemPathname, partial: true };
   await hydrateItemRequestFromDisk(item, collectionPath);
@@ -2247,7 +2253,9 @@ const registerNetworkIpc = (): void => {
                 },
                 ...eventData
               });
-              if (stopRunnerExecution) break;
+              if (stopRunnerExecution) {
+                break;
+              }
               currentRequestIndex++;
               continue;
             }
@@ -2399,7 +2407,9 @@ const registerNetworkIpc = (): void => {
               });
             }
 
-            if (stopRunnerExecution) break;
+            if (stopRunnerExecution) {
+              break;
+            }
 
             if (nextRequestName) {
               const nextIndex = folderRequests.findIndex(r => r.name === nextRequestName);
@@ -2420,7 +2430,9 @@ const registerNetworkIpc = (): void => {
             });
           }
 
-          if (stopRunnerExecution) break;
+          if (stopRunnerExecution) {
+            break;
+          }
           currentRequestIndex++;
         }
 
