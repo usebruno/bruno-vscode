@@ -8,13 +8,13 @@ import {
   closeEditorTabIfOpen,
   createFolder,
   expandCollection,
-  dragItemAboveOrBelow,
+  moveItemAboveOrBelow,
   findFilesWithName
 } from '../../utils/page/actions';
 import { buildCommonLocators } from '../../utils/page/locators';
 
 test.describe('Reorder requests by drag and drop', () => {
-  // @deprecated Moved to tests/e2e/sidebar2/suites/reorder.ts (reorderRequests)
+  // @deprecated Moved to tests/e2e/sidebar/sidebar-actions.test.ts (verifyReorder)
   test('Dropping a request above another and below the last row saves the new order', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Reorder Collection';
@@ -36,19 +36,19 @@ test.describe('Reorder requests by drag and drop', () => {
     });
 
     await test.step('Drop r3 above r1 and verify the new order in the sidebar and on disk', async () => {
-      await dragItemAboveOrBelow(sidebar, 'r3', 'r1', 'above');
+      await moveItemAboveOrBelow(sidebar, 'r3', 'r1', 'above');
       await expect(rows()).toHaveText([/r3/, /r1/, /r2/]);
       await expect.poll(() => [seqOf('r3'), seqOf('r1'), seqOf('r2')]).toEqual([1, 2, 3]);
     });
 
     await test.step('Drop r3 below the last row (below r2) and verify the new order in the sidebar and on disk', async () => {
-      await dragItemAboveOrBelow(sidebar, 'r3', 'r2', 'below');
+      await moveItemAboveOrBelow(sidebar, 'r3', 'r2', 'below');
       await expect(rows()).toHaveText([/r1/, /r2/, /r3/]);
       await expect.poll(() => [seqOf('r1'), seqOf('r2'), seqOf('r3')]).toEqual([1, 2, 3]);
     });
   });
 
-  // @deprecated Moved to tests/e2e/sidebar2/suites/reorder.ts (reorderFolders)
+  // @deprecated Moved to tests/e2e/sidebar/sidebar-actions.test.ts (verifyReorder)
   test('Dropping a folder above another and below the last row saves the new order', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Reorder Folders Collection';
@@ -69,13 +69,13 @@ test.describe('Reorder requests by drag and drop', () => {
     });
 
     await test.step('Drop f3 above f1 and verify the new order in the sidebar and on disk', async () => {
-      await dragItemAboveOrBelow(sidebar, 'f3', 'f1', 'above');
+      await moveItemAboveOrBelow(sidebar, 'f3', 'f1', 'above');
       await expect(rows()).toHaveText([/f3/, /f1/, /f2/]);
       await expect.poll(() => [seqOf('f3'), seqOf('f1'), seqOf('f2')]).toEqual([1, 2, 3]);
     });
 
     await test.step('Drop f3 below the last row (below f2) and verify the new order in the sidebar and on disk', async () => {
-      await dragItemAboveOrBelow(sidebar, 'f3', 'f2', 'below');
+      await moveItemAboveOrBelow(sidebar, 'f3', 'f2', 'below');
       await expect(rows()).toHaveText([/f1/, /f2/, /f3/]);
       await expect.poll(() => [seqOf('f1'), seqOf('f2'), seqOf('f3')]).toEqual([1, 2, 3]);
     });

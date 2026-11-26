@@ -9,6 +9,7 @@ import { buildCommonLocators } from '../../utils/page/locators';
 
 test.describe('Clone collection', () => {
 
+  // @deprecated Covered by tests/e2e/sidebar/sidebar-actions.test.ts (verifyCollectionFunctionalities: Clone)
   test('TC-3647: Verify the Cloning the collection from collection ellipse clone option', { tag: '@sanity' }, async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Source Collection';

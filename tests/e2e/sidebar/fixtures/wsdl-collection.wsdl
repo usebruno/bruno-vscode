@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:tns="http://example.com/wsdl"
+    targetNamespace="http://example.com/wsdl"
+    name="wsdl-collection">
+  <types>
+    <xsd:schema targetNamespace="http://example.com/wsdl" elementFormDefault="qualified">
+      <xsd:element name="wsdl-f1-r1Request">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="id" type="xsd:int"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="wsdl-f1-r1Response">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="name" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="wsdl-f2-r1Request">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="id" type="xsd:int"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="wsdl-f2-r1Response">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="name" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+  <message name="wsdl-f1-r1Input">
+    <part name="parameters" element="tns:wsdl-f1-r1Request"/>
+  </message>
+  <message name="wsdl-f1-r1Output">
+    <part name="parameters" element="tns:wsdl-f1-r1Response"/>
+  </message>
+  <portType name="wsdl-f1PortType">
+    <operation name="wsdl-f1-r1">
+      <input message="tns:wsdl-f1-r1Input"/>
+      <output message="tns:wsdl-f1-r1Output"/>
+    </operation>
+  </portType>
+  <binding name="wsdl-f1Binding" type="tns:wsdl-f1PortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="wsdl-f1-r1">
+      <soap:operation soapAction="http://example.com/wsdl/wsdl-f1-r1"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+  </binding>
+  <service name="wsdl-f1">
+    <port name="wsdl-f1Port" binding="tns:wsdl-f1Binding">
+      <soap:address location="http://127.0.0.1:8081/api/echo/xml"/>
+    </port>
+  </service>
+  <message name="wsdl-f2-r1Input">
+    <part name="parameters" element="tns:wsdl-f2-r1Request"/>
+  </message>
+  <message name="wsdl-f2-r1Output">
+    <part name="parameters" element="tns:wsdl-f2-r1Response"/>
+  </message>
+  <portType name="wsdl-f2PortType">
+    <operation name="wsdl-f2-r1">
+      <input message="tns:wsdl-f2-r1Input"/>
+      <output message="tns:wsdl-f2-r1Output"/>
+    </operation>
+  </portType>
+  <binding name="wsdl-f2Binding" type="tns:wsdl-f2PortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="wsdl-f2-r1">
+      <soap:operation soapAction="http://example.com/wsdl/wsdl-f2-r1"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+  </binding>
+  <service name="wsdl-f2">
+    <port name="wsdl-f2Port" binding="tns:wsdl-f2Binding">
+      <soap:address location="http://127.0.0.1:8081/api/echo/xml"/>
+    </port>
+  </service>
+</definitions>

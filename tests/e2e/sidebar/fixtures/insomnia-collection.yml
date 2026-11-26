@@ -1,0 +1,19 @@
+type: collection.insomnia.rest/5.0
+name: in-collection
+collection:
+  - name: in-f1
+    children:
+      - name: in-f1-r1
+        url: http://127.0.0.1:8081/api/echo/json
+        method: POST
+  - name: in-f2
+    children:
+      - name: in-f2-r1
+        url: http://127.0.0.1:8081/api/echo/json
+        method: POST
+  - name: in-r1
+    url: http://127.0.0.1:8081/ping
+    method: GET
+  - name: in-r2
+    url: http://127.0.0.1:8081/api/echo/json
+    method: POST

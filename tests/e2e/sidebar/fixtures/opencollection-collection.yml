@@ -1,0 +1,41 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: oc-collection
+items:
+  - info:
+      name: oc-f1
+      type: folder
+    items:
+      - info:
+          name: oc-f1-r1
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: http://127.0.0.1:8081/api/echo/json
+  - info:
+      name: oc-f2
+      type: folder
+    items:
+      - info:
+          name: oc-f2-r1
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: http://127.0.0.1:8081/api/echo/json
+  - info:
+      name: oc-r1
+      type: http
+      seq: 1
+    http:
+      method: GET
+      url: http://127.0.0.1:8081/ping
+  - info:
+      name: oc-r2
+      type: http
+      seq: 2
+    http:
+      method: POST
+      url: http://127.0.0.1:8081/api/echo/json

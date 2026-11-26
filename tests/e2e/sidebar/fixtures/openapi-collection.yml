@@ -1,0 +1,33 @@
+openapi: 3.0.0
+info:
+  title: oa-collection
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8081
+paths:
+  /api/echo/json:
+    post:
+      summary: oa-f1-r1
+      tags: [oa-f1]
+      responses:
+        '200':
+          description: OK
+  /api/echo/text:
+    post:
+      summary: oa-f2-r1
+      tags: [oa-f2]
+      responses:
+        '200':
+          description: OK
+  /ping:
+    get:
+      summary: oa-r1
+      responses:
+        '200':
+          description: OK
+  /api/echo/xml:
+    post:
+      summary: oa-r2
+      responses:
+        '200':
+          description: OK

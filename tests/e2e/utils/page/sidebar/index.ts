@@ -105,6 +105,64 @@ export interface SaveRequestOptions {
   folderPath?: string[];
 }
 
+type Row = { label: string; level: number };
+
+/** Index of a request or folder row among `rows`, by its name. */
+function getRowIndex(rows: Row[], name: string): number {
+  return rows.findIndex(({ label }) => new RegExp(`^(Folder|App|.* request) ${escapeRegExp(name)}$`).test(label));
+}
+
+/** The index right after a row and the rows under it. */
+function getBlockEndIndex(rows: Row[], start: number): number {
+  let end = start + 1;
+
+  while (end < rows.length && rows[end].level > rows[start].level) {
+    end++;
+  }
+
+  return end;
+}
+
+/**
+ * Where a row lands after a Move Up or Move Down: the moves swap it with its previous or
+ * next sibling, each taken with the rows under it. With no sibling that way the row stays.
+ */
+function getLandingIndex(rows: Row[], index: number, direction: 'up' | 'down'): number {
+  const { level } = rows[index];
+
+  if (direction === 'up') {
+    let sibling = index - 1;
+    while (sibling >= 0 && rows[sibling].level > level) {
+      sibling--;
+    }
+
+    return sibling < 0 || rows[sibling].level < level ? index : sibling;
+  }
+
+  const sibling = getBlockEndIndex(rows, index);
+
+  return (
+    sibling >= rows.length || rows[sibling].level < level
+      ? index
+      : index + (getBlockEndIndex(rows, sibling) - sibling)
+  );
+}
+
+/**
+ * Give a context menu entry the focus, by keyboard.
+ */
+export async function focusContextMenuItem(page: Page, menu: Locator, item: Locator): Promise<void> {
+  const row = item.locator('..');
+
+  const isFocused = async (row: Locator) => await row.evaluate(element => element.classList.contains('focused'))
+
+  for (let step = 0; step < 20 && !(await isFocused(row)); step++) {
+    await page.keyboard.press('ArrowDown');
+  }
+
+  await row.and(menu.locator('.focused')).waitFor({ timeout: 1_000 });
+}
+
 export class NativeSidebar {
   readonly locators: SidebarLocators;
 
@@ -211,36 +269,24 @@ export class NativeSidebar {
       const value = kind === 'directory' ? target + path.sep : target;
       await box.fill(value);
       await expect(box).toHaveValue(value);
+
+      if (kind === 'file') {
+        // The dialog moves its listing to the file's folder on its own time, and Enter pressed before
+        // that move is done only completes it, leaving the dialog open.
+        await this.page.locator('.quick-input-list .monaco-list-row')
+          .filter({ hasText: path.basename(target) })
+          .first()
+          .waitFor({ timeout: 10_000 });
+      }
     }
 
     await this.page.keyboard.press('Enter');
   }
 
   /**
-   * Wait until the tree has stopped changing. The tree repaints a moment after
-   * every file write, and a repaint closes an open context menu, so acting
-   * on a row right after a write can lose the click.
+   * Open a row's context menu and run an entry. Pass `onConfirm` to run a callback post a successful click
    */
-  private async settle(): Promise<void> {
-    const snapshot = () => this.locators.collectionItems().evaluateAll(
-      (rows) => rows.map((row) => row.getAttribute('aria-label')).join('\n')
-    );
-
-    await expect.poll(async () => {
-      const before = await snapshot();
-      await this.page.waitForTimeout(400);
-
-      return before === await snapshot();
-    }, { timeout: 10_000 }).toBe(true);
-  }
-
-  /**
-   * Open a row's context menu and run an entry. `confirmed` checks that the
-   * command took effect (an input box opened, a row went); until it passes
-   * the menu is opened and clicked again, since a repaint can swallow a click.
-   */
-  private async clickContextMenuItem(row: Locator, title: string, confirmed?: () => Promise<void>): Promise<void> {
-    await this.settle();
+  private async clickContextMenuItem(row: Locator, title: string, onConfirm?: () => Promise<void>): Promise<void> {
     const menu = this.contextMenu;
 
     await expect(async () => {
@@ -254,33 +300,31 @@ export class NativeSidebar {
         throw new Error(`No "${title}" in the context menu; it has: ${entries.filter(Boolean).join(', ')}`);
       }
 
-      // A click in the first moments after the menu opens is dropped by the menu, so let it settle.
-      await this.page.waitForTimeout(300);
-      await item.hover();
-      await item.click();
+      await focusContextMenuItem(this.page, menu, item);
+      await this.page.keyboard.press('Enter');
       await menu.waitFor({ state: 'hidden', timeout: 2_000 });
-      await confirmed?.();
+      await onConfirm?.();
     }).toPass({ timeout: 20_000 });
   }
 
-  /** Select a row and leave the keyboard focus on the tree, without running the row's command. */
-  private async focusRow(row: Locator): Promise<void> {
-    await this.settle();
-    await row.click({ button: 'right' });
-
-    await this.contextMenu.waitFor({ state: 'visible', timeout: 15_000 });
-
-    await this.page.waitForTimeout(300);
-    await this.page.keyboard.press('Escape');
-
-    await this.contextMenu.waitFor({ state: 'hidden', timeout: 15_000 });
+  /** Every tree row with its depth, in display order. Collection rows sit at level 1, their items below. */
+  private async rows(): Promise<Row[]> {
+    return this.tree.getByRole('treeitem').evaluateAll((rows) => rows.map((row) => ({
+      label: row.getAttribute('aria-label') ?? '',
+      level: Number(row.getAttribute('aria-level'))
+    })));
   }
 
-  /** Position of a request or folder row among the item rows, in display order. */
+  /** Position of a request or folder row among the tree rows, in display order. */
   private async rowIndex(name: string): Promise<number> {
-    const labels = await this.locators.collectionItems().evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label') ?? ''));
+    return getRowIndex(await this.rows(), name);
+  }
 
-    return labels.findIndex((label) => new RegExp(`^(Folder|App|.* request) ${escapeRegExp(name)}$`).test(label));
+  /** The names of the collections shown, top to bottom. */
+  private async collectionNames(): Promise<string[]> {
+    const rows = await this.rows();
+
+    return rows.filter(({ level }) => level === 1).map(({ label }) => label.replace(/^Collection /, '').replace(/, not found$/, ''));
   }
 
   private async expectQuickInput(): Promise<void> {
@@ -313,6 +357,10 @@ export class NativeSidebar {
 
   async expandFolder(folderName: string): Promise<void> {
     await this.setExpanded(this.itemRow(folderName), true);
+  }
+
+  async collapseFolder(folderName: string): Promise<void> {
+    await this.setExpanded(this.itemRow(folderName), false);
   }
 
   // ---- menus ------------------------------------------------------------
@@ -357,6 +405,25 @@ export class NativeSidebar {
     await this.collectionRow(expectedName).waitFor({ state: 'visible', timeout: 20_000 });
   }
 
+  /**
+   * Import one file into `location` and resolve to the collection's name. The name comes from the
+   * file's contents (a WSDL's only once parsed), so the row that was not there before says what it got.
+   * A zip keeps the format it holds and is asked for none; an export is converted to `format`.
+   */
+  async importFile(filePath: string, location: string, format?: FileFormat): Promise<string> {
+    const before = await this.collectionNames();
+    const review = await this.openImportReview([filePath]);
+    await review.submit(location, format);
+
+    await this.tree.locator('[role="treeitem"][aria-level="1"]').nth(before.length).waitFor({ timeout: 20_000 });
+
+    const [name] = (await this.collectionNames()).filter((candidate) => !before.includes(candidate));
+    // The import ends by revealing the new collection, selected and expanded; the row alone shows earlier.
+    await this.collectionRow(name).and(this.page.locator('[aria-selected="true"][aria-expanded="true"]')).waitFor({ timeout: 20_000 });
+
+    return name;
+  }
+
   /** Start an import with these files and stop at the review step. */
   async openImportReview(filePaths: string[]): Promise<ImportReview> {
     const widget = this.page.locator('.quick-input-widget');
@@ -397,11 +464,22 @@ export class NativeSidebar {
       },
       submit: async (location, format) => {
         await this.page.keyboard.press('Enter');
-        // An OpenAPI spec is asked how to group its requests before the location; other sources go straight on.
-        const groupingPick = rows().filter({ hasText: /Group by/ });
+        // An OpenAPI spec is asked how to group its requests before the location; other sources go
+        // straight to the location's dialog, which fills its box with a folder. The box is the same
+        // for both, so whichever of the two it shows first says which prompt came.
+        const prompt = await this.page.waitForFunction(() => {
+          const input = document.querySelector<HTMLInputElement>('.quick-input-widget .quick-input-box input');
 
-        if (await groupingPick.first().isVisible().catch(() => false)) {
-          await groupingPick.first().click();
+          if (input?.placeholder === 'How should the requests be grouped into folders?') {
+            return 'grouping';
+          }
+
+          // A value ending in a path separator, `/` or `\`, is the folder the location dialog fills in.
+          return input && /[\\/]$/.test(input.value) ? 'location' : null;
+        }, undefined, { timeout: 15_000 });
+
+        if (await prompt.jsonValue() === 'grouping') {
+          await this.pickQuickItem('Tags');
         }
 
         await this.answerFileDialog(location, 'directory');
@@ -485,6 +563,14 @@ export class NativeSidebar {
 
   async removeCollection(name: string): Promise<void> {
     await this.collectionAction(name, 'remove');
+  }
+
+  /** Rename through the collection menu; the row with the new name is there when this resolves. */
+  async renameCollection(name: string, newName: string): Promise<void> {
+    await this.collectionAction(name, 'rename');
+    // The name box comes prefilled with the current name.
+    await this.answerInputBox('New name', newName);
+    await this.collectionRow(newName).waitFor({ state: 'visible', timeout: 15_000 });
   }
 
   async openCollectionSettings(name: string): Promise<Frame> {
@@ -629,10 +715,44 @@ export class NativeSidebar {
     await this.itemRow(cloneName).waitFor({ state: 'visible', timeout: 15_000 });
   }
 
-  /** Copy leaves nothing to see, so it goes through the keybinding, which a repaint cannot swallow. */
+  /** Rename a request or folder through its row menu. */
+  async renameItem(name: string, newName: string): Promise<void> {
+    await this.itemAction(name, 'rename');
+    await this.answerInputBox('New name', newName);
+    await this.itemRow(newName).waitFor({ state: 'visible', timeout: 15_000 });
+  }
+
+  /** Move Up / Move Down from the row's menu; resolves once the row sits where the move puts it. */
+  async moveItem(name: string, direction: 'up' | 'down'): Promise<void> {
+    // The row is read for its place, which a plain read does not wait for as a click would.
+    await this.itemRow(name).waitFor({ state: 'visible', timeout: 10_000 });
+    const rows = await this.rows();
+    const index = getRowIndex(rows, name);
+    if (index === -1) {
+      throw new Error(`Cannot find "${name}" among the sidebar rows`);
+    }
+    const landing = getLandingIndex(rows, index, direction);
+
+    await this.clickContextMenuItem(this.itemRow(name), MENU_TITLES[direction === 'up' ? 'move-up' : 'move-down'], async () => {
+      await expect.poll(() => this.rowIndex(name), { timeout: 3_000 }).toBe(landing);
+    });
+  }
+
+  /** Copy a request or folder from its row menu. Nothing shows for a copy but the Paste entry it adds to the menus, so that confirms it. */
   async copyItem(name: string): Promise<void> {
-    await this.focusRow(this.itemRow(name));
-    await this.page.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+c');
+    const row = this.itemRow(name);
+
+    await this.clickContextMenuItem(row, MENU_TITLES.copy, async () => {
+      await row.click({ button: 'right' });
+      await this.contextMenu.waitFor({ timeout: 3_000 });
+      const pasted = await this.contextMenu.getByRole('menuitem', { name: /^Paste/ }).isVisible();
+      await this.page.keyboard.press('Escape');
+      await this.contextMenu.waitFor({ state: 'hidden', timeout: 2_000 });
+
+      if (!pasted) {
+        throw new Error(`Copying "${name}" left no Paste entry in the menu`);
+      }
+    });
   }
 
   async pasteIntoCollection(collectionName: string): Promise<void> {
@@ -663,37 +783,74 @@ export class NativeSidebar {
   }
 
   /**
-   * Put `itemName` right above or right below `targetName`. A drop onto a
-   * request puts the dragged item in front of it; everything else goes
-   * through Move Up / Move Down.
+   * Put `itemName` right above or right below `targetName` through Move Up / Move Down,
+   * one sibling at a time toward the target.
    */
   async moveItemAboveOrBelow(itemName: string, targetName: string, position: 'above' | 'below'): Promise<void> {
-    await this.settle();
-    const from = await this.rowIndex(itemName);
-    const to = await this.rowIndex(targetName);
+    await this.itemRow(itemName).waitFor({ state: 'visible', timeout: 10_000 });
+    await this.itemRow(targetName).waitFor({ state: 'visible', timeout: 10_000 });
 
-    if (from === -1 || to === -1) {
+    const places = async () => {
+      const rows = await this.rows();
+      const item = getRowIndex(rows, itemName);
+      const target = getRowIndex(rows, targetName);
+      if (item === -1 || target === -1) {
+        throw new Error(`Cannot find "${itemName}" and "${targetName}" among the sidebar rows`);
+      }
+
+      return { rows, item, target };
+    };
+
+    // Done once the item sits right next to the target: above, the target follows the item's rows; below, the item follows the target's.
+    const isAdjacent = ({ rows, item, target }: Awaited<ReturnType<typeof places>>) =>
+      position === 'above' ? getBlockEndIndex(rows, item) === target : getBlockEndIndex(rows, target) === item;
+
+    let placed = await places();
+    while (!isAdjacent(placed)) {
+      const { rows, item, target } = placed;
+      const direction = item < target ? 'down' : 'up';
+
+      if (getLandingIndex(rows, item, direction) === item) {
+        throw new Error(`"${itemName}" cannot be put ${position} "${targetName}": they are not under the same parent`);
+      }
+
+      await this.moveItem(itemName, direction);
+      placed = await places();
+    }
+  }
+
+  /**
+   * Drag `itemName` onto `targetName` and resolve once it sits where the drop puts it.
+   * VS Code reports only the row dropped on, so the sidebar decides the place: a request
+   * dropped on a request goes in front of it, and anything dropped on a folder goes inside
+   * it. A folder dropped on a request goes into that request's folder, so drop it on the
+   * folder instead. For any other placement use Move Up / Move Down.
+   */
+  async dragItemOnto(itemName: string, targetName: string): Promise<void> {
+    await this.itemRow(itemName).waitFor({ state: 'visible', timeout: 10_000 });
+    await this.itemRow(targetName).waitFor({ state: 'visible', timeout: 10_000 });
+
+    const rows = await this.rows();
+    const item = getRowIndex(rows, itemName);
+    const target = getRowIndex(rows, targetName);
+    if (item === -1 || target === -1) {
       throw new Error(`Cannot find "${itemName}" and "${targetName}" among the sidebar rows`);
     }
 
-    const targetIsFolder = (await this.itemRow(targetName).getAttribute('aria-label'))?.startsWith('Folder ');
-    if (position === 'above' && !targetIsFolder) {
-      // A drop onto a request puts the dragged item in front of it. A drop onto a
-      // folder would move the item inside it, so folders are reordered below.
-      await this.itemRow(itemName).dragTo(this.itemRow(targetName), { steps: 15 });
+    const isFolder = (index: number) => rows[index].label.startsWith('Folder ');
+    if (isFolder(target)) {
+      await this.dragItemIntoFolder(itemName, targetName);
       return;
     }
-
-    // Move Up / Move Down one place at a time until the item sits where asked.
-    const action: ItemAction = position === 'above' ? 'move-up' : 'move-down';
-    const steps = position === 'above' ? from - to : to - from;
-
-    for (let step = 0; step < steps; step++) {
-      const before = await this.rowIndex(itemName);
-      await this.clickContextMenuItem(this.itemRow(itemName), MENU_TITLES[action], async () => {
-        await expect.poll(() => this.rowIndex(itemName), { timeout: 3_000 }).toBe(position === 'above' ? before - 1 : before + 1);
-      });
+    if (isFolder(item)) {
+      throw new Error(`A folder dropped on a request goes into that request's folder; drag "${itemName}" onto the folder instead`);
     }
+
+    // The request takes the target's place; from above the target, its own row leaves first.
+    const landing = item < target ? target - 1 : target;
+
+    await this.itemRow(itemName).dragTo(this.itemRow(targetName), { steps: 15 });
+    await expect.poll(() => this.rowIndex(itemName), { timeout: 3_000 }).toBe(landing);
   }
 }
 

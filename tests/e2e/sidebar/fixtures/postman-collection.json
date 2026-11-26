@@ -1,0 +1,139 @@
+{
+  "info": {
+    "name": "pm-collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "pm-f1",
+      "item": [
+        {
+          "name": "pm-f1-r1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/echo/json",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "port": "8081",
+              "path": [
+                "api",
+                "echo",
+                "json"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"bruno\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "pm-f2",
+      "item": [
+        {
+          "name": "pm-f2-r1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/echo/json",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "port": "8081",
+              "path": [
+                "api",
+                "echo",
+                "json"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"bruno\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "pm-r1",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8081/ping",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8081",
+          "path": [
+            "ping"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "pm-r2",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8081/api/echo/json",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8081",
+          "path": [
+            "api",
+            "echo",
+            "json"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"bruno\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    }
+  ]
+}

@@ -14,6 +14,7 @@ import {
 const TEST_SERVER = 'http://127.0.0.1:8081';
 
 test.describe('Paste on a request', () => {
+  // @deprecated Covered by tests/e2e/sidebar/sidebar-actions.test.ts (verifyRequestFunctionalities: Copy, then Paste onto a request)
   test('pasting with a request row focused puts the copy beside it', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Paste Target';

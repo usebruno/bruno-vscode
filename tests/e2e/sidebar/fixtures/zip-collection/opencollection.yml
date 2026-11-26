@@ -1,0 +1,7 @@
+opencollection: 1.0.0
+
+info:
+  name: zip-collection
+  version: "1"
+bundled: false
+extensions: {}

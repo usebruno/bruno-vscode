@@ -115,18 +115,27 @@ export async function collapseCollection(sidebar: Sidebar, collectionName: strin
   await sidebar.collapseCollection(collectionName);
 }
 
+export async function collapseFolder(sidebar: Sidebar, folderName: string): Promise<void> {
+  await sidebar.collapseFolder(folderName);
+}
+
 export async function dragItemIntoFolder(sidebar: Sidebar, itemName: string, folderName: string): Promise<void> {
   await sidebar.dragItemIntoFolder(itemName, folderName);
 }
 
-/** Place `itemName` right above or below `targetName`. */
-export async function dragItemAboveOrBelow(
+/** Place `itemName` right above or below `targetName` through Move Up / Move Down. */
+export async function moveItemAboveOrBelow(
   sidebar: Sidebar,
   itemName: string,
   targetName: string,
   position: 'above' | 'below'
 ): Promise<void> {
   await sidebar.moveItemAboveOrBelow(itemName, targetName, position);
+}
+
+/** Drag `itemName` onto `targetName`: in front of a request, or into a folder. */
+export async function dragItemOnto(sidebar: Sidebar, itemName: string, targetName: string): Promise<void> {
+  await sidebar.dragItemOnto(itemName, targetName);
 }
 
 /** Move an item: 'inside' drops it into a folder, 'above' / 'below' place it next to a sibling. */
@@ -167,6 +176,21 @@ export async function openCollectionSettings(sidebar: Sidebar, collectionName: s
 /** Remove an opened collection from the sidebar and wait for its row to go. */
 export async function removeCollection(sidebar: Sidebar, collectionName: string): Promise<void> {
   await sidebar.removeCollection(collectionName);
+}
+
+/** Rename a collection from its menu; the row with the new name is there when this resolves. */
+export async function renameCollection(sidebar: Sidebar, collectionName: string, newName: string): Promise<void> {
+  await sidebar.renameCollection(collectionName, newName);
+}
+
+/** Rename a request or folder from its row menu; the row with the new name is there when this resolves. */
+export async function renameItem(sidebar: Sidebar, itemName: string, newName: string): Promise<void> {
+  await sidebar.renameItem(itemName, newName);
+}
+
+/** Move a request or folder one place up or down from its row menu. */
+export async function moveItem(sidebar: Sidebar, itemName: string, direction: 'up' | 'down'): Promise<void> {
+  await sidebar.moveItem(itemName, direction);
 }
 
 /** Create a folder under a collection (`isCollection`) or under another folder. */
@@ -220,8 +244,8 @@ export async function createCollectionV2(
   location: string,
   fileFormat: FileFormat = 'yml'
 ): Promise<void> {
-  ctx.addCollection(name, location);
   await sidebar.createCollection(name, location, fileFormat);
+  ctx.addCollection(name, location, fileFormat);
 }
 
 /**
@@ -262,6 +286,14 @@ export async function fillRequestDetails(editor: FrameLocator, type: RequestKind
     const queryEditor = buildCommonLocators(editor).graphql.queryEditor();
     await queryEditor.click();
     await queryEditor.page().keyboard.insertText(payload);
+  }
+
+  if (type === 'gRPC') {
+    // The gRPC pane takes the URL after a debounce and then tries server reflection, which can
+    // change the request. A save before that lands misses the URL, so let the attempt report first.
+    await editor.getByText(/gRPC methods/).last()
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .catch((): void => undefined);
   }
 }
 
@@ -308,23 +340,31 @@ export async function exportCollection(page: Page, sidebar: Sidebar, ctx: Contex
   await webview.getByText('Bruno Collection (ZIP)', { exact: true }).click();
 
   // Save dialog (simple dialog): replace the prefilled path with one inside the collection's location
-  const exportPath = path.join(ctx.getCollection(collectionName).location, `${collectionName}.zip`);
+  const fileName = `${collectionName}.zip`;
+  const exportPath = path.join(ctx.getCollection(collectionName).location, fileName);
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
-  // The dialog fills in its suggested "<collection>.zip" a moment after opening; a path typed before that is overwritten.
-  await expect(saveInput).toHaveValue(/\.zip$/);
+  // The dialog fills in its suggested file name a moment after opening; a path typed before that is overwritten.
+  const input = await saveInput.elementHandle({ timeout: 10_000 });
+  await page.waitForFunction(
+    ({ input, extension }) => (input as HTMLInputElement).value.endsWith(extension),
+    { input, extension: path.extname(fileName) },
+    { timeout: 10_000 }
+  );
   await saveInput.fill(exportPath);
-  // The suggested file sits in another folder, so the first Enter can only move the dialog to the typed one.
-  await expect(async () => {
-    await page.keyboard.press('Enter');
-    await expect(saveInput).toBeHidden();
-  }).toPass();
+  // The dialog moves its listing to the typed path's folder as the path is typed, on its own time.
+  // Enter pressed before that move is done only completes it; pressed after, it accepts the file name.
+  // The folder holds the collection, so the collection's row is the sign the move is done.
+  await page.locator('.quick-input-list .monaco-list-row')
+    .filter({ hasText: collectionName })
+    .first()
+    .waitFor({ timeout: 10_000 });
+  await page.keyboard.press('Enter');
+  await saveInput.waitFor({ state: 'hidden', timeout: 10_000 });
 
-  // The panel closes itself once the file is written, so its success toast can't be waited on.
+  // The panel closes itself only once the file is written, so its going is the wait for the file.
   // On failure it stays open with "Failed to export collection".
   await webview.owner().waitFor({ state: 'detached', timeout: 10_000 });
 
-  // verify the exported file on disk
-  await expect.poll(() => fs.existsSync(exportPath), { message: `${exportPath} should be exported` }).toBe(true);
   const entries = new AdmZip(exportPath).getEntries().filter((entry) => !entry.isDirectory);
   return Object.fromEntries(entries.map((entry) => [entry.entryName, entry.getData().toString('utf8')]));
 }
@@ -962,6 +1002,12 @@ export async function openRequestPaneTab(editor: Frame, tabName: string): Promis
  * Run a VS Code command via the Command Palette.
  */
 export async function runCommand(page: Page, command: string): Promise<void> {
+  // A focused webview keeps F1 for itself, so take the focus back to the workbench first.
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLIFrameElement) {
+      document.activeElement.blur();
+    }
+  });
   await page.keyboard.press('F1');
   await page.waitForSelector('.quick-input-widget', { timeout: 8_000 });
   await page.keyboard.type(command, { delay: 30 });
@@ -1059,6 +1105,9 @@ export async function exportPostmanCollection(page: Page, collectionName: string
 
   const exportPath = path.join(os.tmpdir(), `${collectionName}-${Date.now()}_postman.json`);
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
+  // The dialog fills in its suggested file name a moment after opening; a path typed before that is overwritten.
+  const input = await saveInput.elementHandle({ timeout: 10_000 });
+  await page.waitForFunction((input) => (input as HTMLInputElement).value.endsWith('.json'), input, { timeout: 10_000 });
   await saveInput.fill(exportPath);
   await expect(async () => {
     await page.keyboard.press('Enter');
