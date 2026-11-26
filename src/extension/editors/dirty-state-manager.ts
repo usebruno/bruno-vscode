@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { registerHandler } from '../ipc/handlers';
+import { stateManager } from '../webview/state-manager';
 import { setUnsavedRoot, clearUnsavedRootForFile } from '../store/unsaved-roots';
 import { DIRTY_MARKER, dirtyMarkerOffsets, stripDirtyMarker } from '../utils/dirty-marker';
 import { hasRequestExtension } from '../utils/filesystem';
@@ -21,8 +22,18 @@ const dirtyDocuments = new Map<string, DirtyDocument>();
 // Track registered documents (normalized file path -> TextDocument)
 const registeredDocuments = new Map<string, vscode.TextDocument>();
 
+// Track the webview showing each registered document (normalized file path -> Webview)
+const registeredWebviews = new Map<string, vscode.Webview>();
+
 // Track files currently being written to prevent re-entrant writes
 const filesBeingWritten = new Set<string>();
+
+// Saves VS Code starts itself (the close prompt, switching to file mode) wait here for the
+// webview's own save, whose serialized draft becomes the content VS Code writes.
+const pendingVSCodeSaves = new Map<string, (content: string) => void>();
+
+// VS Code ignores a will-save participant that takes longer than 1.5s
+const DRAFT_SAVE_TIMEOUT_MS = 1000;
 
 function normalizePath(filePath: string): string {
   // Use path.normalize and convert to lowercase on case-insensitive systems
@@ -34,14 +45,18 @@ function normalizePath(filePath: string): string {
   return normalized;
 }
 
-export function registerDocument(document: vscode.TextDocument): void {
+export function registerDocument(document: vscode.TextDocument, webview?: vscode.Webview): void {
   const normalizedPath = normalizePath(document.uri.fsPath);
   registeredDocuments.set(normalizedPath, document);
+  if (webview) {
+    registeredWebviews.set(normalizedPath, webview);
+  }
 }
 
 export function unregisterDocument(filePath: string): void {
   const normalizedPath = normalizePath(filePath);
   registeredDocuments.delete(normalizedPath);
+  registeredWebviews.delete(normalizedPath);
   dirtyDocuments.delete(normalizedPath);
   clearUnsavedRootForFile(filePath);
 }
@@ -158,6 +173,13 @@ export async function writeFileViaVSCode(
   _options?: { encoding?: BufferEncoding }
 ): Promise<void> {
   const normalizedPath = normalizePath(filePath);
+
+  // VS Code is already saving this document, so hand it the content instead of saving again
+  const pendingSave = pendingVSCodeSaves.get(normalizedPath);
+  if (pendingSave) {
+    pendingSave(stripDirtyMarker(content));
+    return;
+  }
 
   // Prevent re-entrant writes
   if (filesBeingWritten.has(normalizedPath)) {
@@ -345,15 +367,29 @@ export function registerDirtyStateHandlers(): void {
   });
 }
 
-function saveDraftOnSaveClick(document: vscode.TextDocument): Promise<void> {
-  vscode.commands.executeCommand('bruno.saveFromEditor');
-  return new Promise<void>((resolve) => {
-    const finish = () => {
-      changes.dispose();
-      resolve();
-    };
-    const changes = vscode.workspace.onDidChangeTextDocument((change) => change.document === document && finish());
-    setTimeout(finish, 1000);
+/**
+ * Asks the webview to save its draft and resolves with edits that replace the document with the
+ * serialized draft. Falls back to only stripping the marker if the save does not arrive in time.
+ */
+function draftSaveEdits(
+  document: vscode.TextDocument,
+  normalizedPath: string,
+  webview: vscode.Webview
+): Promise<vscode.TextEdit[]> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingVSCodeSaves.delete(normalizedPath);
+      resolve(dirtyMarkerRanges(document).map((range) => vscode.TextEdit.delete(range)));
+    }, DRAFT_SAVE_TIMEOUT_MS);
+
+    pendingVSCodeSaves.set(normalizedPath, (content) => {
+      clearTimeout(timer);
+      pendingVSCodeSaves.delete(normalizedPath);
+      const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
+      resolve([vscode.TextEdit.replace(fullRange, content)]);
+    });
+
+    stateManager.sendTo(webview, 'main:trigger-save');
   });
 }
 
@@ -394,21 +430,23 @@ export function registerSaveHandler(context: vscode.ExtensionContext): void {
         return;
       }
 
-      const { document } = event;
-      const normalizedPath = normalizePath(document.uri.fsPath);
-      const hasUnsavedDraft = dirtyDocuments.has(normalizedPath) && event.reason === vscode.TextDocumentSaveReason.Manual && !filesBeingWritten.has(normalizedPath);
-      const hasDirtyMarker = dirtyMarkerRanges(document).length > 0;
-
-      if (!hasUnsavedDraft && !hasDirtyMarker) {
+      // The text document only holds the file as it was, so write the webview's draft instead
+      const normalizedPath = normalizePath(event.document.uri.fsPath);
+      const webview = registeredWebviews.get(normalizedPath);
+      if (
+        webview
+        && dirtyDocuments.has(normalizedPath)
+        && !filesBeingWritten.has(normalizedPath)
+        && event.reason === vscode.TextDocumentSaveReason.Manual
+      ) {
+        event.waitUntil(draftSaveEdits(event.document, normalizedPath, webview));
         return;
       }
 
-      event.waitUntil((async () => {
-        if (hasUnsavedDraft) {
-          await saveDraftOnSaveClick(document);
-        }
-        return dirtyMarkerRanges(document).map((range) => vscode.TextEdit.delete(range));
-      })());
+      const ranges = dirtyMarkerRanges(event.document);
+      if (ranges.length) {
+        event.waitUntil(Promise.resolve(ranges.map((range) => vscode.TextEdit.delete(range))));
+      }
     })
   );
 }
