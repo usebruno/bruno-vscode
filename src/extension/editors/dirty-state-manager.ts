@@ -22,17 +22,16 @@ const dirtyDocuments = new Map<string, DirtyDocument>();
 // Track registered documents (normalized file path -> TextDocument)
 const registeredDocuments = new Map<string, vscode.TextDocument>();
 
-// Track the webview showing each registered document (normalized file path -> Webview)
+// Webview per registered document
 const registeredWebviews = new Map<string, vscode.Webview>();
 
 // Track files currently being written to prevent re-entrant writes
 const filesBeingWritten = new Set<string>();
 
-// Saves VS Code starts itself (the close prompt, switching to file mode) wait here for the
-// webview's own save, whose serialized draft becomes the content VS Code writes.
+// VS Code saves waiting for the webview's serialized draft
 const pendingVSCodeSaves = new Map<string, (content: string) => void>();
 
-// VS Code ignores a will-save participant that takes longer than 1.5s
+// Under VS Code's 1.5s will-save limit
 const DRAFT_SAVE_TIMEOUT_MS = 1000;
 
 function normalizePath(filePath: string): string {
@@ -174,7 +173,7 @@ export async function writeFileViaVSCode(
 ): Promise<void> {
   const normalizedPath = normalizePath(filePath);
 
-  // VS Code is already saving this document, so hand it the content instead of saving again
+  // A VS Code save is waiting for this content
   const pendingSave = pendingVSCodeSaves.get(normalizedPath);
   if (pendingSave) {
     pendingSave(stripDirtyMarker(content));
@@ -367,10 +366,7 @@ export function registerDirtyStateHandlers(): void {
   });
 }
 
-/**
- * Asks the webview to save its draft and resolves with edits that replace the document with the
- * serialized draft. Falls back to only stripping the marker if the save does not arrive in time.
- */
+// Replaces the document with the webview's saved draft, or just strips the marker on timeout
 function draftSaveEdits(
   document: vscode.TextDocument,
   normalizedPath: string,
@@ -430,7 +426,7 @@ export function registerSaveHandler(context: vscode.ExtensionContext): void {
         return;
       }
 
-      // The text document only holds the file as it was, so write the webview's draft instead
+      // Write the webview's draft, not the stale document
       const normalizedPath = normalizePath(event.document.uri.fsPath);
       const webview = registeredWebviews.get(normalizedPath);
       if (
