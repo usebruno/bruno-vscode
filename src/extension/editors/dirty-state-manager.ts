@@ -345,7 +345,7 @@ export function registerDirtyStateHandlers(): void {
   });
 }
 
-export function saveDraftOnSaveClick(document: vscode.TextDocument): Promise<void> {
+function saveDraftOnSaveClick(document: vscode.TextDocument): Promise<void> {
   vscode.commands.executeCommand('bruno.saveFromEditor');
   return new Promise<void>((resolve) => {
     const finish = () => {
