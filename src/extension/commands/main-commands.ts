@@ -12,7 +12,7 @@ import { handleInvoke } from '../ipc/handlers';
 import collectionWatcher from '../app/collection-watcher';
 import { getCollectionFormat } from '../utils/filesystem';
 import { stateManager } from '../webview/state-manager';
-import { isDirty } from '../editors/dirty-state-manager';
+import { isDirty, saveDraftOnSaveClick } from '../editors/dirty-state-manager';
 
 const { stringifyCollection } = require('@usebruno/filestore');
 
@@ -91,13 +91,9 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
             }
 
             if (choice === 'Save') {
-              await vscode.commands.executeCommand('bruno.saveFromEditor');
-              for (let attempt = 0; attempt < 50 && isDirty(uri.fsPath); attempt++) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-              }
-              if (isDirty(uri.fsPath)) {
-                return;
-              }
+              const document = await vscode.workspace.openTextDocument(uri);
+              await saveDraftOnSaveClick(document);
+              await document.save();
             } else {
               closeCommand = 'workbench.action.revertAndCloseActiveEditor';
             }

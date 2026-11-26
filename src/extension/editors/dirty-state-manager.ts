@@ -345,6 +345,18 @@ export function registerDirtyStateHandlers(): void {
   });
 }
 
+export function saveDraftOnSaveClick(document: vscode.TextDocument): Promise<void> {
+  vscode.commands.executeCommand('bruno.saveFromEditor');
+  return new Promise<void>((resolve) => {
+    const finish = () => {
+      changes.dispose();
+      resolve();
+    };
+    const changes = vscode.workspace.onDidChangeTextDocument((change) => change.document === document && finish());
+    setTimeout(finish, 1000);
+  });
+}
+
 /**
  * Keeps our registered document references current, and strips the dirty marker from any save
  * VS Code starts on its own. Bruno's own save already writes marker free content, but auto-save,
@@ -385,23 +397,17 @@ export function registerSaveHandler(context: vscode.ExtensionContext): void {
       const { document } = event;
       const normalizedPath = normalizePath(document.uri.fsPath);
       const isOwnWrite = filesBeingWritten.has(normalizedPath);
-      if (dirtyDocuments.has(normalizedPath) && event.reason === vscode.TextDocumentSaveReason.Manual && !isOwnWrite) {
-        vscode.commands.executeCommand('bruno.saveFromEditor');
-        event.waitUntil(new Promise<vscode.TextEdit[]>((resolve) => {
-          const finish = () => {
-            changes.dispose();
-            resolve(dirtyMarkerRanges(document).map((range) => vscode.TextEdit.delete(range)));
-          };
-          const changes = vscode.workspace.onDidChangeTextDocument((change) => change.document === document && finish());
-          setTimeout(finish, 1000);
-        }));
+      const hasUnsavedDraft = dirtyDocuments.has(normalizedPath) && event.reason === vscode.TextDocumentSaveReason.Manual && !isOwnWrite;
+      if (!hasUnsavedDraft && !dirtyMarkerRanges(document).length) {
         return;
       }
 
-      const ranges = dirtyMarkerRanges(event.document);
-      if (ranges.length) {
-        event.waitUntil(Promise.resolve(ranges.map((range) => vscode.TextEdit.delete(range))));
-      }
+      event.waitUntil((async () => {
+        if (hasUnsavedDraft) {
+          await saveDraftOnSaveClick(document);
+        }
+        return dirtyMarkerRanges(document).map((range) => vscode.TextEdit.delete(range));
+      })());
     })
   );
 }
