@@ -369,7 +369,8 @@ async function saveTransientRequest(
   }
 
   const result = await showSaveRequestPicker(target.uri, defaultName, {
-    title: `Save request to ${basename(target.uri)}`
+    title: `Save request to ${basename(target.uri)}`,
+    ignore: target.ignore
   });
 
   if (!result) return;
@@ -414,16 +415,25 @@ async function saveTransientRequest(
       data: requestData
     });
 
-    savedPanels.add(itemUid);
+    // The panel may have closed during the write, and a restore within the grace period
+    // reopens the same item uid: only the panel that still owns the item is the saved one,
+    // and a disposed panel's view column cannot be read.
+    const owned = transientPanels.get(itemUid) === panel;
+    if (owned) {
+      savedPanels.add(itemUid);
+    }
 
-    const targetViewColumn = panel.viewColumn ?? vscode.ViewColumn.Active;
+    const viewColumn = owned ? panel.viewColumn ?? vscode.ViewColumn.Active : vscode.ViewColumn.Active;
     await vscode.commands.executeCommand(
       'vscode.openWith',
       file,
       'bruno.requestEditor',
-      { viewColumn: targetViewColumn, preview: false }
+      { viewColumn, preview: false }
     );
-    panel.dispose();
+
+    if (owned) {
+      panel.dispose();
+    }
 
     vscode.window.showInformationMessage(`Request saved as "${name}"`);
   } catch (err: any) {

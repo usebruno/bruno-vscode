@@ -1195,12 +1195,16 @@ async function openSettingsFile(entity: Entity): Promise<void> {
   let file: vscode.Uri;
 
   if (entity.type === 'collection') {
-    // A YAML collection keeps its settings in opencollection.yml, which is what identified it.
+    // A YAML collection keeps its settings in the opencollection file that identified it, .yml or .yaml.
     // A BRU one keeps them in collection.bru, which it has only once something was set.
-    file = vscode.Uri.joinPath(entity.uri, format === 'yml' ? 'opencollection.yml' : 'collection.bru');
+    if (format === 'yml') {
+      file = await findCollectionConfig(entity.uri);
+    } else {
+      file = vscode.Uri.joinPath(entity.uri, 'collection.bru');
 
-    if (format === 'bru' && !(await doesItExist(file))) {
-      await writeText(file, await stringifyCollection(defaultCollectionRoot(name), defaultBrunoConfig(name, format), { format }));
+      if (!(await doesItExist(file))) {
+        await writeText(file, await stringifyCollection(defaultCollectionRoot(name), defaultBrunoConfig(name, format), { format }));
+      }
     }
   } else {
     // A folder created outside Bruno has no folder file yet; the editor needs one to show.

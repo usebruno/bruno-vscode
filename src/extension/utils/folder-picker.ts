@@ -24,14 +24,15 @@ export interface SaveLocation {
 export async function showSaveRequestPicker(
   rootPath: vscode.Uri,
   defaultName?: string,
-  options?: { title?: string }
+  options: { title?: string; ignore?: string[] } = {}
 ): Promise<SaveLocation | undefined> {
   const rootName = basename(rootPath);
+  const { ignore = [] } = options;
 
   // Step 1: Pick a folder, unless the root is the only choice there is.
-  const folder = (await listSubfolders(rootPath)).length === 0
+  const folder = (await listSubfolders(rootPath, ignore)).length === 0
     ? rootPath
-    : await showFolderStep(rootPath, rootName, options?.title);
+    : await showFolderStep(rootPath, rootName, ignore, options.title);
 
   if (!folder) {
     return undefined
@@ -47,13 +48,13 @@ export async function showSaveRequestPicker(
   return { folder, name };
 }
 
-/** List of folders into which a request can be saved under `dir` */
-async function listSubfolders(dir: vscode.Uri): Promise<string[]> {
+/** List of folders into which a request can be saved under `dir`: what the sidebar lists, so a saved request shows. */
+async function listSubfolders(dir: vscode.Uri, ignore: string[]): Promise<string[]> {
   try {
     const entries = await vscode.workspace.fs.readDirectory(dir);
 
     return entries
-      .filter(([name, type]) => (type & vscode.FileType.Directory) && !name.startsWith('.') && name !== 'node_modules' && name !== 'environments')
+      .filter(([name, type]) => (type & vscode.FileType.Directory) && !name.startsWith('.') && name !== 'node_modules' && name !== 'environments' && !ignore.includes(name))
       .map(([name]) => name)
       .sort((a, b) => a.localeCompare(b));
   } catch {
@@ -66,7 +67,7 @@ function getRelativePath(root: vscode.Uri, uri: vscode.Uri): string {
   return uri.path.slice(root.path.length).replace(/^\//, '') || '/';
 }
 
-async function showFolderStep(rootPath: vscode.Uri, rootName: string, title?: string): Promise<vscode.Uri | undefined> {
+async function showFolderStep(rootPath: vscode.Uri, rootName: string, ignore: string[], title?: string): Promise<vscode.Uri | undefined> {
   return new Promise<vscode.Uri | undefined>((resolve) => {
     const quickPick = vscode.window.createQuickPick<FolderPickItem>();
     let currentPath = rootPath;
@@ -102,7 +103,7 @@ async function showFolderStep(rootPath: vscode.Uri, rootName: string, title?: st
         });
       }
 
-      const subfolders = await listSubfolders(dir);
+      const subfolders = await listSubfolders(dir, ignore);
       if (load !== latestLoad) {
         return;
       }
