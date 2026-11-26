@@ -31,7 +31,7 @@ const filesBeingWritten = new Set<string>();
 // VS Code saves waiting for the webview's serialized draft
 const pendingVSCodeSaves = new Map<string, (content: string) => void>();
 
-// Under VS Code's 1.5s will-save limit
+// Can't exceed VS Code's 1.5s will-save limit: past it our edits are dropped
 const DRAFT_SAVE_TIMEOUT_MS = 1000;
 
 function normalizePath(filePath: string): string {
