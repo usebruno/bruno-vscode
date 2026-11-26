@@ -26,6 +26,7 @@ import {
   newTransientRequest,
   openBrunoSidebar,
   openCollectionFromDisk,
+  openRequestTab,
   pasteIntoCollection,
   pasteOntoItem,
   removeCollection,
@@ -656,6 +657,12 @@ async function verifyTransientRequests(page: Page, setup: Setup) {
 
       if (curl) {
         await expect(pane.locator('.input-container .CodeMirror').first()).toContainText(url);
+
+        // The query is listed in the Params table, so editing that table keeps it in the URL.
+        await openRequestTab(pane, 'params');
+        const queryParams = buildCommonLocators(pane.getByTestId('query-params')).editableTable;
+        await expect(queryParams.columnNameInput(0)).toHaveValue('page');
+        await expect(queryParams.columnValueEditor(0)).toContainText('2');
       }
     }
   })

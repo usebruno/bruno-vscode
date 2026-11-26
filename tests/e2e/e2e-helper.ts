@@ -154,7 +154,7 @@ export async function createSetup<const EnvName extends string = never>(
         location,
         collection.endsWith('.zip') ? undefined : 'yml'
       );
-      ctx.addCollection(name, location, 'yml');
+      ctx.addCollection(name, location, fs.existsSync(path.join(location, name, 'bruno.json')) ? 'bru' : 'yml');
     } else {
       const folders = flattenFolders(collection.folders)
       const requests: RequestEntry[] = [

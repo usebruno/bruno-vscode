@@ -247,7 +247,7 @@ export class NativeSidebar {
 
   /** Click the quick pick entry whose text contains `label`. */
   private async pickQuickItem(label: string): Promise<void> {
-    const item = this.page.locator('.quick-input-list .monaco-list-row').filter({ hasText: label }).first();
+    const item = this.page.locator('.quick-input-list .monaco-list-row').filter({ hasText: label, visible: true }).first();
     await item.waitFor({ state: 'visible', timeout: 15_000 });
     await item.click();
   }
@@ -538,7 +538,8 @@ export class NativeSidebar {
 
     if (await folderEntry.isVisible()) {
       for (const folder of folderPath) {
-        await rows.filter({ hasText: folder }).first().click();
+        const label = this.page.locator('.label-name', { hasText: new RegExp(`^\\s*${escapeRegExp(folder)}\\s*$`) });
+        await rows.filter({ has: label }).first().click();
         // The entry's description names the folder once the list has moved into it.
         await expect(folderEntry).toContainText(folder);
       }
