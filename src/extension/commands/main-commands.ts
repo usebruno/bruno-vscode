@@ -12,7 +12,7 @@ import { handleInvoke } from '../ipc/handlers';
 import collectionWatcher from '../app/collection-watcher';
 import { getCollectionFormat } from '../utils/filesystem';
 import { stateManager } from '../webview/state-manager';
-import { isDirty } from '../editors/dirty-state-manager';
+import { isDirty, saveDraft } from '../editors/dirty-state-manager';
 
 const { stringifyCollection } = require('@usebruno/filestore');
 
@@ -91,7 +91,10 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
             }
 
             if (choice === 'Save') {
-              await vscode.commands.executeCommand('workbench.action.files.save');
+              // Keep the editor open with its draft if Bruno could not save it
+              if (!(await saveDraft(uri.fsPath))) {
+                return;
+              }
             } else {
               closeCommand = 'workbench.action.revertAndCloseActiveEditor';
             }

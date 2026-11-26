@@ -34,6 +34,12 @@ const pendingVSCodeSaves = new Map<string, (content: string) => void>();
 // Can't exceed VS Code's 1.5s will-save limit: past it our edits are dropped
 const DRAFT_SAVE_TIMEOUT_MS = 1000;
 
+// Bruno saves waiting for the webview to clear its draft
+const draftClearWaiters = new Map<string, () => void>();
+
+// How long to wait for Bruno's own save to clear the draft
+const DRAFT_CLEAR_TIMEOUT_MS = 5000;
+
 function normalizePath(filePath: string): string {
   // Use path.normalize and convert to lowercase on case-insensitive systems
   const normalized = path.normalize(filePath);
@@ -130,6 +136,11 @@ async function markDocumentClean(filePath: string): Promise<void> {
   const normalizedPath = normalizePath(filePath);
 
   dirtyDocuments.delete(normalizedPath);
+
+  const onDraftCleared = draftClearWaiters.get(normalizedPath);
+  if (onDraftCleared) {
+    onDraftCleared();
+  }
 
   // Discarding a draft clears the state without a write, which used to leave the marker behind.
   const document = registeredDocuments.get(normalizedPath);
@@ -366,27 +377,48 @@ export function registerDirtyStateHandlers(): void {
   });
 }
 
-// Replaces the document with the webview's saved draft, or just strips the marker on timeout
-function draftSaveEdits(
+// Resolves with the value passed to `done`, or undefined once the timeout passes
+function waitWithTimeout<T>(timeoutMs: number, start: (done: (value: T) => void) => void): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), timeoutMs);
+    start((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    });
+  });
+}
+
+// Runs the webview's own save and resolves true once its draft is cleared
+export async function saveDraft(filePath: string): Promise<boolean> {
+  const normalizedPath = normalizePath(filePath);
+  const webview = registeredWebviews.get(normalizedPath);
+  if (webview) {
+    await waitWithTimeout<void>(DRAFT_CLEAR_TIMEOUT_MS, (done) => {
+      draftClearWaiters.set(normalizedPath, done);
+      stateManager.sendTo(webview, 'main:trigger-save');
+    });
+    draftClearWaiters.delete(normalizedPath);
+  }
+  return !dirtyDocuments.has(normalizedPath);
+}
+
+// Edits that replace the document with the webview's saved draft, or only strip the marker on timeout
+async function draftSaveEdits(
   document: vscode.TextDocument,
   normalizedPath: string,
   webview: vscode.Webview
 ): Promise<vscode.TextEdit[]> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      pendingVSCodeSaves.delete(normalizedPath);
-      resolve(dirtyMarkerRanges(document).map((range) => vscode.TextEdit.delete(range)));
-    }, DRAFT_SAVE_TIMEOUT_MS);
-
-    pendingVSCodeSaves.set(normalizedPath, (content) => {
-      clearTimeout(timer);
-      pendingVSCodeSaves.delete(normalizedPath);
-      const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
-      resolve([vscode.TextEdit.replace(fullRange, content)]);
-    });
-
+  const content = await waitWithTimeout<string>(DRAFT_SAVE_TIMEOUT_MS, (done) => {
+    pendingVSCodeSaves.set(normalizedPath, done);
     stateManager.sendTo(webview, 'main:trigger-save');
   });
+  pendingVSCodeSaves.delete(normalizedPath);
+
+  if (content === undefined) {
+    return dirtyMarkerRanges(document).map((range) => vscode.TextEdit.delete(range));
+  }
+  const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
+  return [vscode.TextEdit.replace(fullRange, content)];
 }
 
 /**
