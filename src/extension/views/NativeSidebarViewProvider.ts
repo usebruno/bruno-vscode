@@ -771,6 +771,10 @@ export class Entity extends vscode.TreeItem {
       };
     } else {
       this.iconPath = this.getRequestIcon(requestType, requestMethod);
+      // A method with no glyph of its own is named beside the label instead.
+      if (requestType === 'HTTP' && !(requestMethod in requestIcons)) {
+        this.description = requestMethod;
+      }
       this.command = {
         command: 'vscode.openWith',
         title: 'Open Request',

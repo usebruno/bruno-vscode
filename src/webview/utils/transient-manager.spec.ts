@@ -35,14 +35,14 @@ const metaDetails = { uid: 'item-1', name: 'Untitled 1' };
 
 describe('common transient item fields', () => {
   test('every item has isTransient: true, seq: 0, draft: null', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.isTransient).toBe(true);
     expect(item.seq).toBe(0);
     expect(item.draft).toBeNull();
   });
 
   test('the item carries the uid and name it was given', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.uid).toBe('item-1');
     expect(item.name).toBe('Untitled 1');
   });
@@ -52,27 +52,27 @@ describe('common transient item fields', () => {
 
 describe('file extension and pathname', () => {
   test('bru format produces .bru extension', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.filename).toBe('Untitled 1.bru');
   });
 
   test('yml format produces .yml extension', () => {
-    const item = transientManager.create('http', ymlCollection, metaDetails);
+    const item = transientManager.create(ymlCollection, { ...metaDetails, type: 'http' });
     expect(item.filename).toBe('Untitled 1.yml');
   });
 
   test('missing format defaults to .yml', () => {
-    const item = transientManager.create('http', noFormatCollection, metaDetails);
+    const item = transientManager.create(noFormatCollection, { ...metaDetails, type: 'http' });
     expect(item.filename).toBe('Untitled 1.yml');
   });
 
   test('pathname is under .bruno/transient/ with Unix separators', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.pathname).toBe('/Users/test/my-collection/.bruno/transient/Untitled 1.bru');
   });
 
   test('pathname uses backslash separators for Windows paths', () => {
-    const item = transientManager.create('http', windowsCollection, metaDetails);
+    const item = transientManager.create(windowsCollection, { ...metaDetails, type: 'http' });
     expect(item.pathname).toBe('C:\\Users\\test\\my-collection\\.bruno\\transient\\Untitled 1.bru');
   });
 });
@@ -81,27 +81,27 @@ describe('file extension and pathname', () => {
 
 describe("create('http')", () => {
   test('type is http-request', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.type).toBe('http-request');
   });
 
   test('method defaults to GET', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.request.method).toBe('GET');
   });
 
   test('body mode is none', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect((item.request.body as any).mode).toBe('none');
   });
 
   test('settings has encodeUrl: true', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.settings).toEqual({ encodeUrl: true });
   });
 
   test('has empty url, headers, params, assertions, tests, docs', () => {
-    const item = transientManager.create('http', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'http' });
     expect(item.request.url).toBe('');
     expect(item.request.headers).toEqual([]);
     expect(item.request.params).toEqual([]);
@@ -115,17 +115,17 @@ describe("create('http')", () => {
 
 describe("create('graphql')", () => {
   test('type is graphql-request', () => {
-    const item = transientManager.create('graphql', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'graphql' });
     expect(item.type).toBe('graphql-request');
   });
 
   test('method defaults to POST', () => {
-    const item = transientManager.create('graphql', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'graphql' });
     expect(item.request.method).toBe('POST');
   });
 
   test('body mode is graphql with query and variables', () => {
-    const item = transientManager.create('graphql', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'graphql' });
     const body = item.request.body as any;
     expect(body.mode).toBe('graphql');
     expect(body.graphql).toEqual({ query: '', variables: '' });
@@ -136,25 +136,25 @@ describe("create('graphql')", () => {
 
 describe("create('grpc')", () => {
   test('type is grpc-request', () => {
-    const item = transientManager.create('grpc', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'grpc' });
     expect(item.type).toBe('grpc-request');
   });
 
   test('body mode is grpc with default message', () => {
-    const item = transientManager.create('grpc', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'grpc' });
     const body = item.request.body as any;
     expect(body.mode).toBe('grpc');
     expect(body.grpc).toEqual([{ name: 'message 1', content: '{}' }]);
   });
 
   test('method and methodType are empty strings', () => {
-    const item = transientManager.create('grpc', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'grpc' });
     expect(item.request.method).toBe('');
     expect(item.request.methodType).toBe('');
   });
 
   test('settings is empty object', () => {
-    const item = transientManager.create('grpc', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'grpc' });
     expect(item.settings).toEqual({});
   });
 });
@@ -163,24 +163,24 @@ describe("create('grpc')", () => {
 
 describe("create('ws')", () => {
   test('type is ws-request', () => {
-    const item = transientManager.create('ws', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'ws' });
     expect(item.type).toBe('ws-request');
   });
 
   test('method defaults to GET', () => {
-    const item = transientManager.create('ws', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'ws' });
     expect(item.request.method).toBe('GET');
   });
 
   test('body mode is ws with default message', () => {
-    const item = transientManager.create('ws', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'ws' });
     const body = item.request.body as any;
     expect(body.mode).toBe('ws');
     expect(body.ws).toEqual([{ name: 'message 1', type: 'json', content: '{}' }]);
   });
 
   test('settings has timeout and keepAliveInterval', () => {
-    const item = transientManager.create('ws', bruCollection, metaDetails);
+    const item = transientManager.create(bruCollection, { ...metaDetails, type: 'ws' });
     expect(item.settings).toEqual({ timeout: 0, keepAliveInterval: 0 });
   });
 });
@@ -205,19 +205,19 @@ describe('collection presets', () => {
   };
 
   test('base URL preset seeds the url of every request type', () => {
-    expect(transientManager.create('http', withPresets, metaDetails).request.url).toBe(presetUrl);
-    expect(transientManager.create('graphql', withPresets, metaDetails).request.url).toBe(presetUrl);
-    expect(transientManager.create('grpc', withPresets, metaDetails).request.url).toBe(presetUrl);
-    expect(transientManager.create('ws', withPresets, metaDetails).request.url).toBe(presetUrl);
+    expect(transientManager.create(withPresets, { ...metaDetails, type: 'http' }).request.url).toBe(presetUrl);
+    expect(transientManager.create(withPresets, { ...metaDetails, type: 'graphql' }).request.url).toBe(presetUrl);
+    expect(transientManager.create(withPresets, { ...metaDetails, type: 'grpc' }).request.url).toBe(presetUrl);
+    expect(transientManager.create(withPresets, { ...metaDetails, type: 'ws' }).request.url).toBe(presetUrl);
   });
 
   test('unsaved preset edits on the draft win over the saved config', () => {
-    const item = transientManager.create('http', withDraftPresets, metaDetails);
+    const item = transientManager.create(withDraftPresets, { ...metaDetails, type: 'http' });
     expect(item.request.url).toBe(draftPresetUrl);
   });
 
   test('collections without presets still produce an empty url', () => {
-    expect(transientManager.create('http', bruCollection, metaDetails).request.url).toBe('');
+    expect(transientManager.create(bruCollection, { ...metaDetails, type: 'http' }).request.url).toBe('');
   });
 
   test('the requestType preset does not override the type picked from the menu', () => {
@@ -226,15 +226,16 @@ describe('collection presets', () => {
       pathname: '/Users/test/graphql-preset',
       brunoConfig: { presets: { requestType: 'graphql' } }
     };
-    expect(transientManager.create('http', graphqlPreset, metaDetails).type).toBe('http-request');
+    expect(transientManager.create(graphqlPreset, { ...metaDetails, type: 'http' }).type).toBe('http-request');
   });
 });
 
 describe('create from a curl command', () => {
   test('merges the parsed request and settings over the base of the picked type', () => {
-    const item = transientManager.create('http', bruCollection, {
+    const item = transientManager.create(bruCollection, {
       uid: 'u1',
       name: 'Untitled 9',
+      type: 'http',
       request: {
         url: 'https://example.com/users',
         method: 'POST',

@@ -1,10 +1,20 @@
 import * as vscode from 'vscode';
-import type { GrpcRequest, HttpItemSettings, HttpRequest, HttpRequestBody, HttpRequestParam, ItemType, WebSocketRequest } from '@bruno-types';
+import type {
+  GrpcRequest,
+  HttpItemSettings,
+  HttpRequest,
+  HttpRequestBody,
+  HttpRequestParam,
+  ItemType,
+  KeyValue,
+  WebSocketRequest
+} from '@bruno-types';
 import { stringifyCollection, stringifyFolder, stringifyRequest } from '@usebruno/filestore';
 
 import { getRequestFromCurlCommand, isCurlCommand, normalizeCurlCommand } from '../../utils/curl';
 import { DEFAULT_GITIGNORE } from '../utils/constants';
-import { defaultBrunoConfig, defaultCollectionRoot, type CollectionFormat } from '../../utils/collection';
+import type { CollectionFormat, NewTransientRequest, RequestKind } from '../../utils/collection';
+import { defaultBrunoConfig, defaultCollectionRoot } from '../../utils/collection';
 import { parseParamsFromUrl } from '../../utils/url';
 
 import collectionWatcher from '../app/collection-watcher';
@@ -12,7 +22,7 @@ import { BrunoEditorProvider } from '../editors/bruno-editor-provider';
 import { broadcastToAllWebviews } from '../ipc/handlers';
 
 import { openRunnerPanel } from '../panels/runner-panel';
-import { openScratchRequest, type NewTransientRequest, type RequestKind } from '../panels/transient-request-panel';
+import { openScratchRequest } from '../panels/transient-request-panel';
 
 import LastOpenedCollections from '../store/last-opened-collections';
 import logsStore from '../store/logs';
@@ -222,12 +232,7 @@ type CurlRequest = NewTransientRequest & {
   request: {
     url: string;
     method: string;
-    headers: {
-      uid: string;
-      name: string;
-      value: string;
-      enabled: boolean
-    }[];
+    headers: KeyValue[];
     params: HttpRequestParam[];
     body: unknown;
     auth?: unknown
@@ -1056,7 +1061,7 @@ async function handleNewTransientRequest(context: vscode.ExtensionContext): Prom
  * Pick an opened collection to save the request in. Local ones only for now: the request
  * panel loads its collection through the Node-fs runtime, which cannot follow a remote URI yet.
  */
-async function pickCollection(provider: NativeSidebarViewProvider, placeHolder: string): Promise<{ uid: string; uri: vscode.Uri } | undefined> {
+async function pickCollection(provider: NativeSidebarViewProvider, placeHolder: string): Promise<CollectionRoot | undefined> {
   const collections = (await provider.listCollections()).filter((collection) => collection.uri.scheme === 'file');
 
   if (collections.length === 0) {
@@ -1073,7 +1078,7 @@ async function pickCollection(provider: NativeSidebarViewProvider, placeHolder: 
       { placeHolder }
     ))?.collection;
 
-  return picked && { uid: picked.uid, uri: picked.uri };
+  return picked;
 }
 
 async function handleNewRequest(item: Entity | undefined, getTarget: GetTargetFn) {

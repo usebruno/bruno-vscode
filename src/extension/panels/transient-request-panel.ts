@@ -16,6 +16,8 @@ import { posixifyPath } from '../utils/filesystem';
 import { basename, doesItExist, getNextSequenceNumber, writeText } from '../utils/file';
 import { parseRequest } from '../utils/parse';
 import { hydrateRequestWithUuid } from '../utils/collection';
+import type { NewTransientRequest } from '../../utils/collection';
+import type { CollectionRoot } from '../views/NativeSidebarViewProvider';
 import { stateManager } from '../webview/state-manager';
 import {
   broadcastToAllWebviews,
@@ -51,20 +53,11 @@ interface OpenTransient {
 // By item uid. An entry outlives its panel for the Undo grace period, so a reopen finds the item.
 const openTransients = new Map<string, OpenTransient>();
 
-export type RequestKind = 'http' | 'graphql' | 'grpc' | 'ws';
-
-/** What a panel opened before its item exists asks the webview to build: a kind, and for curl, the fields the command gave. */
-export interface NewTransientRequest {
-  type: RequestKind;
-  request?: Record<string, unknown>;
-  settings?: Record<string, unknown>;
-}
-
 /** The next free "Untitled N" among the transient requests open in `collectionUid`. */
-export function nextTransientName(collectionUid: string): string {
+function nextTransientName(collectionUid: string): string {
   let max = 0;
 
-  for (const [itemUid, open] of openTransients) {
+  for (const open of openTransients.values()) {
     if (open.collectionUid !== collectionUid) {
       continue;
     }
@@ -179,7 +172,7 @@ export async function openTransientRequestPanel(
 
         token.onCancellationRequested(() => {
           clearTimeout(timer);
-          vscode.commands.executeCommand('bruno.openTransientRequest', itemUid, itemName, collectionUid, collectionPath);
+          vscode.commands.executeCommand('bruno.openTransientRequest', itemUid, itemName, collectionUid, collectionPath, create);
           resolve();
         });
       })
@@ -366,7 +359,7 @@ async function saveTransientRequest(
   const item = openTransients.get(itemUid)?.item;
   const defaultName = (item?.name as string) || 'Untitled';
 
-  const target = await vscode.commands.executeCommand<{ uid: string; uri: vscode.Uri } | undefined>(
+  const target = await vscode.commands.executeCommand<CollectionRoot | undefined>(
     'bruno.sidebar.pickCollection',
     'Collection to save the request in'
   );
@@ -383,8 +376,8 @@ async function saveTransientRequest(
 
   const { folder, name } = result;
 
-  // Step 2: Determine format and write the file
-  const format = (await doesItExist(vscode.Uri.joinPath(target.uri, 'opencollection.yml'))) ? 'yml' : 'bru';
+  // Step 2: Write the file in the collection's format
+  const { format } = target;
   const filename = `${name}.${format}`;
   const file = vscode.Uri.joinPath(folder, filename);
 
@@ -396,6 +389,11 @@ async function saveTransientRequest(
     );
     if (overwrite !== 'Overwrite') return;
   }
+
+  // The prompts stay up after the panel is closed; a request that is gone is not saved.
+  if (transientPanels.get(itemUid) !== panel) {
+    return
+  };
 
   try {
     // A transient request starts at seq 0; saved, it takes its place after the folder's requests.

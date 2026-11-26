@@ -42,7 +42,9 @@ import logsStore from './store/logs';
 import { registerTreeCommands, registerMainCommands } from './commands';
 import { registerDirtyStateHandlers, registerSaveHandler } from './editors/dirty-state-manager';
 import { createOAuth2UriHandler } from './ipc/network/authorize-user-in-system-browser';
-import { openTransientRequestPanel, type NewTransientRequest } from './panels/transient-request-panel';
+import { openTransientRequestPanel } from './panels/transient-request-panel';
+
+import type { NewTransientRequest } from '../utils/collection';
 
 let extensionActivated = false;
 
