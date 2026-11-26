@@ -7,7 +7,7 @@ import { registerHandler, sendToWebview } from '../handlers';
 import { interpolateVars } from './interpolate-vars';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeHeaders, mergeScripts, mergeVars, mergeAuth } from '../../utils/collection';
 import { getCertsAndProxyConfig } from './cert-utils';
-import { getPreferences } from '../../store/preferences';
+import { preferencesUtil } from '../../store/preferences';
 import { getRuntimeVariables } from '../../store/runtime-variables';
 import { setAuthHeaders } from './prepare-request';
 import { interpolateString } from './interpolate-string';
@@ -532,9 +532,9 @@ const registerGrpcEventHandlers = (): void => {
       let certFilePath: string | undefined;
       let keyFilePath: string | undefined;
 
-      const preferences = getPreferences();
-      if (preferences?.request?.customCaCertificate?.enabled && preferences.request.customCaCertificate.filePath) {
-        caCertFilePath = preferences.request.customCaCertificate.filePath;
+      const customCaCertFilePath = preferencesUtil.getCustomCaCertificateFilePath();
+      if (preferencesUtil.shouldUseCustomCaCertificate() && customCaCertFilePath) {
+        caCertFilePath = customCaCertFilePath;
       }
 
       const clientCertConfig = collection.draft?.brunoConfig

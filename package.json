@@ -44,6 +44,81 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": [
+      {
+        "title": "General",
+        "order": 1,
+        "properties": {
+          "request.SSL/TLS Verification": {
+            "type": "boolean",
+            "default": true,
+            "order": 1,
+            "description": "Verify server certificates when sending HTTPS requests."
+          },
+          "request.Timeout (ms)": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "order": 2,
+            "description": "Maximum time in milliseconds to wait for a response. Use 0 for no timeout."
+          },
+          "certificate.Custom Certificate File": {
+            "type": "boolean",
+            "default": false,
+            "order": 3,
+            "description": "Trust an additional certificate authority, e.g. for internal or self-signed servers."
+          },
+          "certificate.Certificate File Path": {
+            "type": "string",
+            "default": "",
+            "order": 4,
+            "markdownDescription": "Path to the certificate file. Only applies when Custom Certificate File is on.\n\n[Select Certificate File](command:bruno.selectCaCertificateFile)"
+          },
+          "certificate.Keep Default CA Certificates": {
+            "type": "boolean",
+            "default": true,
+            "order": 5,
+            "markdownDescription": "Continue trusting the system CA certificates alongside the custom one. Only applies when Custom Certificate File is on."
+          },
+          "cookies.Store Cookies Automatically": {
+            "type": "boolean",
+            "default": true,
+            "order": 6,
+            "description": "Save cookies received in responses."
+          },
+          "cookies.Send Cookies Automatically": {
+            "type": "boolean",
+            "default": true,
+            "order": 7,
+            "description": "Attach stored cookies to matching requests."
+          },
+          "autoSave.Enable Auto Save": {
+            "type": "boolean",
+            "default": false,
+            "order": 8,
+            "description": "Save request changes automatically after you stop editing."
+          },
+          "autoSave.Save Delay (ms)": {
+            "type": "number",
+            "default": 1000,
+            "minimum": 100,
+            "order": 9,
+            "markdownDescription": "How long in milliseconds to wait after the last change before saving. Only applies when `#autoSave.Enable Auto Save#` is on."
+          }
+        }
+      },
+      {
+        "title": "About",
+        "order": 2,
+        "properties": {
+          "about": {
+            "type": "null",
+            "default": null,
+            "markdownDescription": "**Bruno for VS Code**: open-source API client for exploring and testing APIs.\n\n[Documentation](https://docs.usebruno.com) · [Website](https://www.usebruno.com) · [GitHub](https://github.com/usebruno/bruno-vscode) · [Changelog](https://github.com/usebruno/bruno-vscode/blob/main/CHANGELOG.md) · [Report an Issue](https://github.com/usebruno/bruno-vscode/issues) · [Discord](https://discord.com/invite/KgcZUncpjq)"
+          }
+        }
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -212,6 +287,11 @@
         "title": "Open Preferences",
         "category": "Bruno",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "bruno.selectCaCertificateFile",
+        "title": "Select CA Certificate File",
+        "category": "Bruno"
       },
       {
         "command": "bruno.openEnvironmentSettings",

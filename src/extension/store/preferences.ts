@@ -199,7 +199,14 @@ class PreferencesStore {
       }
     }
 
-    return merge({}, defaultPreferences, preferences);
+    const mergedPreferences: Preferences = merge({}, defaultPreferences, preferences);
+
+    // Auto save is configured in VS Code settings; the webview reads it from these preferences
+    const config = vscode.workspace.getConfiguration();
+    mergedPreferences.autoSave.enabled = config.get<boolean>('autoSave.Enable Auto Save') ?? mergedPreferences.autoSave.enabled;
+    mergedPreferences.autoSave.interval = config.get<number>('autoSave.Save Delay (ms)') ?? mergedPreferences.autoSave.interval;
+
+    return mergedPreferences;
   }
 
   savePreferences(newPreferences: Preferences): void {
@@ -228,28 +235,28 @@ export const savePreferences = async (newPreferences: Partial<Preferences> | Rec
 
 export const preferencesUtil = {
   shouldVerifyTls: (): boolean => {
-    return get(getPreferences(), 'request.sslVerification', true);
+    return vscode.workspace.getConfiguration().get('request.SSL/TLS Verification', true);
   },
   shouldUseCustomCaCertificate: (): boolean => {
-    return get(getPreferences(), 'request.customCaCertificate.enabled', false);
+    return vscode.workspace.getConfiguration().get('certificate.Custom Certificate File', false);
   },
   shouldKeepDefaultCaCertificates: (): boolean => {
-    return get(getPreferences(), 'request.keepDefaultCaCertificates.enabled', true);
+    return vscode.workspace.getConfiguration().get('certificate.Keep Default CA Certificates', true);
   },
   getCustomCaCertificateFilePath: (): string | null => {
-    return get(getPreferences(), 'request.customCaCertificate.filePath', null);
+    return vscode.workspace.getConfiguration().get<string>('certificate.Certificate File Path', '') || null;
   },
   getRequestTimeout: (): number => {
-    return get(getPreferences(), 'request.timeout', 0);
+    return vscode.workspace.getConfiguration().get('request.Timeout (ms)', 0);
   },
   getGlobalProxyConfig: (): Proxy => {
     return get(getPreferences(), 'proxy', defaultPreferences.proxy);
   },
   shouldStoreCookies: (): boolean => {
-    return get(getPreferences(), 'request.storeCookies', true);
+    return vscode.workspace.getConfiguration().get('cookies.Store Cookies Automatically', true);
   },
   shouldSendCookies: (): boolean => {
-    return get(getPreferences(), 'request.sendCookies', true);
+    return vscode.workspace.getConfiguration().get('cookies.Send Cookies Automatically', true);
   },
   shouldUseSystemBrowser: (): boolean => {
     // Always true in VS Code (no embedded browser window)

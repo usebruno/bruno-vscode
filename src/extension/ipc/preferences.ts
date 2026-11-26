@@ -36,6 +36,13 @@ const registerPreferencesIpc = (): void => {
     return { success: true };
   });
 
+  // Push auto save changes made in VS Code settings to every open webview
+  vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration('autoSave')) {
+      broadcastToAllWebviews('main:load-preferences', getPreferences());
+    }
+  });
+
   registerEventListener('main:open-preferences', () => {
     sendToWebview('main:open-preferences', {});
   });

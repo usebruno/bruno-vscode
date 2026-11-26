@@ -5,7 +5,7 @@ import https from 'https';
 import type { Readable } from 'stream';
 import type { NetworkLogEntry } from '@bruno-types';
 import { createAxiosInstance } from './axios-instance';
-import { setExtensionContext as setPreferencesContext } from '../../store/preferences';
+import * as vscode from 'vscode';
 import { addCookieToJar, cookieJar } from '../../utils/cookies';
 
 interface StubResponse {
@@ -313,15 +313,8 @@ describe('axios-instance TLS options', () => {
 
 describe('axios-instance cookies', () => {
   const setSendCookiesPreference = (sendCookies: boolean) => {
-    const state: Record<string, unknown> = { preferences: { request: { sendCookies } } };
-    setPreferencesContext({
-      globalState: {
-        get: <T>(key: string, defaultValue?: T) => (key in state ? (state[key] as T) : defaultValue),
-        update: (key: string, value: unknown) => {
-          state[key] = value;
-          return Promise.resolve();
-        }
-      }
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: (key: string, defaultValue?: unknown) => (key === 'cookies.Send Cookies Automatically' ? sendCookies : defaultValue)
     } as never);
   };
 

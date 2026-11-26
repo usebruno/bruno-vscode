@@ -5,7 +5,6 @@ import { BrunoEditorProvider, setPendingVariablesMode, ensureBrunoEditorIntent }
 import { resolveCollectionRoot } from '../utils/path';
 import { openRunnerPanel } from '../panels/runner-panel';
 import { openGlobalEnvironmentsPanel } from '../panels/global-environments-panel';
-import { openPreferencesPanel } from '../panels/preferences-panel';
 import { openEnvironmentSettingsPanel } from '../panels/environment-settings-panel';
 import { openExportCollectionPanel } from '../panels/export-collection-panel';
 import { handleInvoke } from '../ipc/handlers';
@@ -174,7 +173,31 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openPreferences', async () => {
-      await openPreferencesPanel(context);
+      await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bruno-api-client.bruno');
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('bruno.selectCaCertificateFile', async () => {
+      if (!vscode.workspace.getConfiguration().get('certificate.Custom Certificate File', false)) {
+        vscode.window.showWarningMessage('Enable "Custom Certificate File" to select a certificate file.');
+        return;
+      }
+
+      const result = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        title: 'Select Certificate File'
+      });
+
+      if (!result || result.length === 0) {
+        return;
+      }
+
+      await vscode.workspace
+        .getConfiguration()
+        .update('certificate.Certificate File Path', result[0].fsPath, vscode.ConfigurationTarget.Global);
     })
   );
 

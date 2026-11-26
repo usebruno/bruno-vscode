@@ -12,7 +12,7 @@ import { getCookieStringForUrl, saveCookies } from '../../utils/cookies';
 import { createFormData, formatMultipartData } from '../../utils/form-data';
 import { readFileBody, getSelectedFileBodyEntry, DEFAULT_FILE_BODY_CONTENT_TYPE } from '../../utils/file-body';
 import { safeStringifyJSON } from '../../utils/common';
-import { getPreferences, preferencesUtil } from '../../store/preferences';
+import { preferencesUtil } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
 import { getRuntimeVariables, setRuntimeVariables } from '../../store/runtime-variables';
 import { getCertsAndProxyConfig } from './cert-utils';
@@ -396,8 +396,6 @@ const executeRequest = async (
       }
     }
 
-    const preferences = getPreferences();
-
     const certsAndProxyConfig = await certsAndProxyConfigFor(request.url);
 
     const followRedirects = request.settings?.followRedirects ?? true;
@@ -409,7 +407,7 @@ const executeRequest = async (
     }
 
     const axiosOptions: AxiosInstanceOptions = {
-      timeout: request.timeout || request.settings?.timeout || preferences?.request?.timeout || 0,
+      timeout: request.timeout || request.settings?.timeout || preferencesUtil.getRequestTimeout() || 0,
       ...axiosOptionsFromCertsAndProxyConfig(certsAndProxyConfig),
       requestMaxRedirects,
       digestConfig: request.digestConfig,
