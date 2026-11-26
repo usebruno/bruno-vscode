@@ -396,9 +396,10 @@ export function registerSaveHandler(context: vscode.ExtensionContext): void {
 
       const { document } = event;
       const normalizedPath = normalizePath(document.uri.fsPath);
-      const isOwnWrite = filesBeingWritten.has(normalizedPath);
-      const hasUnsavedDraft = dirtyDocuments.has(normalizedPath) && event.reason === vscode.TextDocumentSaveReason.Manual && !isOwnWrite;
-      if (!hasUnsavedDraft && !dirtyMarkerRanges(document).length) {
+      const hasUnsavedDraft = dirtyDocuments.has(normalizedPath) && event.reason === vscode.TextDocumentSaveReason.Manual && !filesBeingWritten.has(normalizedPath);
+      const hasDirtyMarker = dirtyMarkerRanges(document).length > 0;
+
+      if (!hasUnsavedDraft && !hasDirtyMarker) {
         return;
       }
 
