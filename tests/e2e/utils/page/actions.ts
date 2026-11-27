@@ -1103,16 +1103,22 @@ export async function exportPostmanCollection(page: Page, collectionName: string
   const webview = await getWebviewByTitle(page, 'Export Collection');
   await webview.locator('[data-testid="export-option-postman"]:not(.disabled)').click();
 
-  const exportPath = path.join(os.tmpdir(), `${collectionName}-${Date.now()}_postman.json`);
+  // create temp folder
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bruno-postman-export-'));
+  fs.mkdirSync(path.join(dir, collectionName));
+
+  const exportPath = path.join(dir, `${collectionName}_postman.json`);
   const saveInput = buildCommonLocators(page).workbench.quickInputBox();
   // The dialog fills in its suggested file name a moment after opening; a path typed before that is overwritten.
   const input = await saveInput.elementHandle({ timeout: 10_000 });
   await page.waitForFunction((input) => (input as HTMLInputElement).value.endsWith('.json'), input, { timeout: 10_000 });
   await saveInput.fill(exportPath);
-  await expect(async () => {
-    await page.keyboard.press('Enter');
-    await expect(saveInput).toBeHidden();
-  }).toPass();
+  await page.locator('.quick-input-list .monaco-list-row')
+    .filter({ hasText: collectionName })
+    .first()
+    .waitFor({ timeout: 10_000 });
+  await page.keyboard.press('Enter');
+  await saveInput.waitFor({ state: 'hidden', timeout: 10_000 });
 
   await webview.owner().waitFor({ state: 'detached', timeout: 10_000 });
   return JSON.parse(fs.readFileSync(exportPath, 'utf8'));
