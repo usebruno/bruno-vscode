@@ -1374,6 +1374,19 @@ async function handlePaste(item: Entity | undefined, getTarget: GetTargetFn, set
 
     const dest = await getUniqueUri(parent.uri, sourceName, '');
     await vscode.workspace.fs.copy(copied.uri, dest, { overwrite: false });
+
+    // As for a request, the folder's own name picks up the " copy" suffix its directory did.
+    // Without a name of its own the folder shows its directory's, which already carries it.
+    const suffix = basename(dest).slice(sourceName.length);
+    const folderFile = vscode.Uri.joinPath(dest, `folder.${format}`);
+    if (suffix && await doesItExist(folderFile)) {
+      const { meta } = parseFolder(await readText(folderFile), { format }) ?? {};
+      // The parser substitutes "Untitled Folder" when the file carries no name.
+      if (meta?.name && meta.name !== 'Untitled Folder') {
+        await updateNameInFile(folderFile, 'folder', `${meta.name}${suffix}`, format);
+      }
+    }
+
     return;
   }
 

@@ -58,7 +58,7 @@ test.describe('response lifecycle', () => {
   let collections: string[] = [];
 
   test.beforeEach(async ({ workbench }) => {
-    ({ collections } = await createSetup(workspace, workbench));
+    ({ ctx: { collections } } = await createSetup(workspace, workbench));
   });
 
   test.afterEach(async ({ workbench }) => {

@@ -1,18 +1,25 @@
+import type { FileFormat } from './utils/page/sidebar';
+
 type CollectionInfo = {
   name: string,
-  location: string
+  location: string,
+  format: FileFormat,
 }
 
 // One per test: every collection the test creates, by name.
 export class Context {
-  private collections = new Map<string, CollectionInfo>();
+  private _collections = new Map<string, CollectionInfo>();
 
-  addCollection(name: string, location: string) {
-    this.collections.set(name, { name, location });
+  get collections(): string[] {
+    return Array.from(this._collections.keys());
+  }
+
+  addCollection(name: string, location: string, format: FileFormat) {
+    this._collections.set(name, { name, location, format });
   }
 
   getCollection(name: string): CollectionInfo {
-    const collection = this.collections.get(name);
+    const collection = this._collections.get(name);
 
     if (!collection) {
       throw new Error(`Collection "${name}" was not created in this test`);

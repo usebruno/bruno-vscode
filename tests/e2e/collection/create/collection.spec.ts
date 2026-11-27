@@ -16,6 +16,7 @@ import { buildCommonLocators } from '../../utils/page/locators';
 
 test.describe('Collection management', () => {
 
+  // @deprecated Covered by tests/e2e/sidebar/sidebar-actions.test.ts (verifyWelcomeView and the setup, which creates every collection from the sidebar)
   test('TC-3504: Create a collection from the sidebar', { tag: '@sanity' }, async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'My Test Collection';

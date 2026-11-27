@@ -1,0 +1,8 @@
+info:
+  name: zip-f1-r1
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://127.0.0.1:8081/api/echo/json

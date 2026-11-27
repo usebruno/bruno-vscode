@@ -603,7 +603,9 @@ const HTTP_METHOD_BLOCK_REGEX = /^\s*(get|post|put|delete|patch|options|head|tra
 
 const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
   try {
-    const metaRegex = /meta\s*{\s*([\s\S]*?)\s*}/;
+    // The block ends at a `}` on its own line, so a `}` inside a value
+    // (e.g. `name: user/{id}/path`) does not cut the block short.
+    const metaRegex = /meta\s*{([\s\S]*?)\n\s*}/;
     const match = data?.match?.(metaRegex);
     if (match) {
       const metaContent = match[1].trim();
@@ -619,7 +621,13 @@ const parseBruFileMeta = (data: string): Record<string, unknown> | null => {
           }
           return;
         }
-        const [key, value] = trimmed.split(':').map((str) => str.trim());
+        // Split on the first colon only: values such as `user/:id` contain more.
+        const colonIndex = trimmed.indexOf(':');
+        if (colonIndex === -1) {
+          return;
+        }
+        const key = trimmed.slice(0, colonIndex).trim();
+        const value = trimmed.slice(colonIndex + 1).trim();
         if (key && value) {
           if (value === '[' || value.startsWith('[')) {
             insideArray = !value.includes(']');

@@ -9,6 +9,7 @@ import { buildCommonLocators } from '../../utils/page/locators';
 
 test.describe('Folder management', () => {
 
+  // @deprecated Covered by tests/e2e/sidebar/sidebar-actions.test.ts (verifyCollectionFunctionalities: New Folder)
   test('TC-3648:Verify Adding a new folder under collection', { tag: '@sanity' }, async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Folder Collection';

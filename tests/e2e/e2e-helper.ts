@@ -134,10 +134,7 @@ async function addRequest(page: Page, sidebar: Sidebar, collection: string, { re
 
 export type Setup = {
   sidebar: Sidebar,
-  // Every collection created, by name
   ctx: Context,
-  // Names of the collections it created
-  collections: string[],
 }
 
 // Builds the workspace. Collections go in `location`, by default a fresh temp folder outside the
@@ -149,11 +146,15 @@ export async function createSetup<const EnvName extends string = never>(
 ): Promise<Setup> {
   const sidebar = await openBrunoSidebar(page);
   const ctx = new Context();
-  const collections: string[] = [];
 
   for (const collection of config.collections) {
     if (typeof collection === 'string') {
-      // import collection
+      const name = await sidebar.importFile(
+        collection,
+        location,
+        collection.endsWith('.zip') ? undefined : 'yml'
+      );
+      ctx.addCollection(name, location, fs.existsSync(path.join(location, name, 'bruno.json')) ? 'bru' : 'yml');
     } else {
       const folders = flattenFolders(collection.folders)
       const requests: RequestEntry[] = [
@@ -162,7 +163,6 @@ export async function createSetup<const EnvName extends string = never>(
       ]
 
       await createCollectionV2(sidebar, ctx, collection.name, location, collection.format)
-      collections.push(collection.name)
 
       verifyGitignore(ctx, collection.name)
 
@@ -215,7 +215,7 @@ export async function createSetup<const EnvName extends string = never>(
     }
   }
 
-  return { sidebar, ctx, collections }
+  return { sidebar, ctx }
 }
 
 export type Workspace = Parameters<typeof createSetup>[0];
@@ -237,7 +237,7 @@ export function runSuites<const S extends LifecycleSuite[]>(title: string, suite
         setup?.(test);
 
         test.beforeEach(async ({ workbench }) => {
-          ({ collections } = await createSetup(workspace, workbench));
+          ({ ctx: { collections } } = await createSetup(workspace, workbench));
         });
 
         test.afterEach(async ({ workbench }) => {

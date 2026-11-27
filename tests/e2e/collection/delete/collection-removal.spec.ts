@@ -74,6 +74,7 @@ test.describe('Collection removal', () => {
     await expect(row).toHaveCount(1);
   });
 
+  // @deprecated Covered by tests/e2e/sidebar/sidebar-actions.test.ts (verifyFolderFunctionalities: Delete)
   test('Deleted folder disappears from the sidebar', async ({ page, tmpDir }) => {
     const sidebar = await openBrunoSidebar(page);
     const collectionName = 'Folder Delete Test';

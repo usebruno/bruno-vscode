@@ -1,0 +1,86 @@
+{
+  "name": "br-collection",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "br-f1",
+      "items": [
+        {
+          "type": "http",
+          "name": "br-f1-r1",
+          "seq": 1,
+          "request": {
+            "url": "http://127.0.0.1:8081/api/echo/json",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "none"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "br-f2",
+      "items": [
+        {
+          "type": "http",
+          "name": "br-f2-r1",
+          "seq": 1,
+          "request": {
+            "url": "http://127.0.0.1:8081/api/echo/json",
+            "method": "POST",
+            "headers": [],
+            "params": [],
+            "body": {
+              "mode": "none"
+            },
+            "auth": {
+              "mode": "none"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "http",
+      "name": "br-r1",
+      "seq": 1,
+      "request": {
+        "url": "http://127.0.0.1:8081/ping",
+        "method": "GET",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "none"
+        },
+        "auth": {
+          "mode": "none"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "name": "br-r2",
+      "seq": 2,
+      "request": {
+        "url": "http://127.0.0.1:8081/api/echo/json",
+        "method": "POST",
+        "headers": [],
+        "params": [],
+        "body": {
+          "mode": "none"
+        },
+        "auth": {
+          "mode": "none"
+        }
+      }
+    }
+  ]
+}
