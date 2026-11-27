@@ -5,7 +5,7 @@ import isEqual from 'lodash/isEqual';
 import { sendToWebview, broadcastToAllWebviews } from '../ipc/handlers';
 import { setRuntimeVariables } from '../store/runtime-variables';
 import logsStore, { LogLevel } from '../store/logs';
-import { clearOauth2CredentialsByCredentialsId } from './oauth2';
+import { clearOauth2Credentials } from './oauth2';
 import type { ScriptErrorContext } from '@bruno-types';
 
 const decomment = (script: string): string => {
@@ -138,8 +138,8 @@ const emitScriptVariableUpdates = (
   }
 };
 
-const resetOauth2Credentials = (credentialIds: unknown, request: unknown, context: ScriptContext): void => {
-  if (!Array.isArray(credentialIds) || !credentialIds.length) {
+const resetOauth2Credentials = (credentialIds: string[] | undefined, request: unknown, context: ScriptContext): void => {
+  if (!credentialIds?.length) {
     return;
   }
 
@@ -147,8 +147,8 @@ const resetOauth2Credentials = (credentialIds: unknown, request: unknown, contex
     oauth2Credentials?: { credentialsId?: string } | null;
     oauth2CredentialVariables?: Record<string, unknown>;
   };
-  for (const credentialsId of credentialIds as string[]) {
-    clearOauth2CredentialsByCredentialsId({ collectionUid: context.collectionUid, credentialsId });
+  for (const credentialsId of credentialIds) {
+    clearOauth2Credentials({ collectionUid: context.collectionUid, credentialsId });
     if (req.oauth2Credentials?.credentialsId === credentialsId) {
       req.oauth2Credentials = null;
     }
@@ -198,7 +198,7 @@ export const runPreRequestScript = async (
     );
 
     emitScriptVariableUpdates(result, context, envVarsBefore);
-    resetOauth2Credentials((result as any).oauth2CredentialsToReset, request, context);
+    resetOauth2Credentials(result.oauth2CredentialsToReset, request, context);
 
     emitScriptTestResults('main:pre-request-test-results', (result as any).results, context);
 
@@ -228,13 +228,16 @@ export const runPreRequestScript = async (
   }
 };
 
+/** Set on the request by `req.onFail(fn)`; bruno-js wraps it to return the script's variable state. */
+export type OnFailHandler = (error: unknown) => Promise<ScriptResult | undefined>;
+
 export const runOnFailHandler = async (
-  request: unknown,
+  request: { onFailHandler?: OnFailHandler },
   error: unknown,
   errorMessage: string,
   context: ScriptContext
 ): Promise<string> => {
-  const handler = (request as { onFailHandler?: unknown } | undefined)?.onFailHandler;
+  const handler = request.onFailHandler;
   if (typeof handler !== 'function') {
     return errorMessage;
   }
@@ -332,7 +335,7 @@ export const runPostResponseScript = async (
     );
 
     emitScriptVariableUpdates(result, context, envVarsBefore);
-    resetOauth2Credentials((result as any).oauth2CredentialsToReset, request, context);
+    resetOauth2Credentials(result.oauth2CredentialsToReset, request, context);
 
     emitScriptTestResults('main:post-response-test-results', (result as any).results, context);
 

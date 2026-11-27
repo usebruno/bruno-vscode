@@ -18,7 +18,7 @@ interface AutoCompleteOptions {
 }
 
 // Static API hints - Bruno JavaScript API (subgrouped by category)
-const STATIC_API_HINTS: Record<string, string[]> = {
+const STATIC_API_HINTS = {
   req: [
     'req',
     'req.url',
@@ -197,10 +197,12 @@ const STATIC_API_HINTS: Record<string, string[]> = {
     'bru.utils.minifyXml(xml)',
     'bru.resetOauth2Credential(credentialId)'
   ]
-};
+} as const;
 
 // The values `showHintsFor` accepts.
-const HINT_GROUPS = Object.keys(STATIC_API_HINTS);
+type HintGroup = keyof typeof STATIC_API_HINTS;
+
+const isHintGroup = (group: string): group is HintGroup => group in STATIC_API_HINTS;
 
 // The globals every hint starts with.
 const HINT_ROOTS = ['bru', 'req', 'res'];
@@ -266,13 +268,11 @@ const transformVariablesToHints = (allVariables: AllVariables = {}) => {
  * @param {Set} apiHints - Set to add API hints to
  * @param {string[]} showHintsFor - Array of hint groups to show
  */
-const addApiHintsToSet = (apiHints: any, showHintsFor: any) => {
-  HINT_GROUPS.forEach((group) => {
-    if (showHintsFor.includes(group)) {
-      STATIC_API_HINTS[group].forEach((hint: any) => {
-        generateProgressiveHints(hint).forEach((h) => apiHints.add(h));
-      });
-    }
+const addApiHintsToSet = (apiHints: any, showHintsFor: string[]) => {
+  showHintsFor.filter(isHintGroup).forEach((group) => {
+    STATIC_API_HINTS[group].forEach((hint) => {
+      generateProgressiveHints(hint).forEach((h) => apiHints.add(h));
+    });
   });
 };
 
@@ -541,7 +541,7 @@ const getAllowedHintsByContext = (categorizedHints: any, context: any, showHints
   if (context === 'variables' && showHintsFor.includes('variables')) {
     allowedHints = [...categorizedHints.variables];
   } else if (context === 'api') {
-    const hasApiHints = showHintsFor.some((group: string) => HINT_GROUPS.includes(group));
+    const hasApiHints = showHintsFor.some(isHintGroup);
     if (hasApiHints) {
       allowedHints = [...categorizedHints.api];
     }
@@ -665,7 +665,7 @@ const handleClickForAutocomplete = (cm: any, options: AutoCompleteOptions) => {
   // Combine all hints based on showHintsFor configuration
   let allHints: any = [];
 
-  const hasApiHints = showHintsFor.some((group: string) => HINT_GROUPS.includes(group));
+  const hasApiHints = showHintsFor.some(isHintGroup);
   if (hasApiHints) {
     allHints = [...allHints, ...categorizedHints.api];
   }

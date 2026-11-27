@@ -193,16 +193,9 @@ const applyAuthConfig = (target: Record<string, unknown> & { headers: Record<str
       }
       break;
     }
-    case 'wsse': {
-      const username = get(auth, 'wsse.username', '') as string;
-      const password = get(auth, 'wsse.password', '') as string;
-      const ts = new Date().toISOString();
-      const nonce = crypto.randomBytes(16).toString('hex');
-      const hash = crypto.createHash('sha1').update(nonce + ts + password).digest('hex');
-      const digest = Buffer.from(hash, 'utf8').toString('base64');
-      target.headers['X-WSSE'] = `UsernameToken Username="${username}", PasswordDigest="${digest}", Nonce="${nonce}", Created="${ts}"`;
+    case 'wsse':
+      target.wsse = pick(auth, 'wsse', ['username', 'password']);
       break;
-    }
     case 'apikey': {
       const apiKeyAuth = auth.apikey as { key?: string; value?: string; placement?: string } | undefined;
       if (!apiKeyAuth?.key) {
@@ -235,6 +228,30 @@ const setAuthHeaders = <T extends { headers: Record<string, string> }>(
     applyAuthConfig(target, request.auth as Record<string, unknown>);
   }
   return axiosRequest;
+};
+
+/** Must run after interpolateVars so the digest is computed from the resolved password. */
+const applyWsseHeader = (request: {
+  headers?: Array<{ name: string; value: string; enabled?: boolean }> | Record<string, string>;
+  wsse?: { username?: string; password?: string };
+}): void => {
+  if (!request.wsse) {
+    return;
+  }
+
+  const username = request.wsse.username || '';
+  const password = request.wsse.password || '';
+  const ts = new Date().toISOString();
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.createHash('sha1').update(nonce + ts + password).digest('hex');
+  const digest = Buffer.from(hash, 'utf8').toString('base64');
+  const value = `UsernameToken Username="${username}", PasswordDigest="${digest}", Nonce="${nonce}", Created="${ts}"`;
+
+  if (Array.isArray(request.headers)) {
+    request.headers.push({ name: 'X-WSSE', value, enabled: true });
+  } else {
+    request.headers = { ...request.headers, 'X-WSSE': value };
+  }
 };
 
 const applyAuth = (request: PreparedRequest, auth: BrunoRequest['auth']): void => {
@@ -321,6 +338,7 @@ export {
   prepareBody,
   applyAuth,
   setAuthHeaders,
+  applyWsseHeader,
   BrunoRequest,
   PreparedRequest
 };

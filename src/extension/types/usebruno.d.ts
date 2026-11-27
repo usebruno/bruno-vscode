@@ -63,6 +63,7 @@ declare module '@usebruno/js' {
     nextRequestName?: string;
     skipRequest?: boolean;
     stopExecution?: boolean;
+    oauth2CredentialsToReset?: string[];
     error?: string;
   }
 
