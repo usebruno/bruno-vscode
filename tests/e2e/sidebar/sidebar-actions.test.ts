@@ -37,7 +37,7 @@ import {
   takeScreenshot,
 } from '../utils/page/actions';
 import { buildCommonLocators } from '../utils/page/locators';
-import { focusContextMenuItem, type TransientRequestKind } from '../utils/page/sidebar';
+import type { TransientRequestKind } from '../utils/page/sidebar';
 import { GRPC_SERVER_URL, TEST_SERVER_LOCAL_URL, WS_SERVER_URL } from '../utils/urls';
 
 type CollectionConfig = Exclude<Workspace['collections'][number], string>;
@@ -249,22 +249,6 @@ async function menuEntries(page: Page, open: () => Promise<void>): Promise<strin
 
 const contextMenuEntries = (page: Page, row: Locator) => menuEntries(page, () => row.click({ button: 'right' }));
 
-/** Run an entry of the title bar's "..." menu. */
-async function runTitleMenuItem(page: Page, title: string): Promise<void> {
-  const menu = page.locator('.context-view .monaco-menu');
-
-  await expect(async () => {
-    await titleActions(page).last().click();
-
-    await expect(menu).toBeVisible({ timeout: 3_000 });
-
-    await focusContextMenuItem(page, menu, menu.getByRole('menuitem', { name: title }));
-    await page.keyboard.press('Enter');
-
-    await expect(menu).toBeHidden({ timeout: 2_000 });
-  }).toPass({ timeout: 15_000 });
-}
-
 /** The inline buttons a row shows while the pointer is over it. */
 async function hoverActions(row: Locator): Promise<(string | null)[]> {
   await row.hover();
@@ -336,7 +320,7 @@ async function verifyCollections(page: Page, location: string): Promise<Setup> {
 
   await test.step("Verify collapsing of all collections", async () => {
     // Collapse All from the title menu leaves the tree as a fresh open shows it: every collection collapsed.
-    await runTitleMenuItem(page, 'Collapse All Collections');
+    await sidebar.collapseAll();
 
     for (const name of ctx.collections) {
       await expect(sidebar.locators.collectionName(name)).toHaveAttribute('aria-expanded', 'false');
@@ -859,7 +843,7 @@ async function verifyImports(page: Page, location: string) {
   expect(ctx.collections).toEqual(imports.map(({ expected }) => expected.name));
 
   // An import shows its collection expanded; the tree is read one collection at a time.
-  await runTitleMenuItem(page, 'Collapse All Collections');
+  await sidebar.collapseAll();
   await expect(sidebar.locators.collectionItems()).toHaveCount(0);
 
   for (const { source, expected } of imports) {
@@ -897,8 +881,9 @@ test('Sidebar actions: welcome view, collections, folders, requests, transient r
   await test.step('Reorder', () => verifyReorder(setup));
 
   await test.step('Export', () => verifyExport(workbench, setup));
-  await test.step('Import', () => verifyImports(workbench, tmpDir));
   await test.step('Remove', () => verifyRemove(workbench, setup));
+
+  await test.step('Import', () => verifyImports(workbench, tmpDir));
 
   await closeAllEditors(workbench);
 });

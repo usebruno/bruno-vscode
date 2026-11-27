@@ -79,8 +79,14 @@ export async function newTransientRequest(sidebar: Sidebar, type: TransientReque
 
 /** Save the unsaved request in the tab titled `from` into a collection as `name`; the tab is replaced by the saved file's. */
 export async function saveTransientRequest(page: Page, sidebar: Sidebar, from: string, name: string, options?: SaveRequestOptions): Promise<void> {
-  // Bring the request to the front and focus its pane, so the save shortcut reaches it.
+  // Bring the request to the front, and let the focus VS Code gives a shown webview land before
+  // going on: it comes a moment after the switch, and would close the collection picker the save opens.
   await buildCommonLocators(page).workbench.editorTab(from).click();
+  await page.waitForFunction(
+    () => document.activeElement?.tagName === 'IFRAME' && document.activeElement.classList.contains('webview'),
+    undefined,
+    { timeout: 10_000 }
+  );
   await activeEditor(page).locator('#request-url').click();
   await saveFileByKeyboard(page);
   await sidebar.answerSaveRequest(name, options);

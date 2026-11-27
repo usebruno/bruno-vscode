@@ -154,7 +154,13 @@ function getLandingIndex(rows: Row[], index: number, direction: 'up' | 'down'): 
 export async function focusContextMenuItem(page: Page, menu: Locator, item: Locator): Promise<void> {
   const row = item.locator('..');
 
-  const isFocused = async (row: Locator) => await row.evaluate(element => element.classList.contains('focused'))
+  const isFocused = async (row: Locator) => {
+    return await row.evaluate(
+      element => element.classList.contains('focused'),
+      undefined,
+      { timeout: 1_000 }
+    )
+  }
 
   for (let step = 0; step < 20 && !(await isFocused(row)); step++) {
     await page.keyboard.press('ArrowDown');
@@ -249,7 +255,7 @@ export class NativeSidebar {
   private async pickQuickItem(label: string): Promise<void> {
     const item = this.page.locator('.quick-input-list .monaco-list-row').filter({ hasText: label, visible: true }).first();
     await item.waitFor({ state: 'visible', timeout: 15_000 });
-    await item.click();
+    await item.click({ timeout: 15_000 });
   }
 
   /**
@@ -318,13 +324,6 @@ export class NativeSidebar {
   /** Position of a request or folder row among the tree rows, in display order. */
   private async rowIndex(name: string): Promise<number> {
     return getRowIndex(await this.rows(), name);
-  }
-
-  /** The names of the collections shown, top to bottom. */
-  private async collectionNames(): Promise<string[]> {
-    const rows = await this.rows();
-
-    return rows.filter(({ level }) => level === 1).map(({ label }) => label.replace(/^Collection /, '').replace(/, not found$/, ''));
   }
 
   private async expectQuickInput(): Promise<void> {
@@ -405,23 +404,36 @@ export class NativeSidebar {
     await this.collectionRow(expectedName).waitFor({ state: 'visible', timeout: 20_000 });
   }
 
+  /** Collapse every collection through the title's overflow menu */
+  async collapseAll(): Promise<void> {
+    const menu = this.contextMenu;
+    const overflow = this.page.locator('.part.sidebar .composite.title .actions-container a.action-label').last();
+
+    await expect(async () => {
+      await overflow.click();
+      await menu.waitFor({ timeout: 3_000 });
+      await focusContextMenuItem(this.page, menu, menu.getByRole('menuitem', { name: 'Collapse All Collections' }));
+      await this.page.keyboard.press('Enter');
+      await menu.waitFor({ state: 'hidden', timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+
+    // Collapse All applies a moment after its menu closes.
+    await this.tree.locator('[role="treeitem"][aria-expanded="true"]').first().waitFor({ state: 'hidden', timeout: 10_000 });
+  }
+
   /**
-   * Import one file into `location` and resolve to the collection's name. The name comes from the
-   * file's contents (a WSDL's only once parsed), so the row that was not there before says what it got.
-   * A zip keeps the format it holds and is asked for none; an export is converted to `format`.
+   * Import `filePath` into `location`, converted to `format`
    */
   async importFile(filePath: string, location: string, format?: FileFormat): Promise<string> {
-    const before = await this.collectionNames();
+    await this.collapseAll();
+
     const review = await this.openImportReview([filePath]);
     await review.submit(location, format);
 
-    await this.tree.locator('[role="treeitem"][aria-level="1"]').nth(before.length).waitFor({ timeout: 20_000 });
+    const revealed = this.tree.locator('[role="treeitem"][aria-level="1"][aria-selected="true"][aria-expanded="true"]');
+    await revealed.waitFor({ timeout: 20_000 });
 
-    const [name] = (await this.collectionNames()).filter((candidate) => !before.includes(candidate));
-    // The import ends by revealing the new collection, selected and expanded; the row alone shows earlier.
-    await this.collectionRow(name).and(this.page.locator('[aria-selected="true"][aria-expanded="true"]')).waitFor({ timeout: 20_000 });
-
-    return name;
+    return (await revealed.getAttribute('aria-label'))!.replace(/^Collection /, '');
   }
 
   /** Start an import with these files and stop at the review step. */
