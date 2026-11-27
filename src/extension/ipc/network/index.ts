@@ -775,8 +775,18 @@ const loadItemTreeFromDisk = async (
   itemPathname: string,
   collectionPath: string
 ): Promise<{ item: RunnableItem; collection: Record<string, unknown> } | undefined> => {
-  const relativeItemPath = path.relative(collectionPath, itemPathname);
-  if (!relativeItemPath || relativeItemPath.startsWith('..') || path.isAbsolute(relativeItemPath)) {
+  // True when `target` is strictly inside the collection. Names like `..foo.bru` are allowed;
+  // only `..` itself or `../...` escapes.
+  const isInsideCollection = (target: string) => {
+    const relative = path.relative(collectionPath, target);
+
+    return Boolean(relative)
+      && relative !== '..'
+      && !relative.startsWith(`..${path.sep}`)
+      && !path.isAbsolute(relative);
+  };
+
+  if (!isInsideCollection(itemPathname)) {
     return undefined;
   }
   if (!(await doesItExist(vscode.Uri.file(itemPathname)))) {
@@ -788,13 +798,8 @@ const loadItemTreeFromDisk = async (
 
   const format = getCollectionFormat(collectionPath);
 
-  const isCollectionSubfolder = (dir: string) => {
-    const relative = path.relative(collectionPath, dir);
-    return Boolean(relative) && !relative.startsWith('..');
-  };
-
   let node: Record<string, unknown> = item;
-  for (let dir = path.dirname(itemPathname); isCollectionSubfolder(dir); dir = path.dirname(dir)) {
+  for (let dir = path.dirname(itemPathname); isInsideCollection(dir); dir = path.dirname(dir)) {
     const folderFileUri = vscode.Uri.file(path.join(dir, format === 'yml' ? 'folder.yml' : 'folder.bru'));
     const root = await doesItExist(folderFileUri)
       ? await parseFolder(await readText(folderFileUri), { format })
@@ -803,6 +808,30 @@ const loadItemTreeFromDisk = async (
   }
 
   return { item, collection: { ...collection, items: [node] } };
+};
+
+/** Resolves the item bru.runRequest() points at: from the collection tree, else from disk. */
+const resolveRunRequestItem = async (
+  collection: Record<string, unknown>,
+  collectionPath: string,
+  relativeItemPathname: string
+): Promise<{ item: Item | RunnableItem; collection: Record<string, unknown>; itemPathname: string }> => {
+  let itemPathname = path.join(collectionPath, relativeItemPathname);
+  if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
+    itemPathname = `${itemPathname}.${getCollectionFormat(collectionPath) === 'yml' ? 'yml' : 'bru'}`;
+  }
+
+  const found = findItemInCollectionByPathname(collection as never, itemPathname);
+  if (found) {
+    return { item: found, collection, itemPathname };
+  }
+
+  const loaded = await loadItemTreeFromDisk(collection, itemPathname, collectionPath);
+  if (!loaded) {
+    throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
+  }
+
+  return { ...loaded, itemPathname };
 };
 
 const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest => {
@@ -998,26 +1027,8 @@ const registerNetworkIpc = (): void => {
 
       // This runs the FULL script flow (pre-request, execute, post-response) like bruno-copy
       const runRequestByItemPathname = async (relativeItemPathname: string): Promise<unknown> => {
-        let itemPathname = path.join(collectionPath, relativeItemPathname);
-        if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
-          try {
-            const { getCollectionFormat } = require('../../utils/filesystem');
-            const fmt = getCollectionFormat(collectionPath);
-            itemPathname = `${itemPathname}.${fmt === 'yml' ? 'yml' : 'bru'}`;
-          } catch {
-            itemPathname = `${itemPathname}.bru`;
-          }
-        }
-        let foundItem: Item | RunnableItem | undefined = findItemInCollectionByPathname(_collection as never, itemPathname);
-        let itemCollection = _collection;
-        if (!foundItem) {
-          const loaded = await loadItemTreeFromDisk(_collection, itemPathname, collectionPath);
-          foundItem = loaded?.item;
-          itemCollection = loaded?.collection ?? _collection;
-        }
-        if (!foundItem) {
-          throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
-        }
+        const { item: foundItem, collection: itemCollection, itemPathname } =
+          await resolveRunRequestItem(_collection, collectionPath, relativeItemPathname);
         const innerItem = cloneDeep(foundItem);
         await hydrateItemRequestFromDisk(innerItem, collectionPath);
         const innerRequest = prepareItemRequest(innerItem, itemCollection);
@@ -1996,23 +2007,11 @@ const registerNetworkIpc = (): void => {
             const runnerProcessEnvVars = getProcessEnvVars(collectionUid) as Record<string, string>;
 
             const runnerRunRequestByItemPathname = async (relativeItemPathname: string): Promise<unknown> => {
-              let itemPathname = path.join(collectionPath, relativeItemPathname);
-              if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
-                try {
-                  const { getCollectionFormat } = require('../../utils/filesystem');
-                  const fmt = getCollectionFormat(collectionPath);
-                  itemPathname = `${itemPathname}.${fmt === 'yml' ? 'yml' : 'bru'}`;
-                } catch {
-                  itemPathname = `${itemPathname}.bru`;
-                }
-              }
-              const foundItem = findItemInCollectionByPathname(collection as never, itemPathname);
-              if (!foundItem) {
-                throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
-              }
-              const innerItem = cloneDeep(foundItem) as unknown as Record<string, unknown>;
+              const { item: foundItem, collection: itemCollection, itemPathname } =
+                await resolveRunRequestItem(collection, collectionPath, relativeItemPathname);
+              const innerItem = cloneDeep(foundItem);
               await hydrateItemRequestFromDisk(innerItem, collectionPath);
-              const innerRequest = prepareItemRequest(innerItem, collection);
+              const innerRequest = prepareItemRequest(innerItem, itemCollection);
               const innerScriptRequest = {
                 ...innerRequest,
                 headers: headersArrayToObject(innerRequest.headers),
@@ -2035,7 +2034,7 @@ const registerNetworkIpc = (): void => {
                 cancelTokenUid,
                 collectionUid,
                 collectionPath,
-                itemUid: innerItem.uid as string,
+                itemUid: innerItem.uid,
                 itemPathname,
                 envVars,
                 collectionVariables: innerScriptRequest.collectionVariables || {},
@@ -2050,7 +2049,7 @@ const registerNetworkIpc = (): void => {
                 collectionUid,
                 collectionPath,
                 collectionName: collection.name as string || '',
-                itemUid: innerItem.uid as string,
+                itemUid: innerItem.uid,
                 requestUid: uuidv4(),
                 envVars: envVars as Record<string, unknown>,
                 runtimeVariables: runnerRuntimeVariables, // Shared with parent
