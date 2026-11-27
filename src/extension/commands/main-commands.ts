@@ -77,7 +77,7 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
       if (activeTab && activeTab.input instanceof vscode.TabInputCustom) {
         const uri = activeTab.input.uri;
         if (uri.fsPath.endsWith('.bru') || uri.fsPath.endsWith('.yml')) {
-          let closeCommand = 'workbench.action.closeActiveEditor';
+          let discardDraft = false;
 
           if (isDirty(uri.fsPath)) {
             const choice = await vscode.window.showWarningMessage(
@@ -96,11 +96,15 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
                 return;
               }
             } else {
-              closeCommand = 'workbench.action.revertAndCloseActiveEditor';
+              discardDraft = true;
             }
           }
 
-          await vscode.commands.executeCommand(closeCommand);
+          if (discardDraft) {
+            await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+          } else if (!(await vscode.window.tabGroups.close(activeTab))) {
+            return;
+          }
           await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
         }
       }
