@@ -7,13 +7,17 @@
  */
 
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
 import { WebviewHelper } from '../webview/helper';
+import { writeCollectionConfig } from '../utils/collection-v2';
+import { generateUidBasedOnHash, uuid } from '../utils/common';
 import { showSaveRequestPicker } from '../utils/folder-picker';
 import { posixifyPath } from '../utils/filesystem';
+import { basename, doesItExist, getNextSequenceNumber, writeText } from '../utils/file';
 import { parseRequest } from '../utils/parse';
 import { hydrateRequestWithUuid } from '../utils/collection';
+import type { NewTransientRequest } from '../../utils/collection';
+import type { CollectionRoot } from '../views/NativeSidebarViewProvider';
 import { stateManager } from '../webview/state-manager';
 import {
   broadcastToAllWebviews,
@@ -24,7 +28,6 @@ import {
 } from '../ipc/handlers';
 import { loadCollectionMetadata } from '../app/collections';
 import collectionWatcher from '../app/collection-watcher';
-import { AppItem } from '@bruno-types';
 
 interface IpcMessage {
   type: 'invoke' | 'send';
@@ -36,13 +39,59 @@ interface IpcMessage {
 // Track open transient panels by item uid
 const transientPanels = new Map<string, vscode.WebviewPanel>();
 
-// Store transient item data so we can forward it to new panels
-const transientItems = new Map<string, Record<string, unknown>>();
-
 const savedPanels = new Set<string>();
 
-export function storeTransientItem(itemUid: string, item: Record<string, unknown>): void {
-  transientItems.set(itemUid, item);
+/** An open transient request: what the extension knows at open, and the item once the webview reports it. */
+interface OpenTransient {
+  collectionUid: string;
+  /** As given at open; `item.name` is the name as edited since. */
+  name: string;
+  /** The request as the webview last reported it; absent until it is built there. */
+  item?: Record<string, unknown>;
+}
+
+// By item uid. An entry outlives its panel for the Undo grace period, so a reopen finds the item.
+const openTransients = new Map<string, OpenTransient>();
+
+/** The next free "Untitled N" among the transient requests open in `collectionUid`. */
+function nextTransientName(collectionUid: string): string {
+  let max = 0;
+
+  for (const open of openTransients.values()) {
+    if (open.collectionUid !== collectionUid) {
+      continue;
+    }
+
+    const name = String(open.item?.name ?? open.name);
+    const n = Number(/^Untitled (\d+)$/.exec(name)?.[1]);
+    max = Math.max(max, n || 0);
+  }
+
+  return `Untitled ${max + 1}`;
+}
+
+async function ensureScratchCollection(context: vscode.ExtensionContext): Promise<{ uid: string; path: string }> {
+  const dir = vscode.Uri.joinPath(context.globalStorageUri, 'scratch');
+
+  if (!(await doesItExist(vscode.Uri.joinPath(dir, 'opencollection.yml')))) {
+    await vscode.workspace.fs.createDirectory(dir);
+    await writeCollectionConfig(dir, 'Scratch', 'yml');
+  }
+
+  return { uid: generateUidBasedOnHash(dir.fsPath), path: dir.fsPath };
+}
+
+/** Open a new unsaved request in the Scratch collection, named "Untitled N". */
+export async function openScratchRequest(context: vscode.ExtensionContext, create: NewTransientRequest): Promise<void> {
+  const scratch = await ensureScratchCollection(context);
+  await openTransientRequestPanel(
+    context,
+    uuid(),
+    nextTransientName(scratch.uid),
+    scratch.uid,
+    scratch.path,
+    create
+  );
 }
 
 export async function openTransientRequestPanel(
@@ -51,7 +100,8 @@ export async function openTransientRequestPanel(
   itemName: string,
   collectionUid: string,
   collectionPath: string,
-  item?: AppItem
+  /** Given when no item is stored yet: the webview then builds it. */
+  create?: NewTransientRequest
 ): Promise<void> {
   // If panel already exists for this item, reveal it
   const existing = transientPanels.get(itemUid);
@@ -63,6 +113,9 @@ export async function openTransientRequestPanel(
       transientPanels.delete(itemUid);
     }
   }
+
+  // Reopened within the Undo grace period, the entry still holds the item; keep it.
+  openTransients.set(itemUid, { ...openTransients.get(itemUid), collectionUid, name: itemName });
 
   const panel = vscode.window.createWebviewPanel(
     'bruno.transientRequest',
@@ -77,54 +130,57 @@ export async function openTransientRequestPanel(
   panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'bruno-icon.png');
 
   transientPanels.set(itemUid, panel);
-  panel.webview.html = WebviewHelper.getHtmlForWebview(panel.webview, context.extensionUri);
-  stateManager.addWebview(panel.webview);
-  stateManager.setActiveEditorWebview(panel.webview);
+  // Taken while the panel is alive: once it is disposed, reading `panel.webview` throws.
+  const webview = panel.webview;
+  webview.html = WebviewHelper.getHtmlForWebview(webview, context.extensionUri);
+  stateManager.addWebview(webview);
+  stateManager.setActiveEditorWebview(webview);
 
   panel.onDidChangeViewState((e) => {
     if (e.webviewPanel.active) {
-      stateManager.setActiveEditorWebview(panel.webview);
+      stateManager.setActiveEditorWebview(webview);
     }
   });
 
   panel.onDidDispose(() => {
-    stateManager.broadcast('main:transient-request-closed', { collectionUid, itemUid });
+    // The panel is gone either way; only the item is kept for the restore.
+    stateManager.removeWebview(webview);
+    transientPanels.delete(itemUid);
 
     if (savedPanels.has(itemUid)) {
       savedPanels.delete(itemUid);
-      stateManager.removeWebview(panel.webview);
-      transientPanels.delete(itemUid);
-      transientItems.delete(itemUid);
+      openTransients.delete(itemUid);
       return;
     }
 
     const GRACE_MS = 10_000;
 
-    const timer = setTimeout(() => {
-      stateManager.removeWebview(panel.webview);
-      transientPanels.delete(itemUid);
-      transientItems.delete(itemUid);
-    }, GRACE_MS);
+    // A progress notification, unlike a message, closes from code: it is gone once the
+    // grace period ends, so no restore can be asked for after the item is dropped.
+    // Its only button is VS Code's "Cancel", which restores the request.
+    vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `"${itemName}" closed. Cancel to restore it.`,
+        cancellable: true
+      },
+      (_progress, token) => new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          openTransients.delete(itemUid);
+          resolve();
+        }, GRACE_MS);
 
-    vscode.window.showInformationMessage(
-      `"${itemName}" closed. Click Undo to restore.`,
-      'Undo'
-    ).then((choice) => {
-      if (choice === 'Undo') {
-        clearTimeout(timer);
-        vscode.commands.executeCommand(
-          'bruno.openTransientRequest',
-          itemUid,
-          itemName,
-          collectionUid,
-          collectionPath
-        );
-      }
-    });
+        token.onCancellationRequested(() => {
+          clearTimeout(timer);
+          vscode.commands.executeCommand('bruno.openTransientRequest', itemUid, itemName, collectionUid, collectionPath, create);
+          resolve();
+        });
+      })
+    );
   });
 
   const webviewSender = (channel: string, ...args: unknown[]) => {
-    stateManager.sendTo(panel.webview, channel, ...args);
+    stateManager.sendTo(webview, channel, ...args);
   };
 
   let collectionLoaded = false;
@@ -143,10 +199,10 @@ export async function openTransientRequestPanel(
     const loadedUid = await loadCollectionMetadata(collectionPath, webviewSender);
     const uid = loadedUid || collectionUid;
 
-    const item = transientItems.get(itemUid);
+    const item = openTransients.get(itemUid)?.item;
     if (item) {
-      // Broadcast so the sidebar store also tracks the transient request.
-      stateManager.broadcast('main:add-transient-request', {
+      // Reopened (Undo) with the item as it was: this webview's store takes it as is.
+      stateManager.sendTo(webview, 'main:reopen-transient-request', {
         collectionUid,
         item
       });
@@ -154,10 +210,19 @@ export async function openTransientRequestPanel(
       // 2) Flip the view as soon as the item is in Redux. ViewContainer will
       // render the request pane; any missing data (e.g. environments) fills
       // in progressively as the background scan completes.
-      stateManager.sendTo(panel.webview, 'main:set-view', {
+      stateManager.sendTo(webview, 'main:set-view', {
         viewType: 'request',
         collectionUid,
         itemUid
+      });
+    } else if (create) {
+      // Nothing stored yet: the webview builds the item from the collection it just
+      // received (presets, format) and reports it back through transient:item-updated.
+      stateManager.sendTo(webview, 'main:new-transient-request', {
+        collectionUid,
+        itemUid,
+        name: itemName,
+        ...create
       });
     }
 
@@ -175,11 +240,11 @@ export async function openTransientRequestPanel(
     }
   };
 
-  panel.webview.onDidReceiveMessage(async (message: IpcMessage) => {
+  webview.onDidReceiveMessage(async (message: IpcMessage) => {
     const { type, channel, args, requestId } = message;
 
     if (type === 'invoke' && requestId) {
-      setCurrentWebview(panel.webview);
+      setCurrentWebview(webview);
 
       try {
         let result: unknown;
@@ -190,7 +255,7 @@ export async function openTransientRequestPanel(
           result = null;
         }
 
-        panel.webview.postMessage({
+        webview.postMessage({
           type: 'response',
           requestId,
           result
@@ -202,7 +267,7 @@ export async function openTransientRequestPanel(
           return;
         }
       } catch (error) {
-        panel.webview.postMessage({
+        webview.postMessage({
           type: 'response',
           requestId,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -211,7 +276,7 @@ export async function openTransientRequestPanel(
         clearCurrentWebview();
       }
     } else if (type === 'send') {
-      setCurrentWebview(panel.webview);
+      setCurrentWebview(webview);
       try {
         if (channel === 'open-external' && typeof args?.[0] === 'string') {
           vscode.env.openExternal(vscode.Uri.parse(args[0]));
@@ -245,18 +310,19 @@ export async function openTransientRequestPanel(
         }
         // Handle save transient request — args[0] is the serialized item data
         if (channel === 'transient:save-request' && args?.[0]) {
-          await saveTransientRequest(panel, itemUid, collectionUid, collectionPath, args[0] as Record<string, unknown>);
+          await saveTransientRequest(panel, itemUid, args[0] as Record<string, unknown>);
         }
         if (channel === 'transient:item-updated' && args?.[0]) {
           const { itemUid: updatedUid, item } = args[0] as { itemUid: string; item: Record<string, unknown> };
-          if (updatedUid && item) {
-            transientItems.set(updatedUid, item);
+          const open = updatedUid && item ? openTransients.get(updatedUid) : undefined;
+          if (open) {
+            open.item = item;
           }
         }
         if (channel === 'transient:item-ready' && args?.[0]) {
           const { itemUid: readyItemUid, collectionUid: readyCollUid } = args[0] as { itemUid: string; collectionUid: string };
           if (readyItemUid && readyCollUid) {
-            stateManager.sendTo(panel.webview, 'main:set-view', {
+            stateManager.sendTo(webview, 'main:set-view', {
               viewType: 'request',
               collectionUid: readyCollUid,
               itemUid: readyItemUid
@@ -280,34 +346,43 @@ export function closeTransientPanel(itemUid: string): void {
 
 /**
  * Save a transient request to disk.
- * Shows a folder picker, asks for a name, writes the file, closes the panel,
- * and opens the saved file in the regular editor.
+ * Asks the sidebar for a collection (the Scratch one it lives in is hidden), shows a
+ * folder picker, asks for a name, writes the file, closes the panel, and opens the
+ * saved file in the regular editor.
  */
 async function saveTransientRequest(
   panel: vscode.WebviewPanel,
   itemUid: string,
-  collectionUid: string,
-  collectionPath: string,
   itemData: Record<string, unknown>
 ): Promise<void> {
-  // Step 1: Pick a folder and enter a name
-  const item = transientItems.get(itemUid);
+  // Step 1: Pick a collection, a folder and a name
+  const item = openTransients.get(itemUid)?.item;
   const defaultName = (item?.name as string) || 'Untitled';
 
-  const result = await showSaveRequestPicker(collectionPath, defaultName, {
-    title: `Save request to ${path.basename(collectionPath)}`
+  const target = await vscode.commands.executeCommand<CollectionRoot | undefined>(
+    'bruno.sidebar.pickCollection',
+    'Collection to save the request in'
+  );
+
+  if (!target) {
+    return;
+  }
+
+  const result = await showSaveRequestPicker(target.uri, defaultName, {
+    title: `Save request to ${basename(target.uri)}`,
+    ignore: target.ignore
   });
 
   if (!result) return;
 
   const { folder, name } = result;
 
-  // Step 2: Determine format and write the file
-  const format = fs.existsSync(path.join(collectionPath, 'opencollection.yml')) ? 'yml' : 'bru';
+  // Step 2: Write the file in the collection's format
+  const { format } = target;
   const filename = `${name}.${format}`;
-  const fullPath = path.join(folder, filename);
+  const file = vscode.Uri.joinPath(folder, filename);
 
-  if (fs.existsSync(fullPath)) {
+  if (await doesItExist(file)) {
     const overwrite = await vscode.window.showWarningMessage(
       `"${filename}" already exists in this folder. Overwrite?`,
       'Overwrite',
@@ -316,32 +391,49 @@ async function saveTransientRequest(
     if (overwrite !== 'Overwrite') return;
   }
 
-  try {
-    const { stringifyRequestViaWorker } = require('@usebruno/filestore');
-    const content = await stringifyRequestViaWorker({ ...itemData, name, filename }, { format });
-    fs.writeFileSync(fullPath, content, 'utf-8');
+  // The prompts stay up after the panel is closed; a request that is gone is not saved.
+  if (transientPanels.get(itemUid) !== panel) {
+    return
+  };
 
+  try {
+    // A transient request starts at seq 0; saved, it takes its place after the folder's requests.
+    const seq = await getNextSequenceNumber(folder, format);
+    const { stringifyRequestViaWorker } = require('@usebruno/filestore');
+    const content = await stringifyRequestViaWorker({ ...itemData, name, filename, seq }, { format });
+    await writeText(file, content);
+
+    // The request runtime keys items by fs path, as the rest of the collection loader does.
     const requestData = await parseRequest(content, { format });
-    hydrateRequestWithUuid(requestData, fullPath);
+    hydrateRequestWithUuid(requestData, file.fsPath);
     broadcastToAllWebviews('main:collection-tree-updated', 'addFile', {
       meta: {
-        collectionUid,
-        pathname: posixifyPath(fullPath),
+        collectionUid: target.uid,
+        pathname: posixifyPath(file.fsPath),
         name: filename
       },
       data: requestData
     });
 
-    savedPanels.add(itemUid);
+    // The panel may have closed during the write, and a restore within the grace period
+    // reopens the same item uid: only the panel that still owns the item is the saved one,
+    // and a disposed panel's view column cannot be read.
+    const owned = transientPanels.get(itemUid) === panel;
+    if (owned) {
+      savedPanels.add(itemUid);
+    }
 
-    const targetViewColumn = panel.viewColumn ?? vscode.ViewColumn.Active;
+    const viewColumn = owned ? panel.viewColumn ?? vscode.ViewColumn.Active : vscode.ViewColumn.Active;
     await vscode.commands.executeCommand(
       'vscode.openWith',
-      vscode.Uri.file(fullPath),
+      file,
       'bruno.requestEditor',
-      { viewColumn: targetViewColumn, preview: false }
+      { viewColumn, preview: false }
     );
-    panel.dispose();
+
+    if (owned) {
+      panel.dispose();
+    }
 
     vscode.window.showInformationMessage(`Request saved as "${name}"`);
   } catch (err: any) {

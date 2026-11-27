@@ -44,6 +44,92 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "icons": {
+      "bruno-method-get": {
+        "description": "HTTP GET request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E001"
+        }
+      },
+      "bruno-method-post": {
+        "description": "HTTP POST request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E002"
+        }
+      },
+      "bruno-method-put": {
+        "description": "HTTP PUT request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E003"
+        }
+      },
+      "bruno-method-patch": {
+        "description": "HTTP PATCH request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E004"
+        }
+      },
+      "bruno-method-delete": {
+        "description": "HTTP DELETE request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E005"
+        }
+      },
+      "bruno-method-options": {
+        "description": "HTTP OPTIONS request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E006"
+        }
+      },
+      "bruno-method-head": {
+        "description": "HTTP HEAD request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E007"
+        }
+      },
+      "bruno-method-trace": {
+        "description": "HTTP TRACE request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E008"
+        }
+      },
+      "bruno-method-connect": {
+        "description": "HTTP CONNECT request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E009"
+        }
+      },
+      "bruno-method-graphql": {
+        "description": "GraphQL request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E00A"
+        }
+      },
+      "bruno-method-grpc": {
+        "description": "gRPC request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E00B"
+        }
+      },
+      "bruno-method-ws": {
+        "description": "WebSocket request",
+        "default": {
+          "fontPath": "media/method-icons.ttf",
+          "fontCharacter": "\\E00C"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -254,6 +340,12 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "bruno.sidebar.collapseAll",
+        "title": "Collapse All Collections",
+        "category": "Bruno",
+        "icon": "$(collapse-all)"
+      },
+      {
         "command": "bruno.sidebar.openCollection",
         "title": "Open Collection",
         "category": "Bruno",
@@ -269,7 +361,7 @@
         "command": "bruno.sidebar.newRequest",
         "title": "New Request",
         "category": "Bruno",
-        "icon": "$(new-file)"
+        "icon": "$(add)"
       },
       {
         "command": "bruno.sidebar.newFolder",
@@ -418,9 +510,19 @@
           "group": "navigation@5"
         },
         {
-          "command": "bruno.sidebar.refresh",
+          "command": "bruno.newRequest",
           "when": "view == bruno.nativeSidebarView",
           "group": "navigation@6"
+        },
+        {
+          "command": "bruno.sidebar.refresh",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "tree@1"
+        },
+        {
+          "command": "bruno.sidebar.collapseAll",
+          "when": "view == bruno.nativeSidebarView",
+          "group": "tree@2"
         }
       ],
       "view/item/context": [
@@ -467,12 +569,12 @@
         {
           "command": "bruno.sidebar.newRequest",
           "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
-          "group": "inline@1"
+          "group": "inline@2"
         },
         {
           "command": "bruno.sidebar.run",
           "when": "view == bruno.nativeSidebarView && viewItem =~ /^(collection(:opened)?|folder)$/",
-          "group": "inline@2"
+          "group": "inline@1"
         },
         {
           "command": "bruno.sidebar.newRequest",
@@ -578,6 +680,10 @@
         },
         {
           "command": "bruno.sidebar.newRequest",
+          "when": "false"
+        },
+        {
+          "command": "bruno.newRequestInCollection",
           "when": "false"
         },
         {
@@ -728,6 +834,7 @@
     "vscode:prepublish": "npm run build",
     "build": "npm run build:extension && npm run build:webview",
     "build:extension": "node esbuild.extension.mjs",
+    "build:method-icons": "node scripts/build-method-icons.mjs",
     "build:webview": "rsbuild build -c rsbuild.webview.config.mjs",
     "dev": "npm run dev:extension & npm run dev:webview",
     "dev:extension": "node esbuild.extension.mjs --watch",
@@ -780,6 +887,7 @@
     "fs-extra": "^11.2.0",
     "glob": "^10.3.0",
     "js-md4": "^0.3.2",
+    "opentype.js": "^2.0.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.1",
     "ts-migrate": "^0.1.35",

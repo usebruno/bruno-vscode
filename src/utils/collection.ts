@@ -4,6 +4,15 @@ import { isNonEmptyString } from './string';
 /** On-disk formats a collection can use: .bru request files, or OpenCollection YAML. */
 export type CollectionFormat = 'bru' | 'yml';
 
+export type RequestKind = 'http' | 'graphql' | 'grpc' | 'ws';
+
+/** What a panel opened before its item exists asks the webview to build: a kind, and for curl, the fields the command gave. */
+export interface NewTransientRequest {
+  type: RequestKind;
+  request?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+}
+
 /** The contents of bruno.json for BRU, or the config half of opencollection.yml for YAML. */
 export type BrunoConfig = {
   /** BRU collections carry a config version. */

@@ -23,7 +23,6 @@ import {
   scriptEnvironmentUpdateEvent,
   streamDataReceived,
   addTransientRequest,
-  removeTransientRequest,
   updateCollectionTagsList
 } from 'providers/ReduxStore/slices/collections';
 import {
@@ -52,6 +51,7 @@ import { addLog } from 'providers/ReduxStore/slices/logs';
 import { addTab } from 'providers/ReduxStore/slices/tabs';
 import { findItemInCollectionByPathname, findCollectionByUid, getDefaultRequestPaneTab } from 'utils/collections';
 import { uuid } from 'utils/common';
+import transientManager from 'utils/transient-manager';
 import type { Preferences } from '@bruno-types';
 import type {
   CollectionAddFileEventPayload,
@@ -152,6 +152,26 @@ const useIpcEvents = () => {
       const state = store.getState() as RootState;
       const collections = state.collections?.collections || [];
       return collections.some((c) => c.uid === collectionUid);
+    };
+
+    /** Runs `run` once the collection is in the store, trying for up to 80 * 50ms = 4 seconds. */
+    const whenCollectionLoads = (collectionUid: string, what: string, run: () => void) => {
+      const MAX_RETRIES = 80;
+      const RETRY_DELAY_MS = 50;
+      let retryCount = 0;
+
+      const attempt = () => {
+        retryCount++;
+        if (collectionExists(collectionUid)) {
+          run();
+        } else if (retryCount < MAX_RETRIES) {
+          setTimeout(attempt, RETRY_DELAY_MS);
+        } else {
+          console.error(`[Bruno] Collection not found for ${what} after max retries:`, collectionUid);
+        }
+      };
+
+      attempt();
     };
 
     // Process pending events that were queued because their collection didn't exist
@@ -406,36 +426,36 @@ const useIpcEvents = () => {
       dispatch(updateCookies(val as Parameters<typeof updateCookies>[0]));
     });
 
-    const removeAddTransientRequestListener = ipcRenderer.on('main:add-transient-request', (val: any) => {
+    // A panel reopened through Undo: its item comes back as it was, so it only has to go in the store.
+    const removeReopenTransientRequestListener = ipcRenderer.on('main:reopen-transient-request', (val: any) => {
       if (!val?.collectionUid || !val?.item) return;
 
-      const MAX_RETRIES = 80;
-      const RETRY_DELAY_MS = 50;
-      let retryCount = 0;
-
-      const tryAdd = () => {
-        retryCount++;
-        if (collectionExists(val.collectionUid)) {
-          dispatch(addTransientRequest({ collectionUid: val.collectionUid, item: val.item }));
-          // Signal the extension host that the item is in Redux
-          ipcRenderer.send('transient:item-ready', {
-            itemUid: val.item.uid,
-            collectionUid: val.collectionUid
-          });
-        } else if (retryCount < MAX_RETRIES) {
-          setTimeout(tryAdd, RETRY_DELAY_MS);
-        } else {
-          console.error('[Bruno] Collection not found for transient request after max retries:', val.collectionUid);
-        }
-      };
-
-      tryAdd();
+      whenCollectionLoads(val.collectionUid, 'transient request', () => {
+        dispatch(addTransientRequest({ collectionUid: val.collectionUid, item: val.item }));
+        // Signal the extension host that the item is in Redux
+        ipcRenderer.send('transient:item-ready', { itemUid: val.item.uid, collectionUid: val.collectionUid });
+      });
     });
 
-    const removeTransientRequestClosedListener = ipcRenderer.on('main:transient-request-closed', (val: any) => {
-      if (val?.collectionUid && val?.itemUid) {
-        dispatch(removeTransientRequest({ collectionUid: val.collectionUid, itemUid: val.itemUid }));
-      }
+    // A panel opened before its request existed: build the request here, where the
+    // collection's presets and format are, then hand it back to the extension host.
+    const removeNewTransientRequestListener = ipcRenderer.on('main:new-transient-request', (val: any) => {
+      if (!val?.collectionUid || !val?.itemUid || !val?.type) return;
+
+      whenCollectionLoads(val.collectionUid, 'new transient request', () => {
+        const { collections } = (store.getState() as RootState).collections;
+        const collection = collections.find((c) => c.uid === val.collectionUid)!;
+        // The store's collection type leaves pathname optional; a loaded collection has one.
+        const item = transientManager.create(
+          { ...collection, pathname: collection.pathname ?? '' },
+          { uid: val.itemUid, name: val.name, type: val.type, request: val.request, settings: val.settings }
+        );
+
+        dispatch(addTransientRequest({ collectionUid: val.collectionUid, item }));
+
+        ipcRenderer.send('transient:item-updated', { itemUid: item.uid, item });
+        ipcRenderer.send('transient:item-ready', { itemUid: item.uid, collectionUid: val.collectionUid });
+      });
     });
 
     const removeGlobalEnvironmentsUpdatesListener = ipcRenderer.on('main:load-global-environments', (val: unknown) => {
@@ -679,8 +699,8 @@ const useIpcEvents = () => {
       removePreferencesUpdatesListener();
       removeCookieUpdateListener();
       removeSystemProxyEnvUpdatesListener();
-      removeAddTransientRequestListener();
-      removeTransientRequestClosedListener();
+      removeReopenTransientRequestListener();
+      removeNewTransientRequestListener();
       removeGlobalEnvironmentsUpdatesListener();
       removeSnapshotHydrationListener();
       removeSecurityConfigUpdatedListener();
