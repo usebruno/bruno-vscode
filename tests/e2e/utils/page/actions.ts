@@ -1342,6 +1342,14 @@ async function updateTableRows(page: Page, table: Locator, rows: TableRow[]) {
   }
 }
 
+export async function updateUrl(page: Page, request: string, url: string, { save = true } = {}): Promise<void> {
+  await openRequestEditor(page, request);
+  await setCodeMirrorValue(page, editorLocators(page).requestUrl.editor().locator('.CodeMirror'), url);
+  if (save) {
+    await saveRequest(page);
+  }
+}
+
 export async function updateVars(page: Page, target: string, rows: TableRow[], phase: VarsPhase = 'preRequest'): Promise<void> {
   const itemType = await openTab(page, target, 'Vars');
   const { varsTable } = buildCommonLocators(activeEditor(page));

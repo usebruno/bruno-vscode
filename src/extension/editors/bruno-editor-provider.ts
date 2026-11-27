@@ -140,7 +140,7 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
 
     stateManager.addWebview(webviewPanel.webview);
 
-    registerDocument(document);
+    registerDocument(document, webviewPanel.webview);
     webviewByFilePath.set(path.normalize(filePath), webviewPanel.webview);
 
     const collectionRoot = findCollectionRoot(filePath);

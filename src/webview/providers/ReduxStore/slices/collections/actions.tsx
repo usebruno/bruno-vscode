@@ -340,6 +340,7 @@ export const saveRequest = (itemUid: string, collectionUid: string, silent = fal
 
     const itemToSave = transformRequestToSaveToFilesystem(item);
     const { ipcRenderer } = window;
+    const savedDraft = findItemInCollection(collection, itemUid)?.draft;
 
     itemSchema
       .validate(itemToSave)
@@ -347,6 +348,11 @@ export const saveRequest = (itemUid: string, collectionUid: string, silent = fal
       .then(() => {
         if (!silent) {
           toast.success('Request saved successfully');
+        }
+        // An edit made while saving is not in the file, so keep it as the draft
+        const currentCollection = findCollectionByUid(getState().collections.collections, collectionUid);
+        if (findItemInCollection(currentCollection, itemUid)?.draft !== savedDraft) {
+          return;
         }
         dispatch(
           _saveRequest({

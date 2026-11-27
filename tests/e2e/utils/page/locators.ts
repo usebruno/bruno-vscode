@@ -113,6 +113,9 @@ const buildLocators = (frame: FrameLike) => ({
     editorTab: (title: string) => frame.locator('.tabs-container .tab').filter({ hasText: title }),
     editorTabClose: (title: string) =>
       frame.locator('.tabs-container .tab').filter({ hasText: title }).locator('.tab-actions .action-label'),
+    editorTitleAction: (label: string) => frame.locator('.editor-actions').getByLabel(label),
+    textEditor: () => frame.locator('.editor-instance .monaco-editor .view-lines'),
+    dialogButton: (label: string) => frame.locator('.monaco-dialog-box').getByRole('button', { name: label, exact: true }),
     quickInput: () => frame.locator('.quick-input-widget'),
     getQuickInputByLabel: (label: string) => frame.locator('.quick-input-list .monaco-list-row', { hasText: label }),
     quickInputBox: () => frame.locator('.quick-input-widget .quick-input-box input'),

@@ -12,6 +12,7 @@ import { handleInvoke } from '../ipc/handlers';
 import collectionWatcher from '../app/collection-watcher';
 import { getCollectionFormat } from '../utils/filesystem';
 import { stateManager } from '../webview/state-manager';
+import { isDirty, saveDraft } from '../editors/dirty-state-manager';
 
 const { stringifyCollection } = require('@usebruno/filestore');
 
@@ -76,7 +77,34 @@ export function registerMainCommands(context: vscode.ExtensionContext): void {
       if (activeTab && activeTab.input instanceof vscode.TabInputCustom) {
         const uri = activeTab.input.uri;
         if (uri.fsPath.endsWith('.bru') || uri.fsPath.endsWith('.yml')) {
-          await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+          let discardDraft = false;
+
+          if (isDirty(uri.fsPath)) {
+            const choice = await vscode.window.showWarningMessage(
+              `Do you want to save the changes you made to ${path.basename(uri.fsPath)}?`,
+              { modal: true, detail: "Your changes will be lost if you don't save them." },
+              'Save',
+              "Don't Save"
+            );
+            if (!choice) {
+              return;
+            }
+
+            if (choice === 'Save') {
+              // Keep the editor open with its draft if Bruno could not save it
+              if (!(await saveDraft(uri.fsPath))) {
+                return;
+              }
+            } else {
+              discardDraft = true;
+            }
+          }
+
+          if (discardDraft) {
+            await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+          } else if (!(await vscode.window.tabGroups.close(activeTab))) {
+            return;
+          }
           await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
         }
       }
