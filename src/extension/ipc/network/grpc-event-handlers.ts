@@ -9,7 +9,7 @@ import { getEnvVars, getTreePathFromCollectionToItem, mergeHeaders, mergeScripts
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getPreferences } from '../../store/preferences';
 import { getRuntimeVariables } from '../../store/runtime-variables';
-import { setAuthHeaders } from './prepare-request';
+import { setAuthHeaders, applyWsseHeader } from './prepare-request';
 import { interpolateString } from './interpolate-string';
 
 interface GrpcBody {
@@ -173,6 +173,8 @@ const prepareGrpcRequest = async (
     requestVariables: request.requestVariables,
     globalEnvironmentVariables: request.globalEnvironmentVariables
   });
+
+  applyWsseHeader(grpcRequest);
 
   processHeaders(grpcRequest.headers as Record<string, string | Buffer>);
 

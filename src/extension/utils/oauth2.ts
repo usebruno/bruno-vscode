@@ -53,7 +53,7 @@ export const persistOauth2Credentials = ({ collectionUid, url, credentials, cred
 
 export const clearOauth2Credentials = ({ collectionUid, url, credentialsId }: {
   collectionUid: string;
-  url: string;
+  url?: string;
   credentialsId: string;
 }): void => {
   oauth2Store.clearCredentialsForCollection({ collectionUid, url, credentialsId });

@@ -596,6 +596,10 @@ export interface CollectionClearOauth2CredentialsByUrlPayload extends Collection
   credentialsId: string;
 }
 
+export interface CollectionClearOauth2CredentialsByCredentialsIdPayload extends CollectionUidPayload {
+  credentialsId: string;
+}
+
 export interface CollectionAddEnvFileEventPayload {
   environment: {
     uid: UID;

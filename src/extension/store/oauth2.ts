@@ -148,10 +148,13 @@ class Oauth2Store {
     }
   }
 
-  clearCredentialsForCollection({ collectionUid, url, credentialsId }: { collectionUid: string; url: string; credentialsId: string }): OAuth2DataForCollection | undefined {
+  /** Without a url, clears every entry for the credentialsId (bru.resetOauth2Credential). */
+  clearCredentialsForCollection({ collectionUid, url, credentialsId }: { collectionUid: string; url?: string; credentialsId: string }): OAuth2DataForCollection | undefined {
     try {
       const oauth2DataForCollection = this.getOauth2DataOfCollection({ collectionUid, url });
-      const filteredCredentials = oauth2DataForCollection?.credentials?.filter((c) => c?.url !== url || c?.credentialsId !== credentialsId);
+      const filteredCredentials = oauth2DataForCollection?.credentials?.filter(
+        (c) => c?.credentialsId !== credentialsId || (url !== undefined && c?.url !== url)
+      );
       const newOauth2DataForCollection: OAuth2DataForCollection = {
         ...oauth2DataForCollection,
         credentials: filteredCredentials

@@ -1,6 +1,7 @@
 
 import type { AxiosRequestConfig } from 'axios';
 import { get, filter } from 'lodash';
+import crypto from 'crypto';
 import decomment from 'decomment';
 import { utils as brunoUtilsRaw } from '@usebruno/common';
 
@@ -125,115 +126,132 @@ const prepareBody = (body: BrunoRequest['body'], headers: Record<string, string>
   }
 };
 
-/**
- * Set auth headers based on request and collection root auth settings
- * Used for WebSocket and gRPC requests
- */
-const setAuthHeaders = <T extends { headers: Record<string, string>; oauth2?: unknown; awsv4config?: unknown; basicAuth?: unknown; digestConfig?: unknown; ntlmConfig?: unknown }>(
+const OAUTH2_FIELDS_BY_GRANT: Record<string, string[]> = {
+  password: [
+    'accessTokenUrl', 'refreshTokenUrl', 'username', 'password', 'clientId', 'clientSecret', 'scope',
+    'credentialsPlacement', 'credentialsId', 'tokenPlacement', 'tokenHeaderPrefix', 'tokenQueryKey',
+    'tokenSource', 'autoFetchToken', 'autoRefreshToken'
+  ],
+  authorization_code: [
+    'callbackUrl', 'authorizationUrl', 'accessTokenUrl', 'refreshTokenUrl', 'clientId', 'clientSecret',
+    'scope', 'state', 'pkce', 'credentialsPlacement', 'credentialsId', 'tokenPlacement', 'tokenHeaderPrefix',
+    'tokenQueryKey', 'tokenSource', 'autoFetchToken', 'autoRefreshToken'
+  ],
+  implicit: [
+    'callbackUrl', 'authorizationUrl', 'clientId', 'scope', 'state', 'credentialsId', 'tokenPlacement',
+    'tokenHeaderPrefix', 'tokenQueryKey', 'tokenSource', 'autoFetchToken'
+  ],
+  client_credentials: [
+    'accessTokenUrl', 'refreshTokenUrl', 'clientId', 'clientSecret', 'scope', 'credentialsPlacement',
+    'credentialsId', 'tokenPlacement', 'tokenHeaderPrefix', 'tokenQueryKey', 'tokenSource', 'autoFetchToken',
+    'autoRefreshToken'
+  ]
+};
+
+const OAUTH1_FIELDS = [
+  'consumerKey', 'consumerSecret', 'accessToken', 'accessTokenSecret', 'callbackUrl', 'verifier',
+  'signatureMethod', 'privateKey', 'privateKeyType', 'timestamp', 'nonce', 'version', 'realm', 'placement',
+  'includeBodyHash'
+];
+
+const EDGEGRID_FIELDS = [
+  'accessToken', 'clientToken', 'clientSecret', 'nonce', 'timestamp', 'baseURL', 'headersToSign', 'maxBodySize'
+];
+
+const pick = (source: unknown, path: string, fields: string[]): Record<string, unknown> =>
+  Object.fromEntries(fields.map((field) => [field, get(source, `${path}.${field}`)]));
+
+const applyAuthConfig = (target: Record<string, unknown> & { headers: Record<string, string> }, auth: Record<string, unknown>): void => {
+  switch (auth.mode) {
+    case 'awsv4':
+      target.awsv4config = pick(auth, 'awsv4', ['accessKeyId', 'secretAccessKey', 'sessionToken', 'service', 'region', 'profileName']);
+      break;
+    case 'basic':
+      target.basicAuth = pick(auth, 'basic', ['username', 'password']);
+      break;
+    case 'bearer':
+      target.headers['Authorization'] = `Bearer ${get(auth, 'bearer.token', '')}`;
+      break;
+    case 'digest':
+      target.digestConfig = pick(auth, 'digest', ['username', 'password']);
+      break;
+    case 'ntlm':
+      target.ntlmConfig = pick(auth, 'ntlm', ['username', 'password', 'domain']);
+      break;
+    case 'oauth1':
+      target.oauth1config = pick(auth, 'oauth1', OAUTH1_FIELDS);
+      break;
+    case 'oauth2': {
+      const grantType = get(auth, 'oauth2.grantType') as string;
+      const fields = OAUTH2_FIELDS_BY_GRANT[grantType];
+      if (fields) {
+        target.oauth2 = {
+          grantType,
+          ...pick(auth, 'oauth2', fields),
+          additionalParameters: get(auth, 'oauth2.additionalParameters', { authorization: [], token: [], refresh: [] })
+        };
+      }
+      break;
+    }
+    case 'wsse':
+      target.wsse = pick(auth, 'wsse', ['username', 'password']);
+      break;
+    case 'apikey': {
+      const apiKeyAuth = auth.apikey as { key?: string; value?: string; placement?: string } | undefined;
+      if (!apiKeyAuth?.key) {
+        break;
+      }
+      if (apiKeyAuth.placement === 'header') {
+        target.headers[apiKeyAuth.key] = apiKeyAuth.value || '';
+        target.apiKeyHeaderName = apiKeyAuth.key;
+      } else if (apiKeyAuth.placement === 'queryparams') {
+        target.apiKeyAuthValueForQueryParams = apiKeyAuth;
+      }
+      break;
+    }
+    case 'akamai-edgegrid':
+      target.edgeGridConfig = pick(auth, 'akamaiEdgegrid', EDGEGRID_FIELDS);
+      break;
+  }
+};
+
+const setAuthHeaders = <T extends { headers: Record<string, string> }>(
   axiosRequest: T,
   request: { auth?: { mode?: string } },
   collectionRoot: unknown
 ): T => {
+  const target = axiosRequest as unknown as Record<string, unknown> & { headers: Record<string, string> };
   const collectionAuth = get(collectionRoot, 'request.auth') as Record<string, unknown> | undefined;
   if (collectionAuth && request.auth?.mode === 'inherit') {
-    const mode = collectionAuth.mode as string;
-    switch (mode) {
-      case 'awsv4':
-        (axiosRequest as { awsv4config?: unknown }).awsv4config = {
-          accessKeyId: get(collectionAuth, 'awsv4.accessKeyId'),
-          secretAccessKey: get(collectionAuth, 'awsv4.secretAccessKey'),
-          sessionToken: get(collectionAuth, 'awsv4.sessionToken'),
-          service: get(collectionAuth, 'awsv4.service'),
-          region: get(collectionAuth, 'awsv4.region'),
-          profileName: get(collectionAuth, 'awsv4.profileName')
-        };
-        break;
-      case 'basic':
-        (axiosRequest as { basicAuth?: unknown }).basicAuth = {
-          username: get(collectionAuth, 'basic.username'),
-          password: get(collectionAuth, 'basic.password')
-        };
-        break;
-      case 'bearer':
-        axiosRequest.headers['Authorization'] = `Bearer ${get(collectionAuth, 'bearer.token', '')}`;
-        break;
-      case 'digest':
-        (axiosRequest as { digestConfig?: unknown }).digestConfig = {
-          username: get(collectionAuth, 'digest.username'),
-          password: get(collectionAuth, 'digest.password')
-        };
-        break;
-      case 'ntlm':
-        (axiosRequest as { ntlmConfig?: unknown }).ntlmConfig = {
-          username: get(collectionAuth, 'ntlm.username'),
-          password: get(collectionAuth, 'ntlm.password'),
-          domain: get(collectionAuth, 'ntlm.domain')
-        };
-        break;
-      case 'oauth2':
-        axiosRequest.oauth2 = collectionAuth.oauth2;
-        break;
-      case 'apikey':
-        const apiKey = get(collectionAuth, 'apikey.key') as string;
-        const apiValue = get(collectionAuth, 'apikey.value') as string;
-        const placement = get(collectionAuth, 'apikey.placement') as string;
-        if (placement === 'header' && apiKey) {
-          axiosRequest.headers[apiKey] = apiValue || '';
-        }
-        break;
-    }
-  } else {
-    const requestAuth = request.auth as Record<string, unknown> | undefined;
-    if (requestAuth) {
-      const mode = requestAuth.mode as string;
-      switch (mode) {
-        case 'awsv4':
-          (axiosRequest as { awsv4config?: unknown }).awsv4config = {
-            accessKeyId: get(requestAuth, 'awsv4.accessKeyId'),
-            secretAccessKey: get(requestAuth, 'awsv4.secretAccessKey'),
-            sessionToken: get(requestAuth, 'awsv4.sessionToken'),
-            service: get(requestAuth, 'awsv4.service'),
-            region: get(requestAuth, 'awsv4.region'),
-            profileName: get(requestAuth, 'awsv4.profileName')
-          };
-          break;
-        case 'basic':
-          (axiosRequest as { basicAuth?: unknown }).basicAuth = {
-            username: get(requestAuth, 'basic.username'),
-            password: get(requestAuth, 'basic.password')
-          };
-          break;
-        case 'bearer':
-          axiosRequest.headers['Authorization'] = `Bearer ${get(requestAuth, 'bearer.token', '')}`;
-          break;
-        case 'digest':
-          (axiosRequest as { digestConfig?: unknown }).digestConfig = {
-            username: get(requestAuth, 'digest.username'),
-            password: get(requestAuth, 'digest.password')
-          };
-          break;
-        case 'ntlm':
-          (axiosRequest as { ntlmConfig?: unknown }).ntlmConfig = {
-            username: get(requestAuth, 'ntlm.username'),
-            password: get(requestAuth, 'ntlm.password'),
-            domain: get(requestAuth, 'ntlm.domain')
-          };
-          break;
-        case 'oauth2':
-          axiosRequest.oauth2 = requestAuth.oauth2;
-          break;
-        case 'apikey':
-          const apiKey = get(requestAuth, 'apikey.key') as string;
-          const apiValue = get(requestAuth, 'apikey.value') as string;
-          const placement = get(requestAuth, 'apikey.placement') as string;
-          if (placement === 'header' && apiKey) {
-            axiosRequest.headers[apiKey] = apiValue || '';
-          }
-          break;
-      }
-    }
+    applyAuthConfig(target, collectionAuth);
+  } else if (request.auth) {
+    applyAuthConfig(target, request.auth as Record<string, unknown>);
   }
   return axiosRequest;
+};
+
+/** Must run after interpolateVars so the digest is computed from the resolved password. */
+const applyWsseHeader = (request: {
+  headers?: Array<{ name: string; value: string; enabled?: boolean }> | Record<string, string>;
+  wsse?: { username?: string; password?: string };
+}): void => {
+  if (!request.wsse) {
+    return;
+  }
+
+  const username = request.wsse.username || '';
+  const password = request.wsse.password || '';
+  const ts = new Date().toISOString();
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.createHash('sha1').update(nonce + ts + password).digest('hex');
+  const digest = Buffer.from(hash, 'utf8').toString('base64');
+  const value = `UsernameToken Username="${username}", PasswordDigest="${digest}", Nonce="${nonce}", Created="${ts}"`;
+
+  if (Array.isArray(request.headers)) {
+    request.headers.push({ name: 'X-WSSE', value, enabled: true });
+  } else {
+    request.headers = { ...request.headers, 'X-WSSE': value };
+  }
 };
 
 const applyAuth = (request: PreparedRequest, auth: BrunoRequest['auth']): void => {
@@ -320,6 +338,7 @@ export {
   prepareBody,
   applyAuth,
   setAuthHeaders,
+  applyWsseHeader,
   BrunoRequest,
   PreparedRequest
 };

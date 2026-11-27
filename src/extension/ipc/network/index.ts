@@ -2,7 +2,7 @@
 import { AxiosResponse, AxiosError } from 'axios';
 import decomment from 'decomment';
 import { registerHandler, sendToWebview, broadcastToAllWebviews } from '../handlers';
-import { prepareRequest, BrunoRequest as PrepareRequestType } from './prepare-request';
+import { prepareRequest, setAuthHeaders, applyWsseHeader, BrunoRequest as PrepareRequestType } from './prepare-request';
 import { interpolateVars } from './interpolate-vars';
 import { createAxiosInstance, axiosOptionsFromCertsAndProxyConfig, AxiosInstanceOptions } from './axios-instance';
 import { resolveAwsV4Credentials, addAwsV4Interceptor, AwsV4Config } from './awsv4auth-helper';
@@ -16,14 +16,37 @@ import { getPreferences, preferencesUtil } from '../../store/preferences';
 import { getProcessEnvVars } from '../../store/process-env';
 import { getRuntimeVariables, setRuntimeVariables } from '../../store/runtime-variables';
 import { getCertsAndProxyConfig } from './cert-utils';
-import { getEnvVars, getTreePathFromCollectionToItem, mergeVars, mergeHeaders, mergeScripts, mergeAuth, flattenItems, findItemInCollection, findItemInCollectionByPathname, hydrateRequestWithUuid, Item } from '../../utils/collection';
+import {
+  getEnvVars,
+  getTreePathFromCollectionToItem,
+  mergeVars,
+  mergeHeaders,
+  mergeScripts,
+  mergeAuth,
+  flattenItems,
+  findItemInCollectionByPathname,
+  hydrateRequestWithUuid,
+  resolveInheritedSettings,
+  Item
+} from '../../utils/collection';
 import { getCollectionFormat } from '../../utils/filesystem';
+import { doesItExist, readText } from '../../utils/file';
+import * as vscode from 'vscode';
 import fs from 'fs';
 import path from 'path';
-import { parseRequest } from '../../utils/parse';
+import { parseRequest, parseFolder } from '../../utils/parse';
 import { registerOAuth2Handlers, applyOAuth2ToRequest } from './oauth2-handlers';
-import { runPreRequestScript, runPostResponseVars, runPostResponseScript, runTests, runAssertions } from '../../utils/script-runner';
+import {
+  runPreRequestScript,
+  runPostResponseVars,
+  runPostResponseScript,
+  runTests,
+  runAssertions,
+  runOnFailHandler,
+  OnFailHandler
+} from '../../utils/script-runner';
 import type { ScriptErrorContext, ScriptMetadata } from '@bruno-types';
+import { RequestCancelledError } from '../../utils/errors';
 import { v4 as uuidv4 } from 'uuid';
 import { cloneDeep, get, filter, forOwn } from 'lodash';
 import { Readable } from 'stream';
@@ -82,7 +105,11 @@ const promisifyStream = async (stream: Readable): Promise<Buffer> => {
  * Parse response data from buffer (like bruno-electron's parseDataFromResponse)
  * Returns data as parsed object and dataBuffer as BASE64 encoded string (required by webview)
  */
-const parseDataFromResponse = (rawBuffer: Buffer, contentType: string): { data: unknown; dataBuffer: string } => {
+const parseDataFromResponse = (
+  rawBuffer: Buffer,
+  contentType: string,
+  disableParsingResponseJson = false
+): { data: unknown; dataBuffer: string } => {
   const charsetMatch = /charset=([^()<>@,;:"/[\]?.=\s]*)/i.exec(contentType || '');
   const charset = charsetMatch?.[1] || 'utf-8';
 
@@ -98,7 +125,7 @@ const parseDataFromResponse = (rawBuffer: Buffer, contentType: string): { data: 
   let parsedData: unknown = dataString;
   try {
     const cleanedData = dataString.replace(/^\uFEFF/, '');
-    parsedData = JSON.parse(cleanedData);
+    parsedData = disableParsingResponseJson ? cleanedData : JSON.parse(cleanedData);
   } catch {
     // Not JSON, keep as string
   }
@@ -183,6 +210,9 @@ interface BrunoRequest {
   requestVariables?: Record<string, unknown>;
   globalEnvironmentVariables?: Record<string, unknown>;
   promptVariables?: Record<string, unknown>;
+  onFailHandler?: OnFailHandler;
+  __brunoDisableParsingResponseJson?: boolean;
+  wsse?: { username?: string; password?: string };
 }
 
 interface RequestContext {
@@ -208,6 +238,19 @@ interface RequestOptions {
   };
   disableCookies?: boolean;
 }
+
+const networkErrors = new WeakMap<RequestResult, unknown>();
+
+const handleNetworkFailure = async (
+  result: RequestResult,
+  scriptRequest: Pick<BrunoRequest, 'onFailHandler'>,
+  scriptContext: Parameters<typeof runOnFailHandler>[3]
+): Promise<void> => {
+  const networkError = networkErrors.get(result);
+  if (networkError && result.error) {
+    result.error = await runOnFailHandler(scriptRequest, networkError, result.error, scriptContext);
+  }
+};
 
 interface RequestResult {
   status: number;
@@ -302,6 +345,8 @@ const executeRequest = async (
       processEnvVars: context.processEnvVars,
       promptVariables: (request.promptVariables || {}) as Record<string, unknown>
     }) as unknown as BrunoRequest;
+
+    applyWsseHeader(interpolatedRequest);
 
     const headers = interpolatedRequest.headers;
     let contentType = '';
@@ -477,7 +522,7 @@ const executeRequest = async (
       response = await axiosInstance.request(preparedRequest);
     } catch (error) {
       if ((error as Error).name === 'AbortError' || (error as Error).name === 'CanceledError') {
-        throw new Error('Request cancelled');
+        throw new RequestCancelledError(error);
       }
       throw error;
     }
@@ -496,7 +541,11 @@ const executeRequest = async (
     const responseSize = rawBuffer.length;
 
     const responseContentType = responseHeaders['content-type'] || '';
-    const { data: parsedData, dataBuffer: dataString } = parseDataFromResponse(rawBuffer, responseContentType);
+    const { data: parsedData, dataBuffer: dataString } = parseDataFromResponse(
+      rawBuffer,
+      responseContentType,
+      Boolean(request.__brunoDisableParsingResponseJson)
+    );
 
     // Note: Cookies are already saved to the shared cookieJar in the axios interceptor
     if (!options.disableCookies && preferencesUtil.shouldStoreCookies()) {
@@ -544,7 +593,11 @@ const executeRequest = async (
           errorRawBuffer = await promisifyStream(axiosError.response.data as Readable);
           errorSize = errorRawBuffer.length;
           const contentType = responseHeaders['content-type'] || '';
-          const parsed = parseDataFromResponse(errorRawBuffer, contentType);
+          const parsed = parseDataFromResponse(
+            errorRawBuffer,
+            contentType,
+            Boolean(request.__brunoDisableParsingResponseJson)
+          );
           errorData = parsed.data;
           errorDataString = parsed.dataBuffer;
         } catch {
@@ -579,7 +632,7 @@ const executeRequest = async (
 
     // Network error or other failure
     const errorMessage = (error as Error).message || 'Error occurred while executing the request!';
-    return {
+    const networkErrorResult: RequestResult = {
       status: 0,
       // Desktop reports the axios error code here and keeps the readable text in `error`.
       statusText: axiosError.code || errorMessage,
@@ -593,6 +646,11 @@ const executeRequest = async (
       requestSent,
       error: errorMessage
     };
+    if (!(error instanceof RequestCancelledError)) {
+      networkErrors.set(networkErrorResult, error);
+    }
+
+    return networkErrorResult;
   } finally {
     if (!existingController) {
       deleteCancelToken(cancelTokenUid);
@@ -683,15 +741,15 @@ const getRequestData = (body: BrunoRequest['body']): unknown => {
  * `item` in place on the runner's local clone — does not affect webview state.
  */
 const hydrateItemRequestFromDisk = async (
-  item: Record<string, unknown>,
+  item: { pathname?: string; partial?: boolean; request?: object },
   collectionPath: string
 ): Promise<void> => {
   if (!item) return;
-  const existingRequest = item.request as Record<string, unknown> | undefined;
+  const existingRequest = item.request;
   const isHydrated = !item.partial && existingRequest && Object.keys(existingRequest).length > 0;
   if (isHydrated) return;
 
-  const pathname = item.pathname as string | undefined;
+  const pathname = item.pathname;
   if (!pathname) return;
 
   try {
@@ -701,16 +759,79 @@ const hydrateItemRequestFromDisk = async (
     // Preserve the runner-relevant fields we already have on `item` (uid, seq,
     // draft, etc.) while pulling in name/type/request/tags/examples/... from
     // the fresh parse.
-    for (const [key, value] of Object.entries(parsed)) {
-      if (key === 'uid') continue;
-      item[key] = value;
-    }
-    item.partial = false;
+    const { uid: _uid, ...fields } = parsed;
+    Object.assign(item, fields, { partial: false });
     hydrateRequestWithUuid(item as never, pathname);
   } catch (err) {
     const errMessage = err instanceof Error ? err.message : String(err);
     console.error('[Runner] Failed to hydrate item from disk:', pathname, errMessage);
   }
+};
+
+type RunnableItem = { uid: string; pathname?: string; partial?: boolean; request?: object; [key: string]: unknown };
+
+const loadItemTreeFromDisk = async (
+  collection: Record<string, unknown>,
+  itemPathname: string,
+  collectionPath: string
+): Promise<{ item: RunnableItem; collection: Record<string, unknown> } | undefined> => {
+  // True when `target` is strictly inside the collection. Names like `..foo.bru` are allowed;
+  // only `..` itself or `../...` escapes.
+  const isInsideCollection = (target: string) => {
+    const relative = path.relative(collectionPath, target);
+
+    return Boolean(relative)
+      && relative !== '..'
+      && !relative.startsWith(`..${path.sep}`)
+      && !path.isAbsolute(relative);
+  };
+
+  if (!isInsideCollection(itemPathname)) {
+    return undefined;
+  }
+  if (!(await doesItExist(vscode.Uri.file(itemPathname)))) {
+    return undefined;
+  }
+
+  const item: RunnableItem = { uid: uuidv4(), pathname: itemPathname, partial: true };
+  await hydrateItemRequestFromDisk(item, collectionPath);
+
+  const format = getCollectionFormat(collectionPath);
+
+  let node: Record<string, unknown> = item;
+  for (let dir = path.dirname(itemPathname); isInsideCollection(dir); dir = path.dirname(dir)) {
+    const folderFileUri = vscode.Uri.file(path.join(dir, format === 'yml' ? 'folder.yml' : 'folder.bru'));
+    const root = await doesItExist(folderFileUri)
+      ? await parseFolder(await readText(folderFileUri), { format })
+      : {};
+    node = { uid: uuidv4(), type: 'folder', name: path.basename(dir), pathname: dir, root, items: [node] };
+  }
+
+  return { item, collection: { ...collection, items: [node] } };
+};
+
+/** Resolves the item bru.runRequest() points at: from the collection tree, else from disk. */
+const resolveRunRequestItem = async (
+  collection: Record<string, unknown>,
+  collectionPath: string,
+  relativeItemPathname: string
+): Promise<{ item: Item | RunnableItem; collection: Record<string, unknown>; itemPathname: string }> => {
+  let itemPathname = path.join(collectionPath, relativeItemPathname);
+  if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
+    itemPathname = `${itemPathname}.${getCollectionFormat(collectionPath) === 'yml' ? 'yml' : 'bru'}`;
+  }
+
+  const found = findItemInCollectionByPathname(collection as never, itemPathname);
+  if (found) {
+    return { item: found, collection, itemPathname };
+  }
+
+  const loaded = await loadItemTreeFromDisk(collection, itemPathname, collectionPath);
+  if (!loaded) {
+    throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
+  }
+
+  return { ...loaded, itemPathname };
 };
 
 const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest => {
@@ -777,36 +898,6 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
 
   const settings = (_item.draft ? (_item.draft as Record<string, unknown>).settings : _item.settings) as Record<string, unknown> || {};
 
-  let digestConfig: { username?: string; password?: string } | undefined;
-  if (auth?.mode === 'digest' && auth.digest) {
-    digestConfig = {
-      username: auth.digest.username,
-      password: auth.digest.password
-    };
-  }
-
-  let ntlmConfig: { username: string; password: string; domain?: string } | undefined;
-  if (auth?.mode === 'ntlm' && auth.ntlm) {
-    ntlmConfig = {
-      username: auth.ntlm.username,
-      password: auth.ntlm.password,
-      domain: auth.ntlm.domain
-    }
-  }
-
-  let awsv4config: AwsV4Config | undefined;
-  if (auth?.mode === 'awsv4' && auth.awsv4) {
-    const awsv4 = auth.awsv4 as AwsV4Config;
-    awsv4config = {
-      accessKeyId: awsv4.accessKeyId,
-      secretAccessKey: awsv4.secretAccessKey,
-      sessionToken: awsv4.sessionToken,
-      service: awsv4.service,
-      region: awsv4.region,
-      profileName: awsv4.profileName
-    };
-  }
-
   // This is needed for BrunoRequest.getBody() to work in scripts/assertions
   const data = getRequestData(body);
 
@@ -819,12 +910,12 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
 
   const globalEnvironmentVariables = (_collection.globalEnvironmentVariables || {}) as Record<string, unknown>;
 
-  return {
+  const preparedRequest = {
     uid: _item.uid as string,
     pathname: (_item.pathname as string) || '',
     url: (request.url as string) || '',
     method: (request.method as string) || 'GET',
-    headers,
+    headers: headersArrayToObject(headers),
     params,
     pathParams,
     body,
@@ -835,16 +926,13 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
     testsMetadata: request.testsMetadata as ScriptMetadata | null,
     vars,
     assertions,
-    timeout: (settings.timeout === 'inherit' ? undefined : settings.timeout as number) || 0,
+    timeout: resolveInheritedSettings(settings).timeout as number,
     settings: {
       followRedirects: settings.followRedirects as boolean | undefined,
       maxRedirects: settings.maxRedirects as number | undefined,
       timeout: settings.timeout === 'inherit' ? undefined : settings.timeout as number | undefined,
       encodeUrl: settings.encodeUrl as boolean | undefined
     },
-    digestConfig,
-    ntlmConfig,
-    awsv4config,
     // Additional properties for scripts
     name,
     tags,
@@ -854,6 +942,9 @@ const prepareItemRequest = (item: unknown, collection: unknown): BrunoRequest =>
     globalEnvironmentVariables,
     promptVariables: (_collection.promptVariables || {}) as Record<string, unknown>
   };
+
+  const collectionRoot = get(_collection, 'draft.root') || _collection.root;
+  return setAuthHeaders(preparedRequest, request as { auth?: { mode?: string } }, collectionRoot);
 };
 
 /** Sent on success too, with a null message, since the webview keys the card off the last report. */
@@ -905,7 +996,8 @@ const registerNetworkIpc = (): void => {
         requestVariables: request.requestVariables || {},
         globalEnvironmentVariables: request.globalEnvironmentVariables || {},
         name: request.name || '',
-        tags: request.tags || []
+        tags: request.tags || [],
+        __bruno__executionMode: 'standalone'
       };
 
       const scriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
@@ -935,22 +1027,11 @@ const registerNetworkIpc = (): void => {
 
       // This runs the FULL script flow (pre-request, execute, post-response) like bruno-copy
       const runRequestByItemPathname = async (relativeItemPathname: string): Promise<unknown> => {
-        let itemPathname = path.join(collectionPath, relativeItemPathname);
-        if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
-          try {
-            const { getCollectionFormat } = require('../../utils/filesystem');
-            const fmt = getCollectionFormat(collectionPath);
-            itemPathname = `${itemPathname}.${fmt === 'yml' ? 'yml' : 'bru'}`;
-          } catch {
-            itemPathname = `${itemPathname}.bru`;
-          }
-        }
-        const foundItem = findItemInCollectionByPathname(_collection as never, itemPathname);
-        if (!foundItem) {
-          throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
-        }
+        const { item: foundItem, collection: itemCollection, itemPathname } =
+          await resolveRunRequestItem(_collection, collectionPath, relativeItemPathname);
         const innerItem = cloneDeep(foundItem);
-        const innerRequest = prepareItemRequest(innerItem, collection);
+        await hydrateItemRequestFromDisk(innerItem, collectionPath);
+        const innerRequest = prepareItemRequest(innerItem, itemCollection);
         const innerScriptRequest = {
           ...innerRequest,
           headers: headersArrayToObject(innerRequest.headers),
@@ -959,7 +1040,8 @@ const registerNetworkIpc = (): void => {
           requestVariables: innerRequest.requestVariables || {},
           globalEnvironmentVariables: innerRequest.globalEnvironmentVariables || {},
           name: innerRequest.name || '',
-          tags: innerRequest.tags || []
+          tags: innerRequest.tags || [],
+          __bruno__executionMode: 'standalone'
         };
         const innerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
         const innerIsFormUrlEncoded = innerScriptContentType === 'application/x-www-form-urlencoded' ||
@@ -1031,6 +1113,7 @@ const registerNetworkIpc = (): void => {
         }
 
         const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
+        await handleNetworkFailure(result, innerScriptRequest, innerScriptContext);
 
         const innerResponse = {
           status: result.status,
@@ -1172,6 +1255,7 @@ const registerNetworkIpc = (): void => {
       // Use scriptRequest so pre-request script changes are respected
       // scriptRequest will be mutated by interpolateVars inside executeRequest
       const result = await executeRequest(scriptRequest as unknown as BrunoRequest, context);
+      await handleNetworkFailure(result, scriptRequest, scriptContext);
 
       const oauth2Credentials = (scriptRequest as {
         oauth2Credentials?: {
@@ -1296,13 +1380,15 @@ const registerNetworkIpc = (): void => {
       setRuntimeVariables(collectionUid, mutableRuntimeVariables);
       broadcastRuntimeVariables(collectionUid, mutableRuntimeVariables);
 
+      const finalDataBuffer = Buffer.isBuffer(response.dataBuffer) ? response.dataBuffer : result.rawBuffer;
+
       return {
         status: result.status,
         statusText: result.statusText,
         headers: result.headers,
-        data: result.data,
-        dataBuffer: result.dataBuffer,
-        size: result.size,
+        data: response.data,
+        dataBuffer: finalDataBuffer ? finalDataBuffer.toString('base64') : result.dataBuffer,
+        size: finalDataBuffer ? finalDataBuffer.length : result.size,
         duration: result.duration,
         timeline: result.timeline,
         requestSent: result.requestSent,
@@ -1855,7 +1941,9 @@ const registerNetworkIpc = (): void => {
         }
 
         let currentRequestIndex = 0;
+        let stopRunnerExecution = false;
         while (currentRequestIndex < folderRequests.length) {
+          stopRunnerExecution = false;
           if (abortController.signal.aborted) {
             const error = new Error('Runner execution cancelled');
             throw error;
@@ -1905,7 +1993,8 @@ const registerNetworkIpc = (): void => {
               requestVariables: request.requestVariables || {},
               globalEnvironmentVariables: request.globalEnvironmentVariables || {},
               name: request.name || '',
-              tags: request.tags || []
+              tags: request.tags || [],
+              __bruno__executionMode: 'runner'
             };
 
             const runnerScriptContentType = scriptRequest.headers['Content-Type'] || scriptRequest.headers['content-type'] || '';
@@ -1918,23 +2007,11 @@ const registerNetworkIpc = (): void => {
             const runnerProcessEnvVars = getProcessEnvVars(collectionUid) as Record<string, string>;
 
             const runnerRunRequestByItemPathname = async (relativeItemPathname: string): Promise<unknown> => {
-              let itemPathname = path.join(collectionPath, relativeItemPathname);
-              if (!itemPathname.endsWith('.bru') && !itemPathname.endsWith('.yml')) {
-                try {
-                  const { getCollectionFormat } = require('../../utils/filesystem');
-                  const fmt = getCollectionFormat(collectionPath);
-                  itemPathname = `${itemPathname}.${fmt === 'yml' ? 'yml' : 'bru'}`;
-                } catch {
-                  itemPathname = `${itemPathname}.bru`;
-                }
-              }
-              const foundItem = findItemInCollectionByPathname(collection as never, itemPathname);
-              if (!foundItem) {
-                throw new Error(`bru.runRequest: invalid request path - ${itemPathname}`);
-              }
-              const innerItem = cloneDeep(foundItem) as unknown as Record<string, unknown>;
+              const { item: foundItem, collection: itemCollection, itemPathname } =
+                await resolveRunRequestItem(collection, collectionPath, relativeItemPathname);
+              const innerItem = cloneDeep(foundItem);
               await hydrateItemRequestFromDisk(innerItem, collectionPath);
-              const innerRequest = prepareItemRequest(innerItem, collection);
+              const innerRequest = prepareItemRequest(innerItem, itemCollection);
               const innerScriptRequest = {
                 ...innerRequest,
                 headers: headersArrayToObject(innerRequest.headers),
@@ -1943,7 +2020,8 @@ const registerNetworkIpc = (): void => {
                 requestVariables: innerRequest.requestVariables || {},
                 globalEnvironmentVariables: innerRequest.globalEnvironmentVariables || {},
                 name: innerRequest.name || '',
-                tags: innerRequest.tags || []
+                tags: innerRequest.tags || [],
+                __bruno__executionMode: 'standalone'
               };
               const runnerInnerScriptContentType = innerScriptRequest.headers['Content-Type'] || innerScriptRequest.headers['content-type'] || '';
               const runnerInnerIsFormUrlEncoded = runnerInnerScriptContentType === 'application/x-www-form-urlencoded' ||
@@ -1956,7 +2034,7 @@ const registerNetworkIpc = (): void => {
                 cancelTokenUid,
                 collectionUid,
                 collectionPath,
-                itemUid: innerItem.uid as string,
+                itemUid: innerItem.uid,
                 itemPathname,
                 envVars,
                 collectionVariables: innerScriptRequest.collectionVariables || {},
@@ -1971,7 +2049,7 @@ const registerNetworkIpc = (): void => {
                 collectionUid,
                 collectionPath,
                 collectionName: collection.name as string || '',
-                itemUid: innerItem.uid as string,
+                itemUid: innerItem.uid,
                 requestUid: uuidv4(),
                 envVars: envVars as Record<string, unknown>,
                 runtimeVariables: runnerRuntimeVariables, // Shared with parent
@@ -2013,6 +2091,7 @@ const registerNetworkIpc = (): void => {
               }
 
               const result = await executeRequest(innerScriptRequest as unknown as BrunoRequest, innerContext);
+              await handleNetworkFailure(result, innerScriptRequest, innerScriptContext);
 
               const innerResponse = {
                 status: result.status,
@@ -2100,6 +2179,7 @@ const registerNetworkIpc = (): void => {
 
               skipRequest = preRequestResult.skipRequest || false;
               nextRequestName = preRequestResult.nextRequestName;
+              stopRunnerExecution = Boolean(preRequestResult.stopExecution);
 
               if (preRequestResult.runtimeVariables) {
                 Object.assign(runnerRuntimeVariables, preRequestResult.runtimeVariables);
@@ -2131,6 +2211,9 @@ const registerNetworkIpc = (): void => {
                 },
                 ...eventData
               });
+              if (stopRunnerExecution) {
+                break;
+              }
               currentRequestIndex++;
               continue;
             }
@@ -2183,6 +2266,7 @@ const registerNetworkIpc = (): void => {
 
             // Use scriptRequest so pre-request script changes are respected
             const result = await executeRequest(scriptRequest as unknown as BrunoRequest, context, { runnerContext: { isRunningFolder: true, delay } });
+            await handleNetworkFailure(result, scriptRequest, scriptContext);
 
             // In this case, skip post-processing and report the error
             if (result.error && result.status === 0) {
@@ -2202,6 +2286,9 @@ const registerNetworkIpc = (): void => {
                 },
                 ...eventData
               });
+              if (stopRunnerExecution) {
+                break;
+              }
               currentRequestIndex++;
               continue;
             }
@@ -2282,6 +2369,10 @@ const registerNetworkIpc = (): void => {
               if (postResponseResult.nextRequestName) {
                 nextRequestName = postResponseResult.nextRequestName;
               }
+
+              if (postResponseResult.stopExecution) {
+                stopRunnerExecution = true;
+              }
             } catch (postResError) {
               console.error('Post-response script error:', postResError);
               sendToWebview('main:run-folder-event', {
@@ -2323,6 +2414,9 @@ const registerNetworkIpc = (): void => {
             try {
               const testResult = await runTests(scriptRequest, response, scriptContext);
               testResults = testResult.results || [];
+              if (testResult.stopExecution) {
+                stopRunnerExecution = true;
+              }
 
               notifyScriptExecution('main:run-folder-event', 'test', eventData, testResult);
 
@@ -2346,6 +2440,10 @@ const registerNetworkIpc = (): void => {
               });
             }
 
+            if (stopRunnerExecution) {
+              break;
+            }
+
             if (nextRequestName) {
               const nextIndex = folderRequests.findIndex(r => r.name === nextRequestName);
               if (nextIndex !== -1) {
@@ -2365,6 +2463,9 @@ const registerNetworkIpc = (): void => {
             });
           }
 
+          if (stopRunnerExecution) {
+            break;
+          }
           currentRequestIndex++;
         }
 
@@ -2372,6 +2473,7 @@ const registerNetworkIpc = (): void => {
           type: 'testrun-ended',
           collectionUid,
           folderUid,
+          ...(stopRunnerExecution && { statusText: 'collection run was terminated!' }),
           runCompletionTime: new Date().toISOString()
         });
 

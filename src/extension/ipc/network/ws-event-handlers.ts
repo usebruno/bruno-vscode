@@ -7,7 +7,7 @@ import { interpolateVars } from './interpolate-vars';
 import { getEnvVars, getTreePathFromCollectionToItem, mergeHeaders, mergeScripts, mergeVars, mergeAuth } from '../../utils/collection';
 import { getCertsAndProxyConfig } from './cert-utils';
 import { getRuntimeVariables } from '../../store/runtime-variables';
-import { setAuthHeaders } from './prepare-request';
+import { setAuthHeaders, applyWsseHeader } from './prepare-request';
 
 interface WsMessage {
   content: string;
@@ -176,6 +176,8 @@ const prepareWsRequest = async (
     globalEnvironmentVariables: request.globalEnvironmentVariables,
     promptVariables: ((collection as any)?.promptVariables || {}) as Record<string, string>
   });
+
+  applyWsseHeader(wsRequest);
 
   return wsRequest;
 };

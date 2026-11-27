@@ -28,6 +28,9 @@ const STATIC_API_HINTS = {
     'req.timeout',
     'req.getUrl()',
     'req.setUrl(url)',
+    'req.getHost()',
+    'req.getPath()',
+    'req.getQueryString()',
     'req.getMethod()',
     'req.getAuthMode()',
     'req.setMethod(method)',
@@ -35,6 +38,8 @@ const STATIC_API_HINTS = {
     'req.getHeaders()',
     'req.setHeader(name, value)',
     'req.setHeaders(data)',
+    'req.deleteHeader(name)',
+    'req.deleteHeaders(data)',
     'req.getBody()',
     'req.setBody(data)',
     'req.setMaxRedirects(maxRedirects)',
@@ -42,9 +47,34 @@ const STATIC_API_HINTS = {
     'req.setTimeout(timeout)',
     'req.getExecutionMode()',
     'req.getName()',
+    'req.getPathParams()',
     'req.getTags()',
     'req.disableParsingResponseJson()',
-    'req.onFail(function(err) {})'
+    'req.onFail(function(err) {})',
+    'req.headerList',
+    'req.headerList.get(name)',
+    'req.headerList.one(name)',
+    'req.headerList.all()',
+    'req.headerList.idx(index)',
+    'req.headerList.count()',
+    'req.headerList.has(name)',
+    'req.headerList.has(name, value)',
+    'req.headerList.find(fn)',
+    'req.headerList.filter(fn)',
+    'req.headerList.indexOf(item)',
+    'req.headerList.each(fn)',
+    'req.headerList.map(fn)',
+    'req.headerList.reduce(fn, initialValue)',
+    'req.headerList.toObject()',
+    'req.headerList.toString()',
+    'req.headerList.toJSON()',
+    'req.headerList.add(headerObj)',
+    'req.headerList.upsert(headerObj)',
+    'req.headerList.remove(predicate)',
+    'req.headerList.clear()',
+    'req.headerList.populate(items)',
+    'req.headerList.repopulate(items)',
+    'req.headerList.assimilate(source, prune)'
   ],
   res: [
     'res',
@@ -65,7 +95,24 @@ const STATIC_API_HINTS = {
     'res.getSize().header',
     'res.getSize().body',
     'res.getSize().total',
-    'res.getUrl()'
+    'res.getUrl()',
+    'res.headerList',
+    'res.headerList.get(name)',
+    'res.headerList.one(name)',
+    'res.headerList.all()',
+    'res.headerList.idx(index)',
+    'res.headerList.count()',
+    'res.headerList.has(name)',
+    'res.headerList.has(name, value)',
+    'res.headerList.find(fn)',
+    'res.headerList.filter(fn)',
+    'res.headerList.indexOf(item)',
+    'res.headerList.each(fn)',
+    'res.headerList.map(fn)',
+    'res.headerList.reduce(fn, initialValue)',
+    'res.headerList.toObject()',
+    'res.headerList.toString()',
+    'res.headerList.toJSON()'
   ],
   bru: [
     'bru',
@@ -76,30 +123,65 @@ const STATIC_API_HINTS = {
     'bru.getEnvVar(key)',
     'bru.getFolderVar(key)',
     'bru.getCollectionVar(key)',
+    'bru.setCollectionVar(key, value)',
+    'bru.hasCollectionVar(key)',
+    'bru.deleteCollectionVar(key)',
+    'bru.deleteAllCollectionVars()',
+    'bru.getAllCollectionVars()',
     'bru.setEnvVar(key, value)',
-    'bru.setEnvVar(key, value, options)',
     'bru.deleteEnvVar(key)',
+    'bru.getAllEnvVars()',
+    'bru.deleteAllEnvVars()',
     'bru.hasVar(key)',
     'bru.getVar(key)',
     'bru.setVar(key,value)',
     'bru.deleteVar(key)',
     'bru.deleteAllVars()',
+    'bru.getAllVars()',
     'bru.setNextRequest(requestName)',
     'bru.getRequestVar(key)',
     'bru.runRequest(requestPathName)',
+    'bru.sendRequest(requestConfig)',
+    'bru.sendRequest(requestConfig, callback)',
     'bru.getAssertionResults()',
     'bru.getTestResults()',
     'bru.sleep(ms)',
     'bru.getCollectionName()',
     'bru.isSafeMode()',
+    'bru.getOauth2CredentialVar(key)',
+    'bru.hasGlobalEnvVar(key)',
     'bru.getGlobalEnvVar(key)',
     'bru.setGlobalEnvVar(key, value)',
+    'bru.deleteGlobalEnvVar(key)',
+    'bru.getAllGlobalEnvVars()',
+    'bru.deleteAllGlobalEnvVars()',
     'bru.runner',
     'bru.runner.setNextRequest(requestName)',
     'bru.runner.skipRequest()',
     'bru.runner.stopExecution()',
     'bru.interpolate(str)',
     'bru.cookies',
+    'bru.cookies.get(name)',
+    'bru.cookies.has(name)',
+    'bru.cookies.has(name, value)',
+    'bru.cookies.one(name)',
+    'bru.cookies.all()',
+    'bru.cookies.count()',
+    'bru.cookies.idx(index)',
+    'bru.cookies.indexOf(item)',
+    'bru.cookies.find(fn)',
+    'bru.cookies.filter(fn)',
+    'bru.cookies.each(fn)',
+    'bru.cookies.map(fn)',
+    'bru.cookies.reduce(fn, initialValue)',
+    'bru.cookies.toObject()',
+    'bru.cookies.toString()',
+    'bru.cookies.add(cookieObj)',
+    'bru.cookies.append(cookieObj)',
+    'bru.cookies.upsert(cookieObj)',
+    'bru.cookies.remove(name)',
+    'bru.cookies.delete(name)',
+    'bru.cookies.clear()',
     'bru.cookies.jar()',
     'bru.cookies.jar().getCookie(url, name, callback)',
     'bru.cookies.jar().getCookies(url, callback)',
@@ -109,11 +191,21 @@ const STATIC_API_HINTS = {
     'bru.cookies.jar().clear(callback)',
     'bru.cookies.jar().deleteCookies(url, callback)',
     'bru.cookies.jar().deleteCookie(url, name, callback)',
+    'bru.cookies.jar().hasCookie(url, name, callback)',
     'bru.utils',
     'bru.utils.minifyJson(json)',
-    'bru.utils.minifyXml(xml)'
+    'bru.utils.minifyXml(xml)',
+    'bru.resetOauth2Credential(credentialId)'
   ]
-};
+} as const;
+
+// The values `showHintsFor` accepts.
+type HintGroup = keyof typeof STATIC_API_HINTS;
+
+const isHintGroup = (group: string): group is HintGroup => group in STATIC_API_HINTS;
+
+// The globals every hint starts with.
+const HINT_ROOTS = ['bru', 'req', 'res'];
 
 // Mock data functions - prefixed with $
 const MOCK_DATA_HINTS = Object.keys(mockDataFunctions).map((key) => `$${key}`);
@@ -174,17 +266,13 @@ const transformVariablesToHints = (allVariables: AllVariables = {}) => {
 /**
  * Add API hints to categorized hints based on showHintsFor configuration
  * @param {Set} apiHints - Set to add API hints to
- * @param {string[]} showHintsFor - Array of hint types to show
+ * @param {string[]} showHintsFor - Array of hint groups to show
  */
-const addApiHintsToSet = (apiHints: any, showHintsFor: any) => {
-  const apiTypes = ['req', 'res', 'bru'] as const;
-
-  apiTypes.forEach((apiType) => {
-    if (showHintsFor.includes(apiType)) {
-      STATIC_API_HINTS[apiType].forEach((hint: any) => {
-        generateProgressiveHints(hint).forEach((h) => apiHints.add(h));
-      });
-    }
+const addApiHintsToSet = (apiHints: any, showHintsFor: string[]) => {
+  showHintsFor.filter(isHintGroup).forEach((group) => {
+    STATIC_API_HINTS[group].forEach((hint) => {
+      generateProgressiveHints(hint).forEach((h) => apiHints.add(h));
+    });
   });
 };
 
@@ -304,10 +392,14 @@ const calculateWordReplacementPositions = (cursor: any, start: any, end: any, wo
  * @param {string} word - The word to analyze
  * @returns {string} The determined context
  */
-const determineWordContext = (word: any) => {
-  if (word.startsWith('req') || word.startsWith('res') || word.startsWith('bru')) {
+const determineWordContext = (word: string) => {
+  const lowerWord = word.toLowerCase();
+  const isApiHint = HINT_ROOTS.some((apiRoot) => apiRoot.startsWith(lowerWord) || lowerWord.startsWith(apiRoot));
+
+  if (isApiHint) {
     return 'api';
   }
+
   return 'anyword';
 };
 
@@ -449,7 +541,7 @@ const getAllowedHintsByContext = (categorizedHints: any, context: any, showHints
   if (context === 'variables' && showHintsFor.includes('variables')) {
     allowedHints = [...categorizedHints.variables];
   } else if (context === 'api') {
-    const hasApiHints = showHintsFor.some((hint: any) => ['req', 'res', 'bru'].includes(hint));
+    const hasApiHints = showHintsFor.some(isHintGroup);
     if (hasApiHints) {
       allowedHints = [...categorizedHints.api];
     }
@@ -573,7 +665,7 @@ const handleClickForAutocomplete = (cm: any, options: AutoCompleteOptions) => {
   // Combine all hints based on showHintsFor configuration
   let allHints: any = [];
 
-  const hasApiHints = showHintsFor.some((hint: any) => ['req', 'res', 'bru'].includes(hint));
+  const hasApiHints = showHintsFor.some(isHintGroup);
   if (hasApiHints) {
     allHints = [...allHints, ...categorizedHints.api];
   }
